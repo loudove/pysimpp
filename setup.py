@@ -67,6 +67,66 @@ def chk_long_description(file,encoding='utf-8'):
         error_print("check the long description file %s"%file, exeption)
     return long_description
 
+def chk_openmp():
+    from numpy.distutils.fcompiler import get_default_fcompiler, CompilerNotFound
+    from distutils.util import get_platform
+
+    # enable openmp threads
+    _extra_compile_args = []
+    _extra_link_args = []
+    _extra_for_compile_args = []
+    platform = get_platform()
+    try:
+        compiler = get_default_fcompiler()
+        if compiler in ['gnu','gnu95','g95']:
+            _extra_for_compile_args= ['-fopenmp' ]
+            _extra_compile_args = ['-Xpreprocessor'] if platform.startswith('macosx') else []
+            _extra_compile_args.append('-fopenmp')
+            _extra_link_args = ['/openmp'] if platform.startswith('win') else ['-lgomp']
+        elif compiler in ['intelv','intelvem','intelem']:
+            if platform.startswith('win'):
+                _extra_for_compile_args=_extra_compile_args=['-Qopenmp']
+                _extra_link_args = ['-Qopenmp']
+            else:
+                _extra_for_compile_args=_extra_compile_args=['-qopenmp']
+                _extra_link_args = ['-liomp5']
+        elif compiler in ['flang']:
+            if get_platform == 'darwin':
+                _extra_for_compile_args=_extra_compile_args=[ '-Xpreprocessor', '-fopenmp' ]
+                _extra_link_args = ['-lomp']
+            else:
+                _extra_for_compile_args=_extra_compile_args=['-mp']
+                _extra_link_args = ['-mp']
+        else:
+            _extra_for_compile_args=_extra_compile_args=_extra_link_args =[]
+    except:
+        _extra_for_compile_args=_extra_compile_args=_extra_link_args =[]
+
+    # it seems that extra_link_args are not provided in 
+    # fcompiler.wrap_unlinkable_objects method called in 
+    # numpy.distutils.command.build_ext.build_ext._process_unlinkable_fobjects
+    if platform.startswith('win'):
+        from numpy.distutils import fcompiler
+        def omppatched_spawn(old_spawn):
+            def spawn(self, cmd, *args, **kw):
+                cmptype = self.compiler_type
+                opt=""
+                # tested only with gnu95
+                if cmptype in ['gnu','gnu95','g95']:
+                    opt='-fopenmp'
+                elif cmptype in ['intelv','intelvem','intelem']:
+                    opt='-Qopenmp'
+                elif cmptype in ['flang']:
+                    opt='-mp'
+                if len(opt) > 0 and self.c_compiler.compiler_type == "msvc":
+                    if not opt in cmd:
+                        cmd.append(opt)
+                return old_spawn(self, cmd, *args, **kw)
+            return spawn
+        fcompiler.FCompiler.spawn = omppatched_spawn(fcompiler.FCompiler.spawn)
+
+    return _extra_for_compile_args, _extra_compile_args, _extra_link_args
+
 # fastlapack and fastcore libraries files
 # TODO check if the system lapack libraries can be retrieved.
 _fastlapackfiles = glob.glob('fastpost/src/lapack/*.f')
@@ -160,43 +220,15 @@ def configuration(parent_package='', top_path=None):
     # the modules neccessary for the library build.
     config.add_include_dirs( fix_include_path())
 
-    # enable openmp threads
-    _extra_compile_args=[]
-    _extra_link_args = []
-    _extra_for_compile_args = []
-    try:
-        compiler = get_default_fcompiler()
-        if compiler in ['gnu','gnu95','g95']:
-            _extra_for_compile_args= ['-fopenmp' ]
-            if get_platform().startswith('macosx'):
-                _extra_compile_args.append('-Xpreprocessor')
-            _extra_compile_args.append('-fopenmp')
-            _extra_link_args = ['-lgomp']
-        elif compiler in ['intelv','intelvem','intelem']:
-            if get_platform().startswith('win'):
-                _extra_compile_args=['-Qopenmp']
-                _extra_link_args = ['-Qopenmp']
-            else:
-                _extra_compile_args=['-qopenmp']
-                _extra_link_args = ['-liomp5']
-        elif compiler in ['flang']:
-            if get_platform == 'darwin':
-                _extra_compile_args=[ '-Xpreprocessor', '-fopenmp' ]
-                _extra_link_args = ['-lomp']
-            else:
-                _extra_compile_args=['-mp']
-                _extra_link_args = ['-mp']
-    except:
-        _extra_compile_args=[]
-        _extra_link_args = []
+    _extra_for_compile_args, _extra_compile_args, _extra_link_args = chk_openmp()
 
     config.add_extension('pysimpp.fastpost',
                         sources=_fastmodulefiles,
                         f2py_options=['--quiet','--verbose'],
+                        extra_link_args=_extra_link_args,
                         extra_f77_compile_args=_extra_for_compile_args,
                         extra_f90_compile_args=_extra_for_compile_args,
                         extra_compile_args=_extra_compile_args,
-                        extra_link_args=_extra_link_args,
                         libraries=['fastlapack','fastcore'],
                         language='f90')
 
