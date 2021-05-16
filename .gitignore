@@ -130,3 +130,6 @@ dmypy.json
 
 # IDEs
 .vscode/
+
+# Fortran modules
+*.mod

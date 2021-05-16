@@ -2,7 +2,7 @@
 subroutine fastbonds(n, r, va, vb, vc, nbnd, bnd, lengths)
 
     use vector3d
-    use simulation_box
+    use domain3d
 
     implicit none
 
@@ -34,7 +34,7 @@ end subroutine fastbonds
 subroutine fastbondstest(n, r, va, vb, vc, nbnd, bnd, lengths)
 
     use vector3d
-    use simulation_box
+    use domain3d
 
     implicit none
 
@@ -66,7 +66,7 @@ end subroutine fastbondstest
 subroutine fastangles(n, r, va, vb, vc, nang, ang, angles)
 
     use vector3d
-    use simulation_box  
+    use domain3d  
 
     implicit none
 
@@ -104,7 +104,7 @@ end subroutine fastangles
 subroutine fastdihedrals(n, r, va, vb, vc ,ndih, dih, angles)
 
     use vector3d
-    use simulation_box    
+    use domain3d    
 
     implicit none
 

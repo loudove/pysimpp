@@ -132,7 +132,7 @@ def chk_openmp():
 _fastlapackfiles = glob.glob('fastpost/src/lapack/*.f')
 _fastcorefiles = [
                 'fastpost/src/core/vector3d_mod.F90',
-                'fastpost/src/core/box_mod.F90',
+                'fastpost/src/core/domain3d_mod.F90',
                 'fastpost/src/core/lj_mod.F90']
 _fastmodulefiles = glob.glob('fastpost/src/*.f90')
 

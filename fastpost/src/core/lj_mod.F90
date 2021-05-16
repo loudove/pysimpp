@@ -1,4 +1,5 @@
 module lj_interactions
+
     implicit none
 
     private
@@ -150,7 +151,7 @@ module lj_interactions
     !enrg,einter,eintra,eimage,press,apress,mstens[:,:],astens[:,:] 
     !    = peenrgpress(r,rw,rcm,molecules,box.va, box.vb, box.vc, T, rcut)
     use vector3d
-    use simulation_box
+    use domain3d
     ! use lj_interactions
 
     implicit none
@@ -179,6 +180,7 @@ module lj_interactions
 
     !> box stuff
     type(SimulationBox) :: box
+    type(BoxCells) :: cells
     real*8, dimension(0:2) :: r0 = (/ 0.d0, 0.d0, 0.d0/)
     logical(4) :: isperiodic = .true.
     !> energy and pressure calculation stuff
@@ -214,7 +216,7 @@ module lj_interactions
     call box%initialize( r0, a, b, c, isperiodic)
 
     rtmp = transpose(rw)
-    call box%splitAndfill( dn(0), dn(1), dn(2), n, rtmp)
+    call cells%splitAndfill( box, dn(0), dn(1), dn(2), n, rtmp)
 
     enrg = 0.d0
     einter = 0.d0
@@ -226,14 +228,14 @@ module lj_interactions
     mstrij = 0.d0
 
     do iat = 1, n ! NOTE box lists are indexed from 1 (std fortran)
-        icell =  box%getAtomCell(iat)
+        icell =  cells%getAtomCell(iat)
         iiat = iat-1
         ich = atch(iiat)
-        call box%getNeighbourCells(icell,ncc,cc)
+        call cells%getNeighbourCells(icell,ncc,cc)
         do j = 1, 27
             jcell = cc(j)
             if ( jcell .eq. -1) cycle
-            call box%getCellAtoms(jcell, cnat, cat)
+            call cells%getCellAtoms(jcell, cnat, cat)
             do k = 1, cnat
                 jat = cat(k)
                 if ( jat .ge. iat) cycle

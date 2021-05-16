@@ -2,6 +2,7 @@
 !> s1 term for the msd formula for the one dimensional case
 !> (http://dx.doi.org/10.1051/sfn/201112010)
 subroutine fasts1(n, d, s1)
+
       implicit none
 
       integer, intent(in) :: n
@@ -27,6 +28,7 @@ end subroutine fasts1
 !> Boost fasts1 even more.
 !> (http://dx.doi.org/10.1051/sfn/201112010)
 subroutine fasts1x(n, m, d, s1)
+
       implicit none
 
       integer, intent(in) :: n, m
@@ -76,28 +78,52 @@ subroutine fastunwrapv(n, rw, ip, a, b, c, r)
 
 end subroutine fastunwrapv
 
-!> Accelerate placing coordinates in (n,3) array and wrapping them (per
-!> configuration) using the periodic indexes
-subroutine fastunwrap(n, x, y, z, ix, iy, iz, a, b, c, rw, r)
+!> Accelerate placing coordinates in (n,3) array and wrapping them
+!> (per configuration) using the periodic indexes
+subroutine fastunwrapf(n, x, y, z, ix, iy, iz, va, vb, vc, r)
+
     implicit none
-      integer, intent(in) :: n
-      real*8, dimension( 0:n-1), intent(in) :: x, y, z
-      integer, dimension( 0:n-1), intent(in) :: ix, iy, iz
-      real*8, dimension( 0:2), intent(in) :: a, b, c
-      real*8, dimension(0:n-1,0:2), intent(out) :: rw
-      real*8, dimension(0:n-1,0:2), intent(out) :: r
 
-      integer :: i
-      real*8, dimension( 0:2) :: v
+    integer, intent(in) :: n                            !< # of atoms
+    real*8, dimension( 0:n-1), intent(in) :: x, y, z    !< atoms wrapped coordinates
+    integer, dimension( 0:n-1), intent(in) :: ix, iy, iz !< atoms periodic indexes
+    real*8, dimension( 0:2), intent(in) :: va, vb, vc   !< box spaning vectors
+    real*8, dimension( 0:2, 0:n-1), intent(out) :: r    !< atoms unwrapped coordinates
 
-      r = 0.d0
-      rw = 0.d0
+    integer :: i
+    real*8, dimension( 0:2) :: v
 
-      do i = 0, n-1
-          v =  (/ x(i), y(i), z(i) /)
-          rw( i,0:2) = v
-          r(i,0:2) = v + ix(i) * a  + iy(i) * b + iz(i) * c
-      end do
+    r = 0.d0
+!$omp parallel do private(i, v)
+    do i = 0, n-1
+        v =  (/ x(i), y(i), z(i) /)
+        r(0:2,i) = v + ix(i) * va  + iy(i) * vb + iz(i) * vc
+    end do
+!$omp end parallel do
+
+end subroutine fastunwrapf
+
+!> Accelerate placing coordinates in (n,3) array and wrapping them
+!> (per configuration) using the periodic indexes
+subroutine fastunwrap(n, rw, ip, va, vb, vc, r)
+
+    implicit none
+
+    integer, intent(in) :: n                            !< # of atoms
+    real*8, dimension( 0:2, 0:n-1), intent(in) :: rw    !< atoms wrapped coordinates
+    integer, dimension( 0:2, 0:n-1), intent(in) :: ip   !< atoms periodic indexes
+    real*8, dimension( 0:2), intent(in) :: va, vb, vc   !< box spaning vectors
+    real*8, dimension( 0:2, 0:n-1), intent(out) :: r    !< atoms unwrapped coordinates
+
+    integer :: i
+    real*8, dimension( 0:2) :: v
+
+    r = 0.d0
+!$omp parallel do private(i)
+    do i = 0, n-1
+        r(:,i) = rw(:,i) + ip(0,i) * va  + ip(1,i) * vb + ip(2,i) * vc
+    end do
+!$omp end parallel do
 
 end subroutine fastunwrap
 
@@ -292,31 +318,60 @@ subroutine fastwhole(n, rw, molecule, nbonds, bonds, a, b, c, r)
 
 end subroutine fastwhole
 
-!> Accelerate wrapping coordinates per configuration (ONLY cubic boxes)
-subroutine fastwrap(n, r, r0, a, b, c, rw)
+!> Accelerate wrapping coordinates per configuration for orthogonal boxes
+subroutine fastwrapo(n, r, v0, a, b, c, rw)
+
     implicit none
-      integer, intent(in) :: n
-      real*8, dimension(0:n-1,0:2), intent(in) :: r
-      real*8, dimension(0:2), intent(in) :: r0
-      real*8, intent(in) :: a, b, c
-      real*8, dimension(0:n-1,0:2), intent(out) :: rw
 
-      integer :: i, j, k
-      real*8, dimension( 0:2) :: v, d
+    integer, intent(in) :: n                          !< # of atoms
+    real*8, dimension( 0:2, 0:n-1), intent(in) :: r   !< atoms coordinates
+    real*8, dimension( 0:2), intent(in) :: v0         !< box origin
+    real*8, intent(in) :: a, b, c                     !< box edges
+    real*8, dimension( 0:2, 0:n-1), intent(out) :: rw !< atoms wrapped coordinates
 
-      rw = 0.d0
+    integer :: i, j, k
+    real*8, dimension( 0:2) :: v, d
 
-      d = (/ a, b, c /)
-      do i = 0, n-1
-          v =  r(i,:) - r0
-          do j = 0, 2
-              k = int( v(j) / d(j) )
-              if ( k /= 0       ) v(j) = v(j) - k * d(j)
-              if ( v(j) < 0.d0  ) v(j) = v(j) + d(j)
-              if ( v(j) >= d(j) ) v(j) = v(j) - d(j)
-          end do
-          rw(i,:) = r0 + v
-      end do
+    rw = 0.d0
+
+    d = (/ a, b, c /)
+!$omp parallel do private(i,j,k,v)
+    do i = 0, n-1
+        v =  r(:,i) - v0
+        do j = 0, 2
+            k = int( v(j) / d(j) )
+            if ( k /= 0       ) v(j) = v(j) - k * d(j)
+            if ( v(j) < 0.d0  ) v(j) = v(j) + d(j)
+            if ( v(j) >= d(j) ) v(j) = v(j) - d(j)
+        end do
+        rw(:,i) = v0 + v
+    end do
+!$omp end parallel do
+
+end subroutine fastwrapo
+
+!> Accelerate wrapping coordinates per configuration
+subroutine fastwrap(n, r, v0, va, vb, vc, rw)
+
+    use domain3d
+
+    implicit none
+
+    integer, intent(in) :: n                          !< # of atoms
+    real*8, dimension( 0:2, 0:n-1), intent(in) :: r   !< atoms coordinates
+    real*8, dimension( 0:2), intent(in) :: v0         !< box origin
+    real*8, dimension( 0:2), intent(in) :: va, vb, vc !< box spaning vectors
+    real*8, dimension( 0:2, 0:n-1), intent(out) :: rw !< atoms wrapped coordinates
+
+    integer :: i, j, k
+    real*8, dimension( 0:2) :: v, d
+    type(SimulationBox) :: box
+
+    rw = r
+    call box%initialize( v0, va, vb, vc, .true.)
+    call box%toFractional( n, rw)
+    call fastwrapo(n, rw, v0, 1.D0, 1.D0, 1.D0, rw)
+    call box%toCartesian(n, rw)
 
 end subroutine fastwrap
 
@@ -369,7 +424,7 @@ subroutine peenrgpress(n, r, rw, nch, rcm, atch , a, b, c, temperature,     &
 !enrg,einter,eintra,eimage,press,apress,mstens[:,:],astens[:,:]
 !    = peenrgpress(r,rw,rcm,molecules,box.va, box.vb, box.vc, T, rcut)
     use vector3d
-    use simulation_box
+    use domain3d
     use lj_interactions
 
     implicit none
@@ -849,7 +904,7 @@ end subroutine fastcom_exclude
 ! subroutine fastdihedrals(n, r, vo, va, vb, vc ,nd, d, angles)
 
 !     use vector3d
-!     use simulation_box    
+!     use domain3d
 
 !     implicit none
 !     integer, intent(in) :: n                          !< number of atoms
@@ -880,10 +935,10 @@ end subroutine fastcom_exclude
 !         ! cis zero righ-handed
 !         dr1xdr2 = unit( cross(dr1, dr2))
 !         dr2xdr3 = unit( cross(dr2, dr3))
-    
+
 !         dih = angle(dr1xdr2, dr2xdr3)
 !         s = dot(dr1xdr2, dr3)
-    
+
 !         angles(i) = dsign(dih, s)
 
 !     end do

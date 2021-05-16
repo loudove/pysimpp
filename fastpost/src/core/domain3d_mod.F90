@@ -1,10 +1,10 @@
-module simulation_box
+module domain3d
 
     implicit none
 
     private
 
-    real*8, parameter :: EPS = 1.d-12    ! precision used
+    real*8, parameter :: EPS = 1.D-12    ! precision used
 
     type CellAtomsData
         integer :: n = 0
@@ -14,9 +14,6 @@ module simulation_box
     type, public :: SimulationBox
         !> true if cell is periodic
         logical(4) :: periodic
-        !> flag indicating that all the arrays needed for
-        !> the calculations are allocated correctly.
-        logical :: initialized=.false.
         !> cell lengths
         real(8) :: a, b, c
         !> cell angles
@@ -35,6 +32,27 @@ module simulation_box
         real(8) :: volume
         !> cell transformation matrix from fractional to Cartesian coordinates.
         real(8), dimension (6) :: matrix
+
+        contains
+        procedure :: initialize => m_initialize
+        procedure :: minImg => m_MinimumImage
+        procedure :: minImgTo => m_MinimumImageTo
+        procedure :: minImgGet => m_iMinimumImage
+        procedure :: minImgToGet => m_iMinimumImageTo
+        procedure :: setMatrix => m_setMatrix
+        procedure :: toCartesian => m_toCartesian
+        procedure :: toFractional => m_toFractional
+        procedure :: getProjections => m_getProjections
+        procedure :: getVectors => m_getVectors
+
+    end Type SimulationBox
+
+    type, public :: BoxCells
+        !> the underline simulation box
+        type(SimulationBox), pointer :: pbox => NULL()
+        !> flag indicating that all the arrays needed for
+        !> the calculations are allocated correctly.
+        logical :: initialized=.false.
         !> # cells in x dimension
         integer, private :: nxCells = 0
         !> # cells in y dimension
@@ -51,79 +69,49 @@ module simulation_box
         real(8), private :: dy = 0.d0, rdy = 0.d0
         !> cells length and reverse length in z dimension
         real(8), private :: dz = 0.d0, rdz = 0.d0
-        !> number of atoms
-        integer, private :: nAtoms = 0
+        !> number of sites
+        integer, private :: nsites = 0
         !> cell that atom belongs
-        integer, private, allocatable, dimension (:)   :: atomCell
-        !> number of points
-        integer, private :: nPoints = 0
-        !> cell that point belong
-        integer, private, allocatable, dimension (:)   :: pointCell
+        integer, private, allocatable, dimension (:)   :: siteCell
 
         !< when the box grid is filled the points are placed in each cell in
         !< ordered fashion {xmin->xmax, ymin->ymax, zmin->zmax} i.e. at each
-        !< cell the first atoms will be closer to X0, Y0, and Z0 planes. This is
+        !< cell the first site will be closer to X0, Y0, and Z0 planes. This is
         !< convenient if you want to calculate periodic indexes conforming to
         !< specific direction which is useful if for example, you analyze Voronoi
         !< cells vertices and you want to find the periodic indexes of each vertex
         !< in order to use it for cluster connectivity checks.
         logical, private :: placeordered = .False.
 
-        !> an array contains atoms indexes. Helps in avoiding the
+        !> an array contains sites indexes. Helps in avoiding the
         !> allocation/deallocation of memory. The slab:
-        !> atoms(cellAtoms(i)%start:cellAtoms(i)%start+cellAtoms(i)%n)
-        !> contains the atoms indexes in the ith cell
-        integer, private, allocatable, dimension (:) :: atoms
-        !> a array contains point indexes. Helps in avoiding the allocation
-        !> deallocation of memory
-        integer, private, allocatable, dimension (:) :: points
+        !> sites(cellSites(i)%start:cellSites(i)%start+cellSites(i)%n)
+        !> contains the sites indexes in the ith cell
+        integer, private, allocatable, dimension (:) :: sites
 
-        type(CellAtomsData), private, allocatable, dimension(:) :: cellAtoms
-        type(CellAtomsData), private, allocatable, dimension(:) :: cellPoints
+        type(CellAtomsData), private, allocatable, dimension(:) :: cellSites
 
         contains
         procedure :: setOrdered => m_setOrdered
-        procedure :: initialize => m_initialize
-        procedure :: minImg => m_MinimumImage
-        procedure :: minImgTo => m_MinimumImageTo
-        procedure :: minImgGet => m_iMinimumImage
-        procedure :: minImgToGet => m_iMinimumImageTo
-        procedure :: setMatrix => m_setMatrix
         procedure :: split => m_split
         procedure :: fill => m_fill
-        procedure :: fillPoints => m_fillPoints
         procedure :: fillCells => m_fillCells
         procedure :: splitAndfill => m_splitAndfill
         procedure :: getAtomCell => m_getAtomCell
         procedure :: getCellAtoms => m_getCellAtoms
-        procedure :: getCellPoints => m_getCellPoints
         procedure :: getNeighbourCells => m_getNeighbourCells
-        procedure :: toCartesian => m_toCartesian
-        procedure :: toFractional => m_toFractional
-        procedure :: getProjections => m_getProjections
-        procedure :: getVectors => m_getVectors
         procedure :: destroy => m_destroy
 
-    end Type SimulationBox
+    end Type BoxCells
 
     contains
 
-    ! initialize the placeordered flag
-    subroutine m_setOrdered( this, on)
-        class(SimulationBox), intent(inout) :: this
-        logical, intent(in) :: on
-        this%placeordered = on
-    end subroutine m_setOrdered
-
-    ! initialize the box
+    !> initialize the box
     subroutine m_initialize( this, r, x, y, z, isPeriodic)
         use vector3d, only : length, angle, cross, dot
         class(SimulationBox), intent(inout) :: this
         real(8), dimension(3), intent(in) :: r, x, y, z
         logical(4), intent(in) :: isperiodic
-
-        ! initialize variables
-        this%nAtoms=0
 
         ! copy the values.
         this%r0 = r
@@ -175,7 +163,6 @@ module simulation_box
 
       u = v
       call m_MinimumImageTo(this, u)
-
       return
     end function m_MinimumImage
 
@@ -250,12 +237,92 @@ module simulation_box
         return
     end subroutine m_setMatrix
 
-    subroutine m_split(this, nx, ny, nz)
+    subroutine m_toCartesian(this, n, x)
+        class(SimulationBox), target, intent(inout) :: this
+        integer, intent(in) :: n
+        real(8), dimension(3,n), intent(inout) :: x
+
+        integer i
+
+        ! set the transformation matrix
+        call m_setMatrix(this)
+!$omp parallel do private(i)
+        do i = 1, n
+            x(1,i)=this%matrix(1)*x(1,i)+this%matrix(2)*x(2,i)+this%matrix(3)*x(3,i)+this%r0(1)
+            x(2,i)=                      this%matrix(4)*x(2,i)+this%matrix(5)*x(3,i)+this%r0(2)
+            x(3,i)=                                            this%matrix(6)*x(3,i)+this%r0(3)
+        end do
+!$omp end parallel do
+        return
+    end subroutine m_toCartesian
+
+    subroutine m_toFractional(this, n, x)
         class(SimulationBox), intent(inout) :: this
+        integer, intent(in) :: n
+        real(8), dimension(3,n), intent(inout) :: x
+
+        integer i
+
+        ! set the inverce transformation matrix
+        call m_setMatrix(this)
+        this%matrix(1)=1.d0/this%matrix(1)
+        this%matrix(4)=1.d0/this%matrix(4)
+        this%matrix(6)=1.d0/this%matrix(6)
+!$omp parallel do private(i)
+        do i = 1, n
+            x(1:3,i) = x(1:3,i)-this%r0(1:3)
+            x(3,i)=                              x(3,i)                *this%matrix(6)
+            x(2,i)=       (x(2,i)               -x(3,i)*this%matrix(5))*this%matrix(4)
+            x(1,i)=(x(1,i)-x(2,i)*this%matrix(2)-x(3,i)*this%matrix(3))*this%matrix(1)
+        end do
+!$omp end parallel
+        return
+    end subroutine m_toFractional
+
+    subroutine m_getProjections(this,x,y,z)
+        class(SimulationBox), intent(in) :: this
+        real(8), intent(out) :: x, y, z
+
+        x = 1.d0/this%px
+        y = 1.d0/this%py
+        z = 1.d0/this%pz
+
+        return
+    end subroutine m_getProjections
+
+    subroutine m_getVectors(this,r0_, a_, b_, c_, nXY_, nYZ_, nZX_)
+        class(SimulationBox), intent(in) :: this
+
+        real(8), dimension (3), intent(inout) :: r0_
+        real(8), dimension (3), intent(inout) :: a_, b_, c_
+        real(8), dimension (3), intent(inout) :: nXY_, nYZ_, nZX_
+
+        r0_ = this%r0
+        a_ = this%ux
+        b_ = this%uy
+        c_ = this%uz
+        nXY_ = this%nXY
+        nYZ_ = this%nYZ
+        nZX_ = this%nZX
+
+        return
+    end subroutine m_getVectors
+
+    !> initialize the placeordered flag
+    subroutine m_setOrdered( this, on)
+        class(BoxCells), intent(inout) :: this
+        logical, intent(in) :: on
+        this%placeordered = on
+    end subroutine m_setOrdered
+
+    subroutine m_split(this, box, nx, ny, nz)
+        class(BoxCells), intent(inout) :: this
+        type(SimulationBox), target, intent(inout) :: box
         integer, intent(in) :: nx, ny, nz
 
         if ( nx < 3 .AND. ny < 3 .AND. nz < 3 ) return
-
+    
+        this%pbox => box
         this%nxCells = nx
         this%nyCells = ny
         this%nzCells = nz
@@ -268,65 +335,42 @@ module simulation_box
         this%nxyCells = this%nxCells*this%nyCells
         this%nCells = this%nxyCells*this%nzCells
 
-        if ( allocated(this%cellAtoms) ) deallocate(this%cellAtoms)
-        allocate(this%cellAtoms(this%nCells))
+        ! check cellSites allocation
+        if ( allocated(this%cellSites) ) then
+            if ( size(this%cellSites) /= this%nCells )  deallocate(this%cellSites)
+        endif
+        if ( .not. allocated(this%cellSites) ) allocate( this%cellSites(this%nCells))
+
+        this%initialized = .true.
 
         return
     end subroutine m_split
 
     subroutine m_fill(this, n, x)
-        class(SimulationBox), intent(inout) :: this
+        class(BoxCells), intent(inout) :: this
         integer, intent(in) :: n
         real(8), dimension(3,n), intent(in) :: x
 
-        ! handle memory stuff
-        if ( this%nAtoms /= n ) then
-            this%nAtoms = n
-            if ( allocated(this%atomCell) ) deallocate(this%atomCell)
-            allocate(this%atomCell(this%nAtoms))
-            if ( allocated(this%atoms) ) deallocate(this%atoms)
-            allocate(this%atoms(this%nAtoms))
-        end if
-
+        ! m_split method need to precede to initialize the grid
         if ( .NOT. this%initialized ) return
 
-        call m_fillcells(this, n, x, this%atomCell, this%cellAtoms, this%atoms)
+        ! handle memory stuff
+        if ( this%nsites /= n ) then
+            this%nsites = n
+            if ( allocated(this%siteCell) ) deallocate(this%siteCell)
+            allocate(this%siteCell(this%nsites))
+            if ( allocated(this%sites) ) deallocate(this%sites)
+            allocate(this%sites(this%nsites))
+        end if
+
+        call m_fillcells(this, n, x)
 
     end subroutine m_fill
 
-    subroutine m_fillPoints(this, n, x)
-        class(SimulationBox), intent(inout) :: this
-        integer, intent(in) :: n
-        real(8), dimension(3,n), intent(in) :: x
-
-        ! handle memory stuff
-        if ( this%nPoints /= n ) then
-            this%nPoints = n
-            if ( allocated(this%pointCell) ) deallocate(this%pointCell)
-            allocate(this%pointCell(this%nPoints))
-            if ( allocated(this%points) ) deallocate(this%points)
-            allocate(this%points(this%nPoints))
-        end if
-
-        if ( .NOT. this%initialized ) return
-
-        ! check cellPoints allocation
-        if ( allocated(this%cellPoints) ) then
-            if ( size(this%cellPoints) /= this%nCells )  deallocate(this%cellPoints)
-        endif
-        if ( .not. allocated(this%cellPoints) ) allocate( this%cellPoints(this%nCells))
-
-        call m_fillcells(this, n, x, this%pointCell, this%cellPoints, this%points)
-
-    end subroutine m_fillPoints
-
-    subroutine m_fillCells(this, n, xin, xCell, Cellx, xarray)
-        class(SimulationBox), intent(inout) :: this
+    subroutine m_fillCells(this, n, xin)
+        class(BoxCells), intent(inout) :: this
         integer, intent(in) :: n
         real(8), dimension(3,n), intent(in) :: xin
-        integer, dimension(n) :: xCell
-        type(CellAtomsData), dimension(n) :: Cellx
-        integer, dimension(n) :: xarray
         real(8), dimension(3) :: r
         integer i, j, ii
         integer ix, iy, iz, icell
@@ -336,15 +380,15 @@ module simulation_box
 
         real(8), dimension(3,n) :: x
 
-        xCell(1:n)=0
-        xarray(1:n)=0
+        this%siteCell(1:n)=0
+        this%sites(1:n)=0
         forall(i=1:this%nCells)
-            cellx(i)%n=0
-            cellx(i)%start=0
+            this%cellSites(i)%n=0
+            this%cellSites(i)%start=0
         end forall
 
         x(:,:) = xin(:,:)
-        call m_toFractional(this, n, x)
+        call m_toFractional(this%pbox, n, x)
 
         ! create the ordered array. if placeordered is true the
         ! atom will be placed in 8 cells of equal volume defined
@@ -404,38 +448,39 @@ module simulation_box
             iz = int(r(3)*this%rdz)
             if ( iz == this%nzCells ) iz = iz - 1
             icell = 1 + ix + iy*this%nxCells + iz*this%nxyCells
-            xCell(i)=icell
+            this%siteCell(i)=icell
         end do
 
         ! find the number of x in the cells
         do i = 1, n
-            icell = xCell(i)
-            cellx(icell)%n = cellx(icell)%n + 1
+            icell = this%siteCell(i)
+            this%cellSites(icell)%n = this%cellSites(icell)%n + 1
         end do
 
         ! find the starting indexes in the x array for cells
-        cellx(1)%start=1
+        this%cellSites(1)%start=1
         do i = 2, this%nCells
-            cellx(i)%start = cellx(i-1)%start+cellx(i-1)%n
+            this%cellSites(i)%start = this%cellSites(i-1)%start+this%cellSites(i-1)%n
         end do
 
         ! zero the number of x in each cell
-        cellx(1:this%nCells)%n=0
+        this%cellSites(1:this%nCells)%n=0
 
-        ! place x in the correct order in xarray array
+        ! place x in the correct order in this%sites array
         do ii = 1, n
             i = ordered(ii)
-            icell = xCell(i)
-            xarray(cellx(icell)%start+cellx(icell)%n) = i
-            cellx(icell)%n=cellx(icell)%n+1
+            icell = this%siteCell(i)
+            this%sites(this%cellSites(icell)%start+this%cellSites(icell)%n) = i
+            this%cellSites(icell)%n=this%cellSites(icell)%n+1
         end do
 
-        call m_toCartesian( this, n, x)
+        call m_toCartesian( this%pbox, n, x)
 
     end subroutine m_fillCells
 
-    subroutine m_splitAndfill(this, nx, ny, nz, n, x)
-        class(SimulationBox), intent(inout) :: this
+    subroutine m_splitAndfill(this, box, nx, ny, nz, n, x)
+        class(BoxCells), intent(inout) :: this
+        type(SimulationBox), target, intent(inout) :: box
         integer, intent(in) :: nx, ny, nz
         integer, intent(in) :: n
         real(8), dimension(3,n), intent(in) :: x
@@ -443,15 +488,15 @@ module simulation_box
         this%initialized = .true.
 
         ! split the box
-        call m_split(this,nx,ny,nz)
+        call m_split(this,box,nx,ny,nz)
 
-        ! allocate the arrays for atoms
-        if ( this%nAtoms /= n ) then
-            this%nAtoms = n
-            if ( allocated(this%atomCell) ) deallocate(this%atomCell)
-            allocate(this%atomCell(this%nAtoms))
-            if ( allocated(this%atoms) ) deallocate(this%atoms)
-            allocate(this%atoms(this%nAtoms))
+        ! allocate the arrays for sites
+        if ( this%nsites /= n ) then
+            this%nsites = n
+            if ( allocated(this%siteCell) ) deallocate(this%siteCell)
+            allocate(this%siteCell(this%nsites))
+            if ( allocated(this%sites) ) deallocate(this%sites)
+            allocate(this%sites(this%nsites))
         end if
 
         ! fill the box with
@@ -461,14 +506,14 @@ module simulation_box
     end subroutine m_splitAndfill
 
     function m_getAtomCell(this, iat) result(icell)
-        class(SimulationBox), target, intent(in) :: this
+        class(BoxCells), target, intent(in) :: this
         integer*4, intent(in) :: iat
         integer*4 :: icell
-        icell = this%atomCell(iat)
+        icell = this%siteCell(iat)
     end function m_getAtomCell
 
     subroutine m_getCellAtoms(this, indx, n, a)
-        class(SimulationBox), target, intent(in) :: this
+        class(BoxCells), target, intent(in) :: this
         integer, intent(in) :: indx
         integer, intent(out)::  n
         integer, pointer, dimension(:) :: a
@@ -479,36 +524,16 @@ module simulation_box
             n=0
             a => NULL()
         else
-            n=this%cellAtoms(indx)%n
-            start = this%cellAtoms(indx)%start
-            a=>this%atoms(start:start+n-1)
+            n=this%cellSites(indx)%n
+            start = this%cellSites(indx)%start
+            a=>this%sites(start:start+n-1)
         end if
 
         return
     end subroutine m_getCellAtoms
 
-    subroutine m_getCellPoints(this, indx, n, a)
-        class(SimulationBox), target, intent(in) :: this
-        integer, intent(in) :: indx
-        integer, intent(out)::  n
-        integer, pointer, dimension(:) :: a
-
-        integer start
-
-        if ( indx == -1 .OR. indx > this%nCells ) then
-            n=0
-            a => NULL()
-        else
-            n=this%cellAtoms(indx)%n
-            start = this%cellAtoms(indx)%start
-            a=>this%atoms(start:start+n-1)
-        end if
-
-        return
-    end subroutine m_getCellPoints
-
     subroutine m_getNeighbourCells(this, indx, n, c)
-        class(SimulationBox), target, intent(in) :: this
+        class(BoxCells), target, intent(in) :: this
         integer, intent(in) :: indx
         integer, intent(out)::  n
         integer, dimension(27) :: c
@@ -547,24 +572,24 @@ module simulation_box
                     exclude=.false.
                     if ( icell == this%nxCells+1 ) then
                         icell=1
-                        if ( .NOT. this%periodic ) exclude=.true.
+                        if ( .NOT. this%pbox%periodic ) exclude=.true.
                     else if ( icell == 0 ) then
                         icell=this%nxCells
-                        if ( .NOT. this%periodic ) exclude=.true.
+                        if ( .NOT. this%pbox%periodic ) exclude=.true.
                     endif
                     if ( jcell == this%nyCells+1 ) then
                         jcell=1
-                        if ( .NOT. this%periodic ) exclude=.true.
+                        if ( .NOT. this%pbox%periodic ) exclude=.true.
                     else if ( jcell == 0 ) then
                         jcell=this%nyCells
-                        if ( .NOT. this%periodic ) exclude=.true.
+                        if ( .NOT. this%pbox%periodic ) exclude=.true.
                     endif
                     if ( kcell == this%nzCells+1 ) then
                         kcell=1
-                        if ( .NOT. this%periodic ) exclude=.true.
+                        if ( .NOT. this%pbox%periodic ) exclude=.true.
                     else if ( kcell == 0 ) then
                         kcell=this%nzCells
-                        if ( .NOT. this%periodic ) exclude=.true.
+                        if ( .NOT. this%pbox%periodic ) exclude=.true.
                     endif
                     if ( exclude ) then
                         tmp = -1
@@ -580,86 +605,14 @@ module simulation_box
       return
     end subroutine m_getNeighbourCells
 
-    subroutine m_toCartesian(this, n, x)
-        class(SimulationBox), target, intent(inout) :: this
-        integer, intent(in) :: n
-        real(8), dimension(3,n), intent(inout) :: x
-
-        integer i
-
-        ! set the transformation matrix
-        call m_setMatrix(this)
-
-        do i = 1, n
-            x(1,i)=this%matrix(1)*x(1,i)+this%matrix(2)*x(2,i)+this%matrix(3)*x(3,i)+this%r0(1)
-            x(2,i)=                      this%matrix(4)*x(2,i)+this%matrix(5)*x(3,i)+this%r0(2)
-            x(3,i)=                                            this%matrix(6)*x(3,i)+this%r0(3)
-        end do
-
-        return
-    end subroutine m_toCartesian
-
-    subroutine m_toFractional(this, n, x)
-        class(SimulationBox), intent(inout) :: this
-        integer, intent(in) :: n
-        real(8), dimension(3,n), intent(inout) :: x
-
-        integer i
-
-        ! set the inverce transformation matrix
-        call m_setMatrix(this)
-        this%matrix(1)=1.d0/this%matrix(1)
-        this%matrix(4)=1.d0/this%matrix(4)
-        this%matrix(6)=1.d0/this%matrix(6)
-
-        do i = 1, n
-            x(1:3,i) = x(1:3,i)-this%r0(1:3)
-            x(3,i)=                              x(3,i)                *this%matrix(6)
-            x(2,i)=       (x(2,i)               -x(3,i)*this%matrix(5))*this%matrix(4)
-            x(1,i)=(x(1,i)-x(2,i)*this%matrix(2)-x(3,i)*this%matrix(3))*this%matrix(1)
-        end do
-
-        return
-    end subroutine m_toFractional
-
-    subroutine m_getProjections(this,x,y,z)
-        class(SimulationBox), intent(in) :: this
-        real(8), intent(out) :: x, y, z
-
-        x = 1.d0/this%px
-        y = 1.d0/this%py
-        z = 1.d0/this%pz
-
-        return
-    end subroutine m_getProjections
-
-    subroutine m_getVectors(this,r0_, a_, b_, c_, nXY_, nYZ_, nZX_)
-        class(SimulationBox), intent(in) :: this
-            
-        real(8), dimension (3), intent(inout) :: r0_
-        real(8), dimension (3), intent(inout) :: a_, b_, c_
-        real(8), dimension (3), intent(inout) :: nXY_, nYZ_, nZX_
-
-        r0_ = this%r0
-        a_ = this%ux
-        b_ = this%uy
-        c_ = this%uz
-        nXY_ = this%nXY
-        nYZ_ = this%nYZ
-        nZX_ = this%nZX
-
-        return
-    end subroutine m_getVectors
-
     subroutine m_destroy(this)
-        class(SimulationBox), intent(inout) :: this
-        integer i
+        class(BoxCells), intent(inout) :: this
 
-        if ( allocated(this%atomCell) ) deallocate(this%atomCell)
-        if ( allocated(this%cellAtoms) ) deallocate(this%cellAtoms)
-        if ( allocated(this%atoms) ) deallocate(this%atoms)
+        if ( allocated(this%siteCell) ) deallocate(this%siteCell)
+        if ( allocated(this%cellSites) ) deallocate(this%cellSites)
+        if ( allocated(this%sites) ) deallocate(this%sites)
 
         return
     end subroutine m_destroy
 
-  end module simulation_box
+  end module domain3d
