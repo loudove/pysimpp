@@ -21,7 +21,7 @@ module domain3d
         !> cell origin
         real(8), dimension (3) :: r0
         !> cell vectors
-        real(8), dimension (3) :: ux, uy, uz
+        real(8), dimension (3) :: vx, vy, vz
         !> cell normal vectors (unit)
         real(8), dimension (3) :: nXY, nYZ, nZX
         !> cell normal vector "projection" lengths
@@ -42,7 +42,7 @@ module domain3d
         procedure :: setMatrix => m_setMatrix
         procedure :: toCartesian => m_toCartesian
         procedure :: toFractional => m_toFractional
-        procedure :: getProjections => m_getProjections
+        procedure :: projections => m_getProjections
         procedure :: getVectors => m_getVectors
 
     end Type SimulationBox
@@ -74,13 +74,13 @@ module domain3d
         !> cell that atom belongs
         integer, private, allocatable, dimension (:)   :: siteCell
 
-        !< when the box grid is filled the points are placed in each cell in
-        !< ordered fashion {xmin->xmax, ymin->ymax, zmin->zmax} i.e. at each
-        !< cell the first site will be closer to X0, Y0, and Z0 planes. This is
-        !< convenient if you want to calculate periodic indexes conforming to
-        !< specific direction which is useful if for example, you analyze Voronoi
-        !< cells vertices and you want to find the periodic indexes of each vertex
-        !< in order to use it for cluster connectivity checks.
+        !> when the box grid is filled the points are placed in each cell in
+        !> ordered fashion {xmin->xmax, ymin->ymax, zmin->zmax} i.e. at each
+        !> cell the first site will be closer to X0, Y0, and Z0 planes. This is
+        !> convenient if you want to calculate periodic indexes conforming to
+        !> specific direction which is useful if for example, you analyze Voronoi
+        !> cells vertices and you want to find the periodic indexes of each vertex
+        !> in order to use it for cluster connectivity checks.
         logical, private :: placeordered = .False.
 
         !> an array contains sites indexes. Helps in avoiding the
@@ -115,9 +115,9 @@ module domain3d
 
         ! copy the values.
         this%r0 = r
-        this%ux = x
-        this%uy = y
-        this%uz = z
+        this%vx = x
+        this%vy = y
+        this%vz = z
         this%periodic = isPeriodic
 
         ! find lengths.
@@ -176,13 +176,13 @@ module domain3d
         if ( .NOT. this%periodic ) return
         project = dot(v,this%nYZ)
         d = dnint(project*this%px)
-        v = v - d * this%ux
+        v = v - d * this%vx
         project = dot(v,this%nZX)
         d = dnint(project*this%py)
-        v = v - d * this%uy
+        v = v - d * this%vy
         project = dot(v,this%nXY)
         d = dnint(project*this%pz)
-        v = v - d * this%uz
+        v = v - d * this%vz
 
         return
     end subroutine m_MinimumImageTo
@@ -211,15 +211,15 @@ module domain3d
         project = dot(v,this%nYZ)
         d = dnint(project*this%px)
         i = int(d)
-        v = v - d * this%ux
+        v = v - d * this%vx
         project = dot(v,this%nZX)
         d = dnint(project*this%py)
         j = int(d)
-        v = v - d * this%uy
+        v = v - d * this%vy
         project = dot(v,this%nXY)
         d = dnint(project*this%pz)
         k = int(d)
-        v = v - d * this%uz
+        v = v - d * this%vz
 
         return
     end subroutine m_iMinimumImageTo
@@ -298,9 +298,9 @@ module domain3d
         real(8), dimension (3), intent(inout) :: nXY_, nYZ_, nZX_
 
         r0_ = this%r0
-        a_ = this%ux
-        b_ = this%uy
-        c_ = this%uz
+        a_ = this%vx
+        b_ = this%vy
+        c_ = this%vz
         nXY_ = this%nXY
         nYZ_ = this%nYZ
         nZX_ = this%nZX
@@ -319,6 +319,8 @@ module domain3d
         class(BoxCells), intent(inout) :: this
         type(SimulationBox), target, intent(inout) :: box
         integer, intent(in) :: nx, ny, nz
+
+        this%initialized = .false.
 
         if ( nx < 3 .AND. ny < 3 .AND. nz < 3 ) return
     
@@ -485,19 +487,8 @@ module domain3d
         integer, intent(in) :: n
         real(8), dimension(3,n), intent(in) :: x
 
-        this%initialized = .true.
-
         ! split the box
         call m_split(this,box,nx,ny,nz)
-
-        ! allocate the arrays for sites
-        if ( this%nsites /= n ) then
-            this%nsites = n
-            if ( allocated(this%siteCell) ) deallocate(this%siteCell)
-            allocate(this%siteCell(this%nsites))
-            if ( allocated(this%sites) ) deallocate(this%sites)
-            allocate(this%sites(this%nsites))
-        end if
 
         ! fill the box with
         call m_fill(this,n,x)

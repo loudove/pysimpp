@@ -1,0 +1,3 @@
+[submodule "fastpost/f90tw"]
+	path = fastpost/f90tw
+	url = https://github.com/loudove/f90tw.git

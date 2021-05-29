@@ -96,13 +96,17 @@ configure_file(
 add_custom_target(uninstall
        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
 
-# # add the test fwk
-add_subdirectory(f90tw)
+# add the test fwk
+set ( GTESTFWK ON )
+set ( BOOSTFWK OFF )
+set ( TESTS OFF )
+set ( EXAMPLES OFF )
+add_subdirectory( f90tw )
 
-# # add test for fastpost core functionality
+# add test for fastpost core functionality
 F90TWTEST ( test_vector3d 
   CFILES tests/test_vector3d.cpp
-  FPPFILES tests/test_vector3d_f90.fpp
+  FPPFILES tests/test_vector3d.fpp
   OUTDIR "${CMAKE_CURRENT_BINARY_DIR}"
   EXE ${FPP_EXE} OPTIONS ${FPP_OPTIONS} SWITCH ${FPP_SWITCH}
   INCLUDES ${f90tw_INCLUDE_DIR}
@@ -113,7 +117,8 @@ F90TWTEST ( test_vector3d
 
 F90TWTEST ( test_domain3d
   CFILES tests/test_domain3d.cpp
-  FPPFILES tests/test_domain3d_f90.fpp
+  F90FILES tests/test_domain3d.f90
+  F2HFILES "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_domain3d.f90"
   OUTDIR "${CMAKE_CURRENT_BINARY_DIR}"
   EXE ${FPP_EXE} OPTIONS ${FPP_OPTIONS} SWITCH ${FPP_SWITCH}
   INCLUDES ${f90tw_INCLUDE_DIR}

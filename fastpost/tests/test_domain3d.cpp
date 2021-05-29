@@ -1,3 +1,3 @@
-#define CURRENTTESTFILE "test_domain3d_f90.fpp"
+#define CURRENTTESTFILE "test_domain3d.f90.h"
 
 #include "f90tw_gtest.h"

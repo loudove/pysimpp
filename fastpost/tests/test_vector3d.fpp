@@ -66,15 +66,15 @@ TESTCODE(TEST, vector3d, square, test_square,
 TESTCODE(TEST, vector3d, linear, test_linear,
       real(8) :: a ; integer(4) :: i;
       real(8), dimension(3) :: v, w ;
-      real(8) :: myeps=DEPS*100.d0 ;
+      real(8) :: myeps=DEPS*1.d5 ;
       call init_random() ;
-      do i = 1, 1000 ;
+      do i = 1, 100000 ;
             call random_number(a) ; call random_number(v) ; call random_number(w) ;
             call F90_ASSERT_DOUBLE_EQ( length(a*v), a*length(v), 
                               "length(a*v)=a*lengt(v)" F90CONCAT C_NULL_CHAR ) ;
             call F90_ASSERT_DOUBLE_EQ( angle(v,w), angle(-v,-w), 
                               "angle(v,w)=angle(-v,-w)" F90CONCAT C_NULL_CHAR ) ;
-            call F90_ASSERT_DOUBLE_EQ( length( project(a*v,w)), a*length( project(v,w)), 
+            call F90_ASSERT_NEAR( length( project(a*v,w)), a*length( project(v,w)), myeps, 
                               "project(a*v,w)=a*project(a*v,w)" F90CONCAT C_NULL_CHAR ) ;
             call F90_ASSERT_NEAR( angle(v,w), dacos(-1.d0)-angle(-1.d0*v,w), myeps, 
                               "angle(v,w)=pi-angle(v,w)" F90CONCAT C_NULL_CHAR ) ;
