@@ -13,7 +13,7 @@ from pysimpp.utils.clusterutils import Node, Connection, Cluster
 from pysimpp.utils.vectorutils import get_length, get_unit, get_projection, projection, get_vertical
 from pysimpp.fastpost import fastcom, gyration, inertia, order_parameter, order_parameter_local # pylint: disable=no-name-in-module
 
-_debug = True
+_debug = False
 __iu = np.array((1.0,0.0,0.0))
 __ju = np.array((0.0,1.0,0.0))
 __ku = np.array((0.0,0.0,1.0))
@@ -664,10 +664,10 @@ class MCluster(Cluster):
                 _cp1 = _l1 * _axis
                 _where = (_rp<_l0) | (_rp>_l1)
                 _x = _r[ _where]
-                _dr0 = _x[ _where] - _cp0
+                _dr0 = _x - _cp0
                 box.set_to_minimum(_dr0)
                 _dist0 = np.sqrt( np.sum( _dr0*_dr0, axis=1))
-                _dr1 = _x[ _where] - _cp1
+                _dr1 = _x - _cp1
                 box.set_to_minimum(_dr1)
                 _dist1 = np.sqrt( np.sum( _dr1*_dr1, axis=1))
                 _dist = np.min( _dist0, _dist1)
