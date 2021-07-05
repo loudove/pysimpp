@@ -49,6 +49,10 @@ def get_projection(a, b):
     p = np.dot(a, b) / np.dot(a, a)
     return np.array(a) * p
 
+def projection(a, b):
+    ''' Return the length of projection of vector b to a, considering a as unit. '''
+    return np.dot(a, b) / np.dot(a, a)
+
 def get_vertical(a, b):
     ''' Return a vertor vertical to vector a. The new vector lies on
         plane defined form a and b toward. '''

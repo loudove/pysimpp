@@ -21,7 +21,7 @@ import pysimpp.readers
 # import pysimpp.readers.groreader as gmp
 
 from pysimpp.utils.utils import chk_filename, parse_radii, isrange, isfile, IsList, IsListOfList, IsListOfNamedList
-from pysimpp.utils.statisticsutils import Histogram, Histogram2D, Histogram3D
+from pysimpp.utils.statisticsutils import Binning, Histogram, Histogram2D, Histogram3D
 from pysimpp.fastpost import fastunwrapv, order_parameter # pylint: disable=no-name-in-module
 from pysimpp.utils.clusterutils import Node, Connection
 import pysimpp.utils.voropputils as voropputils
@@ -53,7 +53,8 @@ def clusters(filename,
              histograms={},
              nbhist=False,
              histograms2d=[],
-             histograms3d=[]):
+             histograms3d=[],
+             profiles=[]):
 
     # check the input file
     reader = pysimpp.readers.create(filename)
@@ -165,10 +166,29 @@ def clusters(filename,
     else:
         atom_specific = atom_selected
 
+    # density profiles calculations
+    if len(profiles) > 0:
+        bprofiles = defaultdict(
+            lambda: defaultdict(lambda: Binning.free(0.2, 0.0, False)))
+        profileid = np.zeros(natoms, dtype=int)
+        profilemap = {}
+        for ik, k in enumerate( sorted( profiles.keys())):
+            v = profiles[k]
+            for name in v:
+                profileid[ np.where(atom_name == name) ] = ik+1
+            profilemap[ ik+1] = k
+        if excluded:
+            profileid[ atom_excluded ] = 0
+
     # check ends (add missing residues)
-    for _res in molnames:
-        pass
-        # res_ends = ends[_res]
+    # TODO finish "-ends" implementation (remove or generalize)
+    res_ends = {}
+    if len(ends) > 0:
+        for _res in molnames:
+            _ends = ends.setdefault(_res,[])
+            res_ends[_res] = tuple(np.array(_ends)-1)
+    else:
+        res_ends['CTAC'] = (0,15)
 
     # coordinates and conformation stuff
     rw = np.empty(shape=(natoms, ndims),
@@ -217,10 +237,10 @@ def clusters(filename,
     ######################################
     hist2d = {}
     for _pair in histograms2d:
-        hist2d["%s_%s" % _pair] = _pair
+        hist2d["%s_%s" % tuple(_pair)] = _pair
     hist3d = {}
     for _triplet in histograms3d:
-        hist3d["%s_%s_%s" % _triplet] = _triplet
+        hist3d["%s_%s_%s" % tuple(_triplet)] = _triplet
     hneighbors2d = defaultdict(lambda: Histogram2D(1.0, (0, 0), addref=False))
     hneighbors3d = defaultdict(
         lambda: Histogram3D(1.0, (0, 0, 0), addref=False))
@@ -272,6 +292,10 @@ def clusters(filename,
             continue
 
         if box:
+            if _debug and len(steps) == 0:
+                print("{0:4s}  {1:4s}  {2:4s}  {3:4s}  {4:4s}  {5:4s}  {6:4s} \
+ {7:4s}  {8:7s}  {9:7s}  {10:7s}  {11:5s}  {12:3s}"                                                   .format('b','b1','b2','c','c1','d','d1','sqk','bb1','bb2','bb3','ee','n'))
+
             steps.append(step)
             boxes.append(box)
             for k, v in dmap.items():
@@ -404,8 +428,9 @@ def clusters(filename,
                 # _b: asphericity
                 # _c: acylindricity
                 # _sqk: relative shape anisotropy
-                MCluster.order(_cl, r, atom_mass, molecule_atoms, neighbors, ends)
+                MCluster.order(_cl, r, atom_mass, molecule_atoms, molecule_name, neighbors, res_ends)
                 MCluster.shape(_cl, r, atom_mass, molecule_atoms)
+                MCluster.profile(_cl, r, box, profileid, profilemap, bprofiles)
                 _size = len(_cl.molecules)
                 # group q matrix eigenvalues based on three basic shapes:
                 # spherical: all eigenvalues are close to zero (a threshold of 0.1 will be used)
@@ -491,6 +516,10 @@ def clusters(filename,
     #     for ic in clusterlen:
     #         a[ ic] += 1
 
+    if len(steps) == 0:
+        print("No frames processed")
+        return
+
     # write down the results
     for ik, iv in hist_neighbors.items():
         for jk, jv in iv.items():
@@ -546,6 +575,12 @@ def clusters(filename,
         v.normalize()
         v.write(dirname + os.sep + _name)
 
+    # write down profiles
+    for k, v in bprofiles.items():
+        for _k, _v in v.items():
+            _name = dirname + os.sep + "%s_%s.prof"%(profilemap[_k],k)
+            _v.write( _name, header="# Number density profile profile")
+
     if True:
         mollog.close()
         orderlog.close()
@@ -596,7 +631,7 @@ def command():
     group = parser.add_mutually_exclusive_group()
     chktype = IsList("wrong molecules indexs range (check: %s)",itemtype=int,positive=True)
     string = '''
-    molecules to be used. A comma seperated list with the ranges of molecules 
+    molecules to be used. A comma seperated list with the ranges of molecules
     ids e.g. "1,2,3" or "1:10,20,30:100" '''
     group.add_argument('-molecules', nargs=1, type=chktype, default=[[]], \
         metavar='molid range', help=string)
@@ -608,13 +643,11 @@ def command():
     group.add_argument('-molnames', nargs=1, type=chktype, default=[[]], \
         metavar='molnames range', help=string)
 
-    chktype = IsListOfNamedList("wrong ends argument (check: %s)", itemtype=int, 
+    chktype = IsListOfNamedList("wrong ends argument (check: %s)", itemtype=int,
         positive=True, llen=2)
     string = '''
-    for the molecular types participating in a cluster provide the two end atoms 
-    defining the end to end vector. If a molecule type (name) provided in the
-    "-molnames" options is omitted it will not be considered in the calculations
-    of the end-to-end vectors. '''
+    provide the two end atoms defining the end to end vectors for the molecular
+    types participating in a cluster (see "-molnames" option). '''
     parser.add_argument('-ends', nargs=1, type=chktype, default=[{}], \
         metavar='list end atoms', help=string)
 
@@ -630,7 +663,7 @@ def command():
     the names of the atoms to be considered in the close contact analysis. A comma
     separated list for each molecular type in the "-molnames" argument should be
     provided. If a wildcard "*" is given for a residue then all the atoms of the
-    residue will be considered. For example, if the molecules A,B are given in 
+    residue will be considered. For example, if the molecules A,B are given in
     "-molnames" argument then this argument should look like "C1,C2,C3:O1" meaning
     that atoms C1,C2,C3 should be considered for residue A and atom O1 for residue B. '''
     parser.add_argument('-specific', nargs=1, type=chktype, default=[[]], \
@@ -640,17 +673,17 @@ def command():
     the file with the radii of the atoms. It can be element or type based.
     The first line of the file contains the keywords:
     [element|type] [r|d].
-    The first, is the atom type identifier and the second if the radius (r) 
-    or the diameter (d) is given for each type. The rest of the lines contain 
+    The first, is the atom type identifier and the second if the radius (r)
+    or the diameter (d) is given for each type. The rest of the lines contain
     pairs of values (type, rarious). The type could be either a number (type id)
     or a string (type name). '''
-    parser.add_argument('-radii', nargs=1, type=argparse.FileType('r'), 
+    parser.add_argument('-radii', nargs=1, type=argparse.FileType('r'),
         metavar='file with atoms\' type/elemet radii', help=string)
 
     string = '''
-    the histograms of the number of neighbor pairs to be calculated. Each pair 
-    consists of a groups of atoms and a list of molecules. The distance is the 
-    distance between their centers of masses. A list of pairs separated with "@" 
+    the histograms of the number of neighbor pairs to be calculated. Each pair
+    consists of a groups of atoms and a list of molecules. The distance is the
+    distance between their centers of masses. A list of pairs separated with "@"
     should be provided. Each pair contains the information for a histogram
     in the following format:
         GROUPNAME:MOLNAME:ATOMSLIST:RESIDUESLIST
@@ -667,7 +700,7 @@ def command():
 
     For example, the line:
         C1:CTAC:C1,H31,H32,H33:CTAC,CL,SOL@C2:CTAC:C2,H1,H2:CTAC,CL,SOL
-    defines two groups and the following pairs: (C1,H31,H32,H33)-CTAC, 
+    defines two groups and the following pairs: (C1,H31,H32,H33)-CTAC,
     (C1 H31 H32 H33)-CL, (C1 H31 H32 H33)-SOL, (C2,H1,H2)-CTAC,
      (C2,H1,H2)-CL, (C2,H1,H2)-SOL. The following files are wirtten in
      the simulation directory: C1_CTAC_neighbors.dat, C1_CL_neighbors.dat,
@@ -695,7 +728,7 @@ def command():
             ret[tk[0]] = (rnm, grp, res)
         return ret
 
-    parser.add_argument('-hist', nargs=1, type=argshist, default=[{}], 
+    parser.add_argument('-hist', nargs=1, type=argshist, default=[{}],
         metavar='list of neighbor group pairs', help=string)
 
     string = '''
@@ -720,14 +753,34 @@ def command():
 
     chktype = IsListOfList("wrong argument (check: %s)", itemtype=str, llen=3)
     string = '''
-    for a cluster, calculates the conditional probability of having n neighbor residues
-    of type C given that m neighbor residues of type B exist for all the possible values 
-    of the number of neighbor residues of type A. The argument is a list of triplets 
-    separated with ":" e.g. A,B,C:D,E,F. For each triplet, the conditional probability 
+    for a cluster, calculate the conditional probability of having n neighbor residues
+    of type C given that m neighbor residues of type B exist for all the possible values
+    of the number of neighbor residues of type A. The argument is a list of triplets
+    separated with ":" e.g. A,B,C:D,E,F. For each triplet, the conditional probability
     is written in the file An_B_C_TOTAL3D_neighbors.dat in the simulation directory.
     '''
     parser.add_argument('-hist3d', nargs=1, type=chktype, default=[[]],
         metavar='list of triplets of residues', help=string)
+
+    chktype = IsListOfNamedList("wrong profiles argument (check: %s)", itemtype=str)
+    string = '''
+    calculate the number density profile of the given groups of atoms. The distance
+    considered for the profiles depends on the position of the atoms in the micelle
+    and eventually from the shape of the cluster. If the atom is located in a spherical
+    micelle or in the spherical caps of an elongated/waged micelle, the distance from
+    the center of the sphere is used. If the atoms belong to a cylindrical column or
+    in the body of an elongated micelle, the length of its projection on the column
+    axis is taken. The argument is a list of comma-separated atoms name lists separated
+    with ":" e.g. C1,C2:N:OW. Atoms specified with the "-excluded" argument will be
+    excluded also here. For each list, the density profile will be written in the file
+    profile_{listnumber}_{shape}.dat in the simulation directory where list number if
+    the id of the list and shape the shape of the cluster. Three types of clusters are
+    considered:  spherical (s), cylindrical infinite periodic (c), and wedged/elongated (e).
+    Therefore file profile_2_s.dat corresponds to the density profiles of N atoms with the
+    respect to the center of mass for spherical clusters.
+    '''
+    parser.add_argument('-profiles', nargs=1, type=chktype, default=[[]],
+        metavar='list of atom names', help=string)
 
     parser.add_argument('-voropp', nargs=1, type=str, default=[""], metavar='voro++ executable', \
         help='provide a voro++ executable to be used instead of pyvoro python module.')
@@ -750,7 +803,8 @@ def command():
              histograms=args.hist[0],
              nbhist=args.nbhist,
              histograms2d=args.hist2d[0],
-             histograms3d=args.hist3d[0])
+             histograms3d=args.hist3d[0],
+             profiles=args.profiles[0])
 
 if __name__ == '__main__':
     command()

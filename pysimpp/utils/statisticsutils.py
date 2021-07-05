@@ -138,6 +138,47 @@ class Binning():
             if (n < 0 or n > self.n): raise HistogramException("value out of range")
         self.h[n].set( value)
 
+    def addat(self, n, value=1.0):
+        ''' Add a value in the histogram at the specific bin. '''
+        if self.type == -1: return
+        self.variable.set(value)
+        if self.type == Histogram.FIXED:
+            if (n < 0 or n > self.n): raise HistogramException("value out of range")
+        self.h[n].set( value)
+
+    def add_histogram(self, histogram, options):
+        ''' Add the given histogram . The options dict contains
+            the keys defining the addition details. Currently
+            works only for free type histograms.
+        '''
+        if not self.type == Histogram.FREE: return
+
+        _h = histogram.h
+        _add = self.addat
+        if options['type'] == 'r': # raw data, just add
+            for k in _h.keys(): _add( k, value=_h[k])
+        else:
+            _profile = options['profile']
+            _d = histogram.d
+            _pi = np.pi
+            if _profile == 's': # spherical
+                for k in _h.keys():
+                    r1 = (k*_d)
+                    r2 = r1+_d
+                    _v = 4.0 / 3.0 * _pi * (r2**3-r1**3)
+                    _add( k, value=_h[k]/_v)
+            elif _profile == 'c': # cylindrical
+                _length = options['length']
+                for k in _h.keys():
+                    r1 = (k*_d)
+                    r2 = r1+_d
+                    _s = _pi * (r2**2-r1**2)
+                    _add( k, value=_h[k]/(_s*_length))
+            elif _profile == 'a': # axial
+                _surface = options['surface']
+                _v = _surface * _h.b
+                for k in _h.keys(): _add( k, value=_h[k]/_v)
+
     def bin_range(self):
         ''' Get the bin range. '''
         if self.type == Histogram.FIXED:
@@ -253,11 +294,18 @@ class Histogram():
 
     def div_data(self, a):
         ''' Divide self histogram data with a array data. '''
-        if not self.type == Histogram.FIXED or\
-            not self.h.size == a.size: return
-
-        for i in range(self.h.size):
-            if  not a[i] == 0.0: self.h[i] /= a[i]
+        if type(a) in (int, float):
+            if self.type == Histogram.FIXED:
+                _h = self.h
+                for k in _h.keys():
+                    _h[k] /= a
+            else:
+                self.h /= a
+        else:
+            if not self.type == Histogram.FIXED or\
+                not self.h.size == a.size: return
+            for i in range(self.h.size):
+                if not a[i] == 0.0: self.h[i] /= a[i]
 
     def add(self, value, multiplicity=1.0):
         ''' Add a value in the histogram. '''

@@ -5,10 +5,10 @@ import sys
 import inspect
 import time
 import math
-import numpy
+import numpy as np
 from collections import defaultdict
 from argparse import ArgumentTypeError
-from numpy import *
+# from numpy import *
 
 def inspect_classes( module):
     ''' returns a {name:class} dict with the classes exist in the given module. '''

@@ -8,11 +8,210 @@ import numpy as np
 import networkx as nx
 
 from pysimpp.utils.simulationbox import SimulationBox
-from pysimpp.utils.statisticsutils import Variable
+from pysimpp.utils.statisticsutils import Variable, Histogram
 from pysimpp.utils.clusterutils import Node, Connection, Cluster
+from pysimpp.utils.vectorutils import get_length, get_unit, get_projection, projection, get_vertical
 from pysimpp.fastpost import fastcom, gyration, inertia, order_parameter, order_parameter_local # pylint: disable=no-name-in-module
 
-_debug = False
+_debug = True
+__iu = np.array((1.0,0.0,0.0))
+__ju = np.array((0.0,1.0,0.0))
+__ku = np.array((0.0,0.0,1.0))
+
+class UnitHexagolal2D():
+    ''' implements a 2d hexagonal grid. '''
+    __sqrt23 = np.sqrt(2./3.)
+    __onesf = np.ones(3, dtype=float)
+    __iu = np.array((1.0,0.0,0.0))
+    __ju = np.array((0.0,1.0,0.0))
+    __ku = np.array((0.0,0.0,1.0))
+
+    def __init__(self):
+        ''' initialize unit cell. '''
+        pass
+
+    @classmethod
+    def create(cls, axis, point, box, atol = 0.1):
+
+        # access static members
+        _ones = UnitHexagolal2D.__onesf
+        _sqrt23 = UnitHexagolal2D.__sqrt23
+
+        # calculate axis/box utility vectors
+        sign = np.sign( axis)
+        absaxis = np.abs( axis)
+        v = np.array( ( box.a, box.b, box.c))
+        u = get_unit( v)
+        obj = None
+
+        iscubic = np.isclose(box.a, box.b) and np.isclose(box.a, box.c)
+        isortho = np.isclose( box.a*box.b*box.c, box.volume)
+
+        if not isortho: return None
+
+        # space diagonal
+        if np.all( np.isclose(absaxis, u, atol = atol)) and iscubic:
+            normal = u * sign # plane normal vector (space diagonal)
+
+            # sign indicats the box apex where the space diagonal points
+            # if the origin is located at the center of the box.
+            # Get the box apex in box coordinates (i,j,k) with i,j,k := {0,1}
+            # (with the origin being located at the start of the box)
+            apex = np.array( (sign+_ones)/2, dtype=int)
+            origin = v * apex
+            _i, _j, _k = apex
+            # find the coordinates of the neighboring/connected apexes
+            iv = v * np.array( ((_i+1)%2, _j, _k))
+            jv = v * np.array( (_i, (_j+1)%2, _k))
+            # kv = v * np.array( (_i, _j, (_k+1)%2))
+            # get their projections to the plance
+            ip = get_vertical( normal, iv-origin)
+            jp = get_vertical( normal, jv-origin)
+            # force right handed (ip,jp,normal) frame
+            if np.dot( np.cross(iv,jv), normal) < 0: ip, jp = jp, ip
+            kp = ip + jp
+            # box edges length
+            a, b, c = v
+            # the total length of the column equals box space diagonal
+            length = np.sqrt(a*a+b*b+c*c)
+            # 2d h1 unit cell edge length
+            d = a * _sqrt23
+            obj = cls()
+            obj.pbc = obj._pbc_space_diagonal
+
+        # face diagonal
+        if obj is None:
+            for mask in (np.array((1,1,0)),np.array((1,0,1)),np.array((0,1,1))):
+                _v = v * mask
+                cmask = (mask+1)%2 # complementary mask (for the normal to the plane)
+                u = get_unit( _v)
+                if np.all( np.isclose(absaxis, u, atol = atol)):
+                    normal = u * sign # plane normal vector (face diagonal)
+
+                    # find box apex where the diagonal points in box coordinates
+                    # [ (i,j,k) with i,j,k := {0,1}]
+                    sign[np.array(cmask,dtype=bool)] = -1 # force using the lower box planes
+                    apex = np.array( (sign+_ones)/2, dtype=int)
+                    origin = _v * apex
+                    # find neighboring apexes
+                    _i, _j, _k = apex
+                    iv = v * np.array( ((_i+1)%2, _j, _k)) # 1st apex connected to plane point
+                    jv = v * np.array( (_i, (_j+1)%2, _k)) # 2nd apex connected to plane point
+                    kv = v * np.array( (_i, _j, (_k+1)%2)) # 3rd apex connected to plane point
+
+                    _box = np.array( (iv, jv, kv))
+                    iv, jv = _box[np.array( mask,dtype=bool)]
+                    kv = v * cmask
+                    ip = get_vertical( normal, iv - jv) * 0.5
+                    # force (ip,kv,normal) to be right handed
+                    if np.dot( np.cross(ip, kv), normal) < 0.0:
+                        ip = get_vertical( normal, jv - iv) * 0.5
+                    jp = kv
+
+                    a, b = get_length(iv-origin), get_length(jv-origin)
+                    c = get_length( kv)
+                    diagonal = np.sqrt(a*a+b*b)
+                    # not necessary but set a convinient length for the normal vector
+                    normal *= diagonal
+                    # 2d unit cell edge length
+                    d = a * b / diagonal
+                    # the total length of the column equals box space diagonal
+                    length = diagonal
+
+                    kp = origin = np.zeros(3)
+                    obj = cls()
+                    obj.pbc = obj._pbc_face
+
+        # face normal
+        if obj is None:
+            for mask in (np.array((1,0,0)),np.array((0,1,0)),np.array((0,0,1))):
+                _v = v * mask
+                cmask = (mask+1)%2 # complementary mask (for the normal to the plane)
+                u = get_unit( _v)
+                if np.all( np.isclose(absaxis, u, atol = atol)):
+                    normal = u * sign # plane normal vector (face diagonal)
+
+                    _box = np.array((box.va, box.vb, box.vc))
+                    ip, jp = _box[ np.array( cmask, dtype=bool)]
+                    if np.dot( np.cross( ip, jp), normal) < 0:
+                        ip, jp = jp, ip
+                    kp = _box[ np.array( mask, dtype=bool)]
+                    a, b, c = get_length(ip), get_length(jp), get_length(kp)
+                    d = 0.0
+
+                    # not necessary but set a convinient length for the normal vector
+                    normal[:] *= c
+                    # the total length of the column equals box face diagonal
+                    length = c
+
+                    kp = origin = np.zeros(3)
+                    obj = cls()
+                    obj.pbc = obj._pbc_face
+
+        if not obj is None:
+            # find transofmation matrix from fram to local coordinates (assuming row vectors)
+            matrix = np.array( (ip, jp, normal))
+            tolocal = np.linalg.inv( matrix)
+            obj.axis = np.array(axis)
+            obj.point = np.array(point)
+            obj.normal = np.array(normal)
+            obj.origin = np.array(origin)
+            obj.u = np.array(ip)
+            obj.v = np.array(jp)
+            obj.w = np.array(kp)
+            obj.tolocal = np.array( tolocal)
+            obj.a = float(a)
+            obj.b = float(b)
+            obj.c = float(c)
+            obj.length = float(length)
+            obj.d = float(d)
+            obj.box = np.array( (get_length(ip),get_length(jp)))
+            return obj
+
+    def _pbc_space_diagonal(self, r):
+        d = np.zeros(r.size//3)
+        # wrap fractional coordinates into the cell
+        r[:,0:2] -= np.floor(r[:,0:2])
+        # convert the projections on the (v,u) plane to lab frame
+        _r = np.outer(r[:,0],self.v)+np.outer(r[:,1],self.u)
+        # get the projections on the v, u, and w vectors
+        pv = np.dot(_r, self.v) / np.dot(self.v, self.v)
+        pu = np.dot(_r, self.u) / np.dot(self.u, self.u)
+        pw = np.dot(_r, self.w) / np.dot(self.w, self.w)
+        # find the distances of the projections from the near apex
+        # of the unit cell
+        condv = pv <= 0.5
+        condu = pu <= 0.5
+        condw = pw <= 0.5
+        where = condv & condu & condw
+        remain = np.array(where)
+        _x = _r[where]
+        d[where] = np.sqrt( np.sum( _x*_x,axis=1))
+        where = (~ condv) & (pu <= 0.0)
+        remain |= where
+        _x = _r[where]-self.v
+        d[where] = np.sqrt( np.sum(_x*_x ,axis=1))
+        where = (~ condu) & (pv <= 0.0)
+        remain |= where
+        _x = _r[where]-self.u
+        d[where] = np.sqrt( np.sum(_x*_x ,axis=1))
+        where = ~ where
+        _x = _r[where]-self.v-self.u
+        d[where] = np.sqrt( np.sum(_x*_x,axis=1))
+        return d
+
+    def _pbc_face(self, r):
+        _box = self.box
+        _r = ( r[:,:2] - np.rint( r[:,:2])) * _box
+        d = np.sqrt( np.sum(_r*_r,axis=1))
+        return d
+
+    def distance(self, r):
+        # center coordinates to the reference point and convert
+        # them to fractional coordinates of the unit cell
+        _r = np.dot(r - self.point, self.tolocal)
+        return self.pbc( _r)
+
 
 class MCluster(Cluster):
     ''' Implements a molecular cluster (i.e. an ensemble
@@ -103,7 +302,7 @@ class MCluster(Cluster):
             Returns:
                 list: the list of the parent clusters.
             '''
-                
+
         # Thε given set should be complete i.e. all the nodes of the system
         # should have been assigned in one of the clusters
 
@@ -234,7 +433,7 @@ class MCluster(Cluster):
                      ( a[0], b[1], c[2], a[1], a[2], b[0], b[2], c[0], c[1]))
 
     @staticmethod
-    def order( cluster, r, atom_mass, molecule_atoms, neighbors, ends):
+    def order( cluster, r, atom_mass, molecule_atoms, molecule_name, neighbors, ends):
         ''' Calculate molecular shape and order characteristics. The calculated
             properties are added as cluster attributes. '''
         _catoms = []
@@ -249,16 +448,18 @@ class MCluster(Cluster):
         _exclude = np.zeros( len(cluster.molecules), dtype=np.bool)
 
         ### LDP specific for CTAC and the connectivity used
-        # (TODO remove or generalize)
-        _matoms = [ molecule_atoms[im] for im in cluster.molecules]
-        # _catoms = [ _at for _mat in _matoms for _at in _mat ]
-        _start = [ _mat[0] for _mat in _matoms ]
-        _end = [ _mat[15] for _mat in _matoms ]
-        _ee = r[_end] - r[_start]
-        # no pbc needed for coordinates since they are already whole
-        _msqee = (_ee*_ee).sum(axis=1).mean()
-        cluster._msqee = _msqee
-        #######################
+        # TODO finish "-ends" implementation (remove or generalize)
+        if len(ends) >0 :
+            _matoms = [ molecule_atoms[im] for im in cluster.molecules]
+            # _catoms = [ _at for _mat in _matoms for _at in _mat ]
+            _end0, _end1 = ends['CTAC']
+            _start = [ _mat[_end0] for _mat in _matoms ]
+            _end = [ _mat[_end1] for _mat in _matoms ]
+            _ee = r[_end] - r[_start]
+            # no pbc needed for coordinates since they are already whole
+            _msqee = (_ee*_ee).sum(axis=1).mean()
+            cluster._msqee = _msqee
+            #######################
 
         _rp, _rg, _eigval, _eigvec, _ierr =  gyration(_r, _masses, _molecules, _exclude)
         _sqrg = _eigval.sum(axis=1)
@@ -303,19 +504,29 @@ class MCluster(Cluster):
         _catoms = []
         for im in cluster.molecules:
             _catoms += molecule_atoms[im]
-
+        cluster._catoms = _catoms
         # shape of the cluster
-        _r = r[ list(_catoms)]
+        _r = r[ _catoms]
         _masses = atom_mass[ _catoms]
         _nomasses = np.ones( _masses.size, dtype=np.float32)
         _molecules = np.zeros(len(_catoms),dtype=np.int32)
         _exclude = np.array((False))
         _rp, _rg, _eigval, _eigvec, _ierr =  gyration(_r, _nomasses, _molecules, _exclude)
+        _com = fastcom( _r, _masses, _molecules, 1)
         _e = _eigval[0]
-        sqrg = _e[0].sum()              # square radious of gyration
-        b = _e[0]-0.5*(+_e[1]+_e[2])    # aspherisity
-        c = _e[1]-_e[2]                 # acylindricity
+        sqrg = _e.sum()              # square radious of gyration
+        b = _e[0]-0.5*(_e[1]+_e[2])    # aspherisity
+        c = _e[1]-_e[2]                # acylindricity
+        cp = _e[0]-_e[1]               # acylindricity prime
         sqk = (b*b+0.75*c*c)/(sqrg*sqrg)# anisotropy
+        # "normalize" asphericity dividing by Rg^2
+        # b = b / _e[0]  # aspherisity
+        b = b / sqrg  # aspherisity
+        # or following gromacs implementation
+        # b = (3./2.) * (np.sum((_e - sqrg/3.)**2))/sqrg**2
+        # "normalize" acylindricity dividing by _e[1]
+        c = c / _e[1]
+        cp = cp / _e[0]
         # bounding ortho box: find the probability distribution along
         # each principal axis. check which range is higher that the
         # value of the corresponding uniform distribution scaled by f
@@ -331,6 +542,7 @@ class MCluster(Cluster):
             _on = x[ np.where(y > f*uniform)]
             bbox.append(_on[-1]-_on[0])
             on.append((_on[0],_on[-1] ))
+        cluster._bounds = on
 
         # estimate the total linear number molecular density
         # find the real molecule for each atom of the cluster
@@ -366,9 +578,27 @@ class MCluster(Cluster):
         cluster._bbox = bbox
         cluster._rgval = _eigval[0]
         cluster._rgvec = _eigvec[0]
+        cluster._com = _com[0]
+
+        if _debug:
+            print( "{0:.2f}  {1:.2f}  {2:.2f}  {3:.2f}  {4:.2f}  {5:.2f}  {6:.2f} \
+ {7:.2f}  {8:7.2f}  {9:7.2f}  {10:7.2f}  {11:.2f}  {12:d}".format(
+                (_e[0]-0.5*(_e[1]+_e[2]))/sqrg,
+                (_e[0]-0.5*(_e[1]+_e[2]))/_e[0],
+                (3./2.) * (np.sum((_e - sqrg/3.)**2))/sqrg**2,
+                (_e[1]-_e[2])/sqrg,
+                (_e[1]-_e[2])/_e[1],
+                (_e[0]-_e[1])/sqrg,
+                (_e[0]-_e[1])/_e[0],
+                sqk,
+                bbox[0],
+                bbox[1],
+                bbox[2],
+                np.sqrt(cluster._msqee),
+                len(cluster.molecules) ))
 
         # retrieve the q matrix for the cluster and check if any
-        #  of the primitive axes coinsides with a director
+        # of the primary axes coinsides with a director
         dirs = cluster._qvec.reshape(3,3)
         _crit = 10.0*np.pi/180.0
         # take the eigenvector corresponding to the larger eigenvalues
@@ -376,3 +606,101 @@ class MCluster(Cluster):
         _v = _eigvec[0][0:3]
         _dir = np.where(np.arccos( dirs.dot( _v)) < _crit)[0]
         cluster._qlong = cluster._qval[_dir[0]] if not _dir.size == 0 else 0.0
+
+    @staticmethod
+    def chkaxis(cluster, box, atol=0.11):
+        hbox = UnitHexagolal2D.create( cluster._rgvec[:3], cluster._com, box, atol=atol)
+        return hbox
+
+    @staticmethod
+    def profile(cluster, r, box, profileid, profilemap, bprofiles):
+        # TODO support triclinic boxes (work in fractional coordinates)
+        # (currently on cubic boxes are supported)
+
+        # TODO add criteria/cases based on the molecular weight
+        # cylindrical column
+        if cluster._infinit:
+            _hbox = MCluster.chkaxis(cluster, box)
+            _bs = bprofiles['c']
+            _hs = defaultdict(lambda: Histogram.free(0.2, 0.0, False))
+            _dist = _hbox.distance(r)
+            for k in profilemap:
+                if k == 0: continue
+                _h = _hs[k]
+                _d = _dist[np.where(profileid == k)]
+                np.vectorize(_h.add)(_d) # TODO compile the universal function once
+            for k, v in _hs.items():
+                _bs[k].add_histogram(v, options={'type':'p','profile':'c', 'length':_hbox.length})
+
+        # spherical
+        elif cluster._b < 0.2 and cluster._c < 0.3 and cluster._sqk < 0.2:
+            _bs = bprofiles['s']
+            _hs = defaultdict(lambda: Histogram.free(0.2, 0.0, False))
+            _cm = cluster._com
+            _dr = r - _cm
+            box.set_to_minimum(_dr)
+            _dist = np.sqrt( np.sum( _dr*_dr, axis=1))
+            for k in profilemap:
+                if k == 0: continue
+                _h = _hs[k]
+                _d = _dist[np.where(profileid == k)]
+                np.vectorize(_h.add)(_d) # TODO compile the universal function once
+            for k, v in _hs.items():
+                _bs[k].add_histogram(v, options={'type':'p','profile':'s'})  
+
+        # cylindrical
+        elif 0.2 < cluster._b < 0.65 and cluster._c < 0.3 and 0.1 < cluster._sqk < 0.4:
+            _rest = (cluster._bbox[1]+cluster._bbox[2])/4.0 # estimate end-to-end
+            if cluster._bbox[0] > 2.0*_rest:
+                _cm = cluster._com
+                _axis = cluster._rgvec[:3]
+                _r = r - _cm
+                box.set_to_minimum(_r)
+                _rp = np.dot(_r, _axis) / np.dot(_axis, _axis)
+                _min, _max = np.min(_rp), np.max(_rp)
+                _l0 = _min+_rest
+                _cp0 = _l0 * _axis
+                _l1 = _max-_rest
+                _cp1 = _l1 * _axis
+                _where = (_rp<_l0) | (_rp>_l1)
+                _x = _r[ _where]
+                _dr0 = _x[ _where] - _cp0
+                box.set_to_minimum(_dr0)
+                _dist0 = np.sqrt( np.sum( _dr0*_dr0, axis=1))
+                _dr1 = _x[ _where] - _cp1
+                box.set_to_minimum(_dr1)
+                _dist1 = np.sqrt( np.sum( _dr1*_dr1, axis=1))
+                _dist = np.min( _dist0, _dist1)
+
+                _bs = bprofiles['es']
+                _hs = defaultdict(lambda: Histogram.free(0.2, 0.0, False))
+
+                _profileid = profileid[ _where]
+                for k in profilemap:
+                    if k == 0: continue
+                    _h = _hs[k]
+                    _d = _dist[np.where(_profileid == k)]
+                    np.vectorize(_h.add)(_d) # TODO compile the universal function once
+
+                for k, v in _hs.items():
+                    _bs[k].add_histogram(v, options={'type':'p','profile':'s'})                    
+
+                _bs = bprofiles['ec']
+                _hs = defaultdict(lambda: Histogram.free(0.2, 0.0, False))
+
+                _where = ~ _where
+                _rpv = _rp[_where] * _axis
+                _dr = _r[_where] - _rpv
+                box.set_to_minimum(_dr)
+                _dist = np.sqrt( np.sum( _dr*_dr, axis=1))
+                for k in profilemap:
+                    if k == 0: continue
+                    _h = _hs[k]
+                    _d = _dist[np.where(_profileid == k)]
+                    np.vectorize(_h.add)(_d) # TODO compile the universal function once
+
+                for k, v in _hs.items():
+                    _bs[k].add_histogram(v, options={'type':'p','profile':'c', 'length':_l1-_l0})
+
+
+

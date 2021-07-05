@@ -238,15 +238,11 @@ class MDAnalysisReader(abcReader):
         return charges
 
     def get_molecule_name(self):
-        ''' Return the molecues residue names.
-            NOTE: in this implementation residues are
-                considered as molecules and therefore,
-                molecules of the same specie sould have
-                the same name. '''
+        ''' Return the molecues residue names. '''
         names = super(MDAnalysisReader, self).get_molecule_name()
         if len(names) == 0:
             _where = np.unique(self.u.atoms.molnums, return_index=True)
-            names = self.u.atoms.moltypes[_where]
+            names = self.u.atoms.moltypes[_where[1]]
         return names
         # return self.u.residues.resnames
 
