@@ -25,7 +25,7 @@ from pysimpp.utils.statisticsutils import Binning, Histogram, Histogram2D, Histo
 from pysimpp.fastpost import fastunwrapv, order_parameter # pylint: disable=no-name-in-module
 from pysimpp.utils.clusterutils import Node, Connection
 import pysimpp.utils.voropputils as voropputils
-from .mclusterutils import MCluster # pylint: disable=import-error
+from .mclusterutils import MClusterTracker, MCluster # pylint: disable=import-error
 from .mclusterlog import ClPropertiesLog, ClMolecularLog, ClOrderLog, ClDetailsLog # pylint: disable=import-error
 
 # global flags
@@ -222,6 +222,8 @@ def clusters(filename,
     hprop2D['sqk_mol'] = Histogram2D((0.1, 1.0), (0, 0), addref=False)
     hprop2D['qlong'] = Histogram2D((0.1, 1.0), (0, 0), addref=False)
 
+    # tracer = MClusterTracker()
+
     # prepare on the fly log
     log = ClPropertiesLog(dirname)
     if True:
@@ -404,6 +406,7 @@ def clusters(filename,
             _clusters = MCluster.defrag(_subclusters)
 
             # analyse
+            # tracer.update(_clusters, step*reader.timestep)
             r = rw if _wholeused else reader.get_unwrapped()
             for i, _cl in enumerate(_clusters):
                 MCluster.udpate_coordinates(_cl, box, rw, r, atom_molecule,

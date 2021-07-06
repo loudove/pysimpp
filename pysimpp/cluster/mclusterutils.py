@@ -212,6 +212,53 @@ class UnitHexagolal2D():
         _r = np.dot(r - self.point, self.tolocal)
         return self.pbc( _r)
 
+class MClusterTracker():
+    def __init__(self):
+        # {cluster UID: [] }
+        self.clusters = defaultdict(list)
+        # current and previous configuration data
+        self.tp = 0.0 # time
+        self.mp = None # {moleculeID:clusterID}
+        self.previous = None # list of clusters [set(molecules)]
+        self.tc = 0.0
+        self.mc = None
+        self.current = None
+
+    def _update_current( self, clusters, t):
+        ''' Create the current state. The clusters list should be
+            sorted based on cluster size (i.e. number of molecules). '''
+        _current = [ set(_c.molecules) for _c in clusters ]
+        _mc = defaultdict(int)
+        for _ic, _c  in enumerate(_current):
+            for _m in _c:
+                _mc[_m] = _ic+1
+        self.current, self.mc, self.tc = _current, _mc, t
+
+    def update(self, clusters, t):
+        # _current is the {id:molecules} dict for the given clusters
+        # the id assigned at each cluster is not unique.
+        _current = { _ic+1:set(_c.molecules) for _ic, _c in enumerate(clusters) }
+
+        if not self.current is None:
+            # move current to previous
+            self.previous, self.mp, self.tp = self.current, self.mc, self.tc
+            # find the current cluster for each molecule
+            _mc = defaultdict(int)
+            for _ic, _c  in enumerate(_current):
+                for _m in _c:
+                    _mc[_m] = _ic
+            # check the state of previous clusters
+            _persist = []
+            for _ip, _p in self.previous.items():
+                # fild where the molecules of _p cluster have been distributed
+                _new = Counter( [ _mc[_m] for _m in _p ])
+                _new = sorted( [ (_k,_v) for _k, _v in _new.items() ], key=lambda _x: _x[1], reverse=True)
+                _max = _new[0]
+                _lenp = len(_p)
+                if (_lenp - _new[ _max[1]])/_lenp < 0.1:
+                    pass 
+        else:
+            pass
 
 class MCluster(Cluster):
     ''' Implements a molecular cluster (i.e. an ensemble
@@ -646,7 +693,7 @@ class MCluster(Cluster):
                 _d = _dist[np.where(profileid == k)]
                 np.vectorize(_h.add)(_d) # TODO compile the universal function once
             for k, v in _hs.items():
-                _bs[k].add_histogram(v, options={'type':'p','profile':'s'})  
+                _bs[k].add_histogram(v, options={'type':'p','profile':'s'})
 
         # cylindrical
         elif 0.2 < cluster._b < 0.65 and cluster._c < 0.3 and 0.1 < cluster._sqk < 0.4:
@@ -656,6 +703,7 @@ class MCluster(Cluster):
                 _axis = cluster._rgvec[:3]
                 _r = r - _cm
                 box.set_to_minimum(_r)
+                # projection length on cylinder axis.
                 _rp = np.dot(_r, _axis) / np.dot(_axis, _axis)
                 _min, _max = np.min(_rp), np.max(_rp)
                 _l0 = _min+_rest
@@ -670,7 +718,9 @@ class MCluster(Cluster):
                 _dr1 = _x - _cp1
                 box.set_to_minimum(_dr1)
                 _dist1 = np.sqrt( np.sum( _dr1*_dr1, axis=1))
-                _dist = np.min( _dist0, _dist1)
+                _minimum = _dist0 < _dist1 # find the min(_dist0, _dist1)
+                _dist = np.array( _dist1)
+                _dist[_minimum] = _dist0[_minimum]
 
                 _bs = bprofiles['es']
                 _hs = defaultdict(lambda: Histogram.free(0.2, 0.0, False))
@@ -683,13 +733,13 @@ class MCluster(Cluster):
                     np.vectorize(_h.add)(_d) # TODO compile the universal function once
 
                 for k, v in _hs.items():
-                    _bs[k].add_histogram(v, options={'type':'p','profile':'s'})                    
+                    _bs[k].add_histogram(v, options={'type':'p','profile':'s'})
 
                 _bs = bprofiles['ec']
                 _hs = defaultdict(lambda: Histogram.free(0.2, 0.0, False))
 
                 _where = ~ _where
-                _rpv = _rp[_where] * _axis
+                _rpv = np.outer(_rp[_where], _axis)
                 _dr = _r[_where] - _rpv
                 box.set_to_minimum(_dr)
                 _dist = np.sqrt( np.sum( _dr*_dr, axis=1))
@@ -701,6 +751,4 @@ class MCluster(Cluster):
 
                 for k, v in _hs.items():
                     _bs[k].add_histogram(v, options={'type':'p','profile':'c', 'length':_l1-_l0})
-
-
 
