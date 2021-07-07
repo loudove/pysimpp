@@ -157,7 +157,7 @@ class IsListOfNamedList(IsListOfList):
             A,B,C:D,E,G:H,J,L,R    
     '''
     def __init__(self, message, itemtype=str, positive=False,
-                 llen=-1, sep='@', sep1=':', sep2=','):
+                 klen=-1, llen=-1, sep='@', sep1=':', sep2=','):
         ''' Initialize the object and store settings.
             Args:
                 message (str) : the error message if one of the lists fails the
@@ -165,7 +165,8 @@ class IsListOfNamedList(IsListOfList):
                 itemtype (type) : the type of the items in the lists. Currently
                     int, float and str types are supported.
                 positive (bool) : check if the numbers in the lists are positive.
-                llen (int) : the length of the lists. If a possitive integer is
+                klen (int) : the length of the name-list 
+                llen (int) : the length of the named lists. If a possitive integer is
                     provided all the lists shoud have the same length and equal to
                     llen
                 ser (str) : the separator for the list.
@@ -174,6 +175,7 @@ class IsListOfNamedList(IsListOfList):
         '''
         super(IsListOfNamedList, self).__init__(message, itemtype, positive, llen, sep1, sep2)
         self.sep = sep
+        self.klen = klen
 
     def __call__(self, string):
         ''' Check if the string conforms with the specifications. '''
@@ -183,18 +185,29 @@ class IsListOfNamedList(IsListOfList):
         lines = string.split(self.sep)
         for line in lines:
             tk = tuple( map(lambda x: x.strip(), line.split(self.sep1)))
-            if not len(tk) == 2:
-                message = "wrong ends argument (check: %s)" % line
-                raise ArgumentTypeError(message)            
-            if self.itemtype is str:
-                items = list(map(lambda x: x.strip(), tk[1].split(self.sep2)))
-            else:
-                items = islist(tk[1],numbertype=self.itemtype,
-                    positive=self.positive, sep=self.sep2)
-            if len(items) == 0 or self.llen>0 and not len(items) == self.llen:
+            if self.klen > 0 and not len(tk) == self.klen:
+                message = self.message % str(line) if "%s" in self.message else self.message
+                raise ArgumentTypeError(message)
+            items = [
+                list(map(lambda x: x.strip(), _tk.split(self.sep2)))
+                        if self.itemtype is str else 
+                islist(_tk, numbertype=self.itemtype, positive=self.positive, sep=self.sep2)
+                        for _tk in tk[1:]
+            ]
+            lengths = list(map(len, items))
+            if lengths.count(0) > 0 or self.llen>0 and not lengths.count(self.llen) == len(lengths):
                 message = self.message % ('"%s"' % line) if "%s" in self.message else self.message
                 raise ArgumentTypeError(message)
-            ret[ tk[0]] = items
+            ret[ tk[0]] = items[0] if len(tk) == 2 else items
+            # if self.itemtype is str:
+            #     items = list(map(lambda x: x.strip(), tk[1].split(self.sep2)))
+            # else:
+            #     items = islist(tk[1],numbertype=self.itemtype,
+            #         positive=self.positive, sep=self.sep2)
+            # if len(items) == 0 or self.llen>0 and not len(items) == self.llen:
+            #     message = self.message % ('"%s"' % line) if "%s" in self.message else self.message
+            #     raise ArgumentTypeError(message)
+            # ret[ tk[0]] = items
         return ret
 
 def islist(string, numbertype=int, positive=False, sep=','):
@@ -389,5 +402,4 @@ def read_ndx(f):
             _type=line[1:-1].strip()
         else:
             _d[_type]+=" "+line
-    return { np.array(list(map( int, _d[k].split()))) for k in list(_d.keys()) } 
-
+    return { np.array(list(map( int, _d[k].split()))) for k in list(_d.keys()) }

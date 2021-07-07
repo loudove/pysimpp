@@ -147,14 +147,14 @@ def clusters(filename,
     # 3 selected can't be a subset of excluded
     # 4 specific intersect with selected is non emtpy and contains
     #     the atoms to be used fro the cluster analysis
-    atom_resname = np.array( list(map( lambda im: molecule_name[im], atom_molecule)))
+    atom_molname = np.array( list(map( lambda im: molecule_name[im], atom_molecule)))
     if len(specific) > 0:
         if not len(specific) == len(molnames):
             print( "A specific list of atom names should be provided for each residue to be considered.")
             sys.exit(0)
         atom_specific = np.zeros((natoms), dtype=np.bool)
         for _resname, _specific in zip(molnames, specific):
-            _atom_specific = atom_resname == _resname
+            _atom_specific = atom_molname == _resname
             if not "*" in _specific:
                 _atom_specific[:] = np.logical_and(_atom_specific, np.isin(atom_name, _specific))
             atom_specific[:] = np.logical_or(atom_specific, _atom_specific)
@@ -167,15 +167,16 @@ def clusters(filename,
         atom_specific = atom_selected
 
     # density profiles calculations
-    if len(profiles) > 0:
+    doprofiles = len(profiles) > 0
+    if doprofiles:
         bprofiles = defaultdict(
-            lambda: defaultdict(lambda: Binning.free(0.2, 0.0, False)))
+            lambda: defaultdict(lambda: Binning.free(0.25, 0.0, False)))
         profileid = np.zeros(natoms, dtype=int)
         profilemap = {}
         for ik, k in enumerate( sorted( profiles.keys())):
             v = profiles[k]
-            for name in v:
-                profileid[ np.where(atom_name == name) ] = ik+1
+            for name in v[1]:
+                profileid[ np.where((atom_name == name)&(np.isin(atom_molname,v[0]))) ] = ik+1
             profilemap[ ik+1] = k
         if excluded:
             profileid[ atom_excluded ] = 0
@@ -270,7 +271,7 @@ def clusters(filename,
 
     _chk_grps_indxs = {}
     for k, v in _chk_grps.items():
-        _atom_ok = atom_resname == _chk_rnm[k]
+        _atom_ok = atom_molname == _chk_rnm[k]
         _atom_ok[:] = np.logical_and(_atom_ok, np.isin(atom_name, v))
         _ndxs = np.where(_atom_ok)[0]
         _chk_grps_indxs[k] = _ndxs.reshape(int(_ndxs.size / len(v)), len(v))
@@ -433,7 +434,8 @@ def clusters(filename,
                 # _sqk: relative shape anisotropy
                 MCluster.order(_cl, r, atom_mass, molecule_atoms, molecule_name, neighbors, res_ends)
                 MCluster.shape(_cl, r, atom_mass, molecule_atoms)
-                MCluster.profile(_cl, r, box, profileid, profilemap, bprofiles)
+                if doprofiles:
+                    MCluster.profile(_cl, r, box, profileid, profilemap, bprofiles)
                 _size = len(_cl.molecules)
                 # group q matrix eigenvalues based on three basic shapes:
                 # spherical: all eigenvalues are close to zero (a threshold of 0.1 will be used)
@@ -579,10 +581,11 @@ def clusters(filename,
         v.write(dirname + os.sep + _name)
 
     # write down profiles
-    for k, v in bprofiles.items():
-        for _k, _v in v.items():
-            _name = dirname + os.sep + "%s_%s.prof"%(profilemap[_k],k)
-            _v.write( _name, header="# Number density profile profile")
+    if doprofiles:
+        for k, v in bprofiles.items():
+            for _k, _v in v.items():
+                _name = dirname + os.sep + "%s_%s.prof"%(profilemap[_k],k)
+                _v.write( _name, header="# Number density profile")
 
     if True:
         mollog.close()
@@ -765,7 +768,7 @@ def command():
     parser.add_argument('-hist3d', nargs=1, type=chktype, default=[[]],
         metavar='list of triplets of residues', help=string)
 
-    chktype = IsListOfNamedList("wrong profiles argument (check: %s)", itemtype=str)
+    chktype = IsListOfNamedList("wrong profiles argument (check: %s)", klen=3, itemtype=str)
     string = '''
     calculate the number density profile of the given groups of atoms. The distance
     considered for the profiles depends on the position of the atoms in the micelle
@@ -773,14 +776,17 @@ def command():
     micelle or in the spherical caps of an elongated/waged micelle, the distance from
     the center of the sphere is used. If the atoms belong to a cylindrical column or
     in the body of an elongated micelle, the length of its projection on the column
-    axis is taken. The argument is a list of comma-separated atoms name lists separated
-    with ":" e.g. C1,C2:N:OW. Atoms specified with the "-excluded" argument will be
-    excluded also here. For each list, the density profile will be written in the file
-    profile_{listnumber}_{shape}.dat in the simulation directory where list number if
-    the id of the list and shape the shape of the cluster. Three types of clusters are
-    considered:  spherical (s), cylindrical infinite periodic (c), and wedged/elongated (e).
-    Therefore file profile_2_s.dat corresponds to the density profiles of N atoms with the
-    respect to the center of mass for spherical clusters.
+    axis is taken. The argument is a set of lists of comma-separated atoms name lists 
+    separated with "@". For example the argument "HEAD:CTAC:C17,N,C18,C19@WAT:SOL:OW"
+    defines two named lists (groups); HEAD cosist of atoms C17,N,C18, and C19 belong
+    to CTAC molecules and WAT consists of OW atoms belong to SOL molecules. Atoms
+    specified with the "-excluded" argument will be excluded also here. For each list,
+    the density profile will be written in the file profile_{listname}_{shape}.prof in
+    the simulation directory where list name is the name of the group of atom and shape
+    the shape of the cluster. Three types of clusters are considered:  spherical (s),
+    cylindrical infinite periodic (c), and wedged/elongated (e). Therefore file HEAD_s.prof
+    corresponds to the density profiles of atoms C17,N,C18, and C19 belong to CTAC molecules,
+    with the respect to the center of mass for spherical clusters.
     '''
     parser.add_argument('-profiles', nargs=1, type=chktype, default=[[]],
         metavar='list of atom names', help=string)
