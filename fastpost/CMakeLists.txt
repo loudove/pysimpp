@@ -96,38 +96,48 @@ configure_file(
 add_custom_target(uninstall
        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
 
-# add the test fwk
-set ( GTESTFWK ON )
-set ( BOOSTFWK OFF )
-set ( TESTS OFF )
-set ( EXAMPLES OFF )
-add_subdirectory( f90tw )
+# get the options for building tests (default no)
+if ( NOT DEFINED DOTESTS )
+    option( BUILDTESTS "Build google.test" OFF )
+else()
+    set( BUILDTESTS ${DOTESTS} CACHE BOOL "Build google.test" )
+endif()
 
-# add test for fastpost core functionality
-F90TWTEST ( test_vector3d 
-  CFILES tests/test_vector3d.cpp
-  FPPFILES tests/test_vector3d.fpp
-  OUTDIR "${CMAKE_CURRENT_BINARY_DIR}"
-  EXE ${FPP_EXE} OPTIONS ${FPP_OPTIONS} SWITCH ${FPP_SWITCH}
-  INCLUDES ${f90tw_INCLUDE_DIR}
-  MODULES ${f90tw_MODULES_DIR} 
-  LIBRARIES fastcore f90tw_gtest
-  DEFINITIONS USEGTEST
-)
+if ( DOTESTS )
+  # add the test fwk
+  set ( GTESTFWK ON )
+  set ( BOOSTFWK OFF )
+  set ( TESTS OFF )
+  set ( EXAMPLES OFF )
 
-F90TWTEST ( test_domain3d
-  CFILES tests/test_domain3d.cpp
-  F90FILES tests/test_domain3d.f90
-  F2HFILES "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_domain3d.f90"
-  OUTDIR "${CMAKE_CURRENT_BINARY_DIR}"
-  EXE ${FPP_EXE} OPTIONS ${FPP_OPTIONS} SWITCH ${FPP_SWITCH}
-  INCLUDES ${f90tw_INCLUDE_DIR}
-  MODULES ${f90tw_MODULES_DIR} 
-  LIBRARIES fastcore f90tw_gtest
-  DEFINITIONS USEGTEST
-)
+  add_subdirectory( f90tw )
 
-enable_testing()
-add_test( test_vector3d test_vector3d )
-add_test( test_domain3d test_domain3d )
+  # add test for fastpost core functionality
+  F90TWTEST ( test_vector3d 
+    CFILES tests/test_vector3d.cpp
+    FPPFILES tests/test_vector3d.fpp
+    OUTDIR "${CMAKE_CURRENT_BINARY_DIR}"
+    EXE ${FPP_EXE} OPTIONS ${FPP_OPTIONS} SWITCH ${FPP_SWITCH}
+    INCLUDES ${f90tw_INCLUDE_DIR}
+    MODULES ${f90tw_MODULES_DIR} 
+    LIBRARIES fastcore f90tw_gtest
+    DEFINITIONS USEGTEST
+  )
 
+  F90TWTEST ( test_domain3d
+    CFILES tests/test_domain3d.cpp
+    F90FILES tests/test_domain3d.f90
+    F2HFILES "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_domain3d.f90"
+    OUTDIR "${CMAKE_CURRENT_BINARY_DIR}"
+    EXE ${FPP_EXE} OPTIONS ${FPP_OPTIONS} SWITCH ${FPP_SWITCH}
+    INCLUDES ${f90tw_INCLUDE_DIR}
+    MODULES ${f90tw_MODULES_DIR} 
+    LIBRARIES fastcore f90tw_gtest
+    DEFINITIONS USEGTEST
+  )
+
+  enable_testing()
+  add_test( test_vector3d test_vector3d )
+  add_test( test_domain3d test_domain3d )
+
+endif()
