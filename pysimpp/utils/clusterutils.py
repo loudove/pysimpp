@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import os
-from collections import defaultdict
+import threading
+from collections import defaultdict, Counter
 
 import numpy as np
 import networkx as nx
@@ -30,6 +31,7 @@ class Node(int):
             obj =  super(Node, cls).__new__(cls, *args)
         obj.connections = kwargs['connections'] if 'connections' in kwargs else []
         obj.cluster = kwargs['cluster'] if 'cluster' in kwargs else None
+        obj.kind = kwargs['kind'] if 'kind' in kwargs else None
         return obj
 
 class Connection(tuple):
@@ -295,3 +297,156 @@ class Cluster(set):
                 # update c1 and the clusters connected to it (including c0)
                 c1.__update_shift_self( parent, shift)
         return connected_sorted
+
+class Assembly(set):
+    ''' Implements a collection of nodes suitable for tracing the evolution of
+        a non connected cluster. To identify the specie of the assembly, the
+        kind of the constituent node is used. '''
+
+    def __init__( self, uid, s):
+        ''' Initialize an Assembly object.
+        Args:
+            uid (int): cluster id. It will be used also as hash for the object.
+            s : a container of Node like objects.
+        '''
+        super(Cluster, self).__init__( s)
+        self.formula = Assembly.find_formula(s)
+        self.uid = uid
+        self.life = 0.0 # in number of configurations processed
+
+    def __str__( self):
+        ''' Return str(self). '''
+        return "%s %d\n nodes: %s" % (self.__class__.__name__, self.uid, " ".join(map(str,self)) )
+
+    def __repr__( self):
+        ''' Return repr(self). '''
+        return "%s %s %d" % (self.__class__.__name__, self.name, self.uid)
+
+    def __eq__( self, other):
+        ''' Return self==other. '''
+        return self.uid == other.uid if type(other) is type(self) else False
+
+    def __hash__( self):
+        ''' Return hash(self) '''
+        return self.uid
+
+    @staticmethod
+    def find_formula( assembly):
+        try:
+            _kinds = Counter( list( map( lambda x: x.kind, assembly)))
+            _formula = ""
+            for _k in sorted( _kinds):
+                _formula += "%s_%s_" %(str(_k),str(_kinds[_k]))
+        except AttributeError:
+            _formula = "*_%s" % str(len(assembly))
+        return _formula
+
+    @staticmethod
+    def find_node_assembly( assemblies):
+        ''' Create the current state. The clusters list should be
+            sorted based on cluster size (i.e. number of molecules). '''
+        node_assembly = defaultdict(int)
+        for _ic, _c  in enumerate(assemblies):
+            for _m in _c:
+                node_assembly[_m] = _ic+1
+        return node_assembly
+
+class EvolutionTracker():
+
+    __uid = -1
+    __lock = threading.Lock()
+
+    def __get_uid(self):
+        EvolutionTracker.__lock.acquire()
+        EvolutionTracker.__uid += 1
+        EvolutionTracker.__lock.release()
+        return EvolutionTracker.__uid
+
+    def __init__(self):
+        # {assembly UID: [] }
+        self.assemblies = {}
+        # previous step configuration data
+        self.previous_t = 0.0   # time
+        self.previous_node_assembly = None  # {moleculeID:assemblyID}
+        self.previous = None    # list of assemblies
+        # current step configuration data
+        self.current_t = 0.0
+        self.current_node_assembly = None
+        self.current = None
+
+    def update_current(self, assemblies, t):
+
+        # move current to previous
+        self.previous = self.current
+        self.previous_node_assembly = self.current_node_assembly
+        self.previous_t = self.current_t
+
+        # set current
+        self.current = assemblies
+        self.current_node_assembly = Assembly.find_node_assembly(assemblies)
+        self.current_t = t
+
+        if not self.previous is None:
+            # track assemblies evolution from the previous to the current state. 
+            # this evolution is modeled as a set if reactions where the assemblies
+            # of the  previous state (reactants or left side assmblies) react to
+            # give the assemblies of the current state (products or righ side assemblies).
+            _assemblies = (self.previous, self.current)
+            _node_assembly = (self.previous_node_assembly, self.current_node_assembly)
+            _used = ( [False]*len(_assemblies[0]), [False]*len(_assemblies[1]))
+            for _p in _assemblies[0]:
+                _candidates = [_p]
+                i, j = 0, 1
+                _sides = ( [], [])
+                while not len( _candidates) == 0:
+                    _candidates = self._track(_candidates, _node_assembly[i], _assemblies[i], _node_assembly[j], _used[j], _sides[j])
+
+        else:
+            for _a in assemblies: # just set assemblies uid
+                _a.uid = self.__get_uid()
+                self.assemblies[_a.uid]._a
+
+
+    def _track(self, ls_candidates, ls_node_assembly, rs_assemblies, rs_node_assembly, rs_used, rs_side):
+        ''' Track the righ side (rs) assemblies containing nodes from the assemblies of the left side (ls). '''
+        _candidates = []
+        for _ls in ls_candidates:
+            for pair in [ (k,v) for k, v in sorted( Counter([ rs_node_assembly[i] for i in _ls]).items(), key=lambda item: item[1]) if not k == 0 ]:
+                _assembly = rs_assemblies[k]
+                rs_side.append( _assembly)
+                _candidates.append( _assembly)
+
+
+class Reaction():
+    ''' Implements a reaction. '''
+
+    def __init__(self, reactants, products):
+        ''' Initialize a reaction object. '''
+        self.reactants = Counter(reactants) # stoichiometry dict for reactants {reactant:#}
+        self.reactants_string = Reaction.__get_string(self.reactants)
+        self.products = Counter(products)  # stoichiometry dict for products {products:#}
+        self.products_string = Reaction.__get_string(self.reactants)
+        self.steps = defaultdict( int)  # dict {step : number of reactions}
+
+    @staticmethod
+    def __get_string( side):
+        ''' Return the string corespond to the given stoichiometry dict. '''
+        return " + ".join( [ k if side[k] == 1 else "%d %s"% (side[k], k) for k in sorted( side.keys())])
+
+    def __str__(self):
+        ''' Return str(self). '''
+        return "%s \u2192 %s" % (self.reactants_string, self.products_string)
+
+    def __eq__(self, other):
+        ''' Return self==other. '''
+        return self.reactants_string == other.reactants_string and self.products_string == other.products_string
+        # return self.reactants == other.reactants and self.products == other.products
+
+    def is_reverse(self, other):
+        ''' Return True if the other reaction is the reverse of self. '''
+        # return self.reactants_string == other.products_string and self.products_string == other.reactants_string
+        return self.reactants == other.products and self.products == other.reactants
+
+    def add_step(self, step):
+        ''' Update steps dict (record). '''
+        self.steps[step] += 1

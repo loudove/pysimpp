@@ -3,17 +3,19 @@
 
 import os
 from collections import defaultdict, Counter
+from pysimpp.cluster import mcluster
 
 import numpy as np
 import networkx as nx
 
 from pysimpp.utils.simulationbox import SimulationBox
 from pysimpp.utils.statisticsutils import Variable, Histogram
-from pysimpp.utils.clusterutils import Node, Connection, Cluster
+from pysimpp.utils.clusterutils import Node, Connection, Cluster, Assembly, EvolutionTracker
 from pysimpp.utils.vectorutils import get_length, get_unit, get_projection, projection, get_vertical
 from pysimpp.fastpost import fastcom, gyration, inertia, order_parameter, order_parameter_local # pylint: disable=no-name-in-module
 
 _debug = False
+_critical_size = 4
 __iu = np.array((1.0,0.0,0.0))
 __ju = np.array((0.0,1.0,0.0))
 __ku = np.array((0.0,0.0,1.0))
@@ -212,53 +214,6 @@ class UnitHexagolal2D():
         _r = np.dot(r - self.point, self.tolocal)
         return self.pbc( _r)
 
-class MClusterTracker():
-    def __init__(self):
-        # {cluster UID: [] }
-        self.clusters = defaultdict(list)
-        # current and previous configuration data
-        self.tp = 0.0 # time
-        self.mp = None # {moleculeID:clusterID}
-        self.previous = None # list of clusters [set(molecules)]
-        self.tc = 0.0
-        self.mc = None
-        self.current = None
-
-    def _update_current( self, clusters, t):
-        ''' Create the current state. The clusters list should be
-            sorted based on cluster size (i.e. number of molecules). '''
-        _current = [ set(_c.molecules) for _c in clusters ]
-        _mc = defaultdict(int)
-        for _ic, _c  in enumerate(_current):
-            for _m in _c:
-                _mc[_m] = _ic+1
-        self.current, self.mc, self.tc = _current, _mc, t
-
-    def update(self, clusters, t):
-        # _current is the {id:molecules} dict for the given clusters
-        # the id assigned at each cluster is not unique.
-        _current = { _ic+1:set(_c.molecules) for _ic, _c in enumerate(clusters) }
-
-        if not self.current is None:
-            # move current to previous
-            self.previous, self.mp, self.tp = self.current, self.mc, self.tc
-            # find the current cluster for each molecule
-            _mc = defaultdict(int)
-            for _ic, _c  in enumerate(_current):
-                for _m in _c:
-                    _mc[_m] = _ic
-            # check the state of previous clusters
-            _persist = []
-            for _ip, _p in self.previous.items():
-                # fild where the molecules of _p cluster have been distributed
-                _new = Counter( [ _mc[_m] for _m in _p ])
-                _new = sorted( [ (_k,_v) for _k, _v in _new.items() ], key=lambda _x: _x[1], reverse=True)
-                _max = _new[0]
-                _lenp = len(_p)
-                if (_lenp - _new[ _max[1]])/_lenp < 0.1:
-                    pass 
-        else:
-            pass
 
 class MCluster(Cluster):
     ''' Implements a molecular cluster (i.e. an ensemble
@@ -393,7 +348,7 @@ class MCluster(Cluster):
             _molecules = set()
             for _sc in _c:
                 _molecules.update(_sc.molecules)
-            if len(_molecules) > 4: _connected.append(_c)
+            if len(_molecules) > _critical_size: _connected.append(_c)
 
         # and now join the connected clusters to obtain their union
         # (parent clusters)
@@ -675,7 +630,8 @@ class MCluster(Cluster):
                 if k == 0: continue
                 _h = _hs[k]
                 _d = _dist[np.where(profileid == k)]
-                np.vectorize(_h.add)(_d) # TODO compile the universal function once
+                if len(_d):
+                    np.vectorize(_h.add)(_d) # TODO compile the universal function once
             for k, v in _hs.items():
                 _bs[k].add_histogram(v, options={'type':'p','profile':'c', 'length':_hbox.length})
 
@@ -691,7 +647,8 @@ class MCluster(Cluster):
                 if k == 0: continue
                 _h = _hs[k]
                 _d = _dist[np.where(profileid == k)]
-                np.vectorize(_h.add)(_d) # TODO compile the universal function once
+                if len(_d) > 0:
+                    np.vectorize(_h.add)(_d) # TODO compile the universal function once
             for k, v in _hs.items():
                 _bs[k].add_histogram(v, options={'type':'p','profile':'s'})
 
@@ -730,7 +687,8 @@ class MCluster(Cluster):
                     if k == 0: continue
                     _h = _hs[k]
                     _d = _dist[np.where(_profileid == k)]
-                    np.vectorize(_h.add)(_d) # TODO compile the universal function once
+                    if len(_d) > 0:
+                        np.vectorize(_h.add)(_d) # TODO compile the universal function once
 
                 for k, v in _hs.items():
                     _bs[k].add_histogram(v, options={'type':'p','profile':'s'})
@@ -746,9 +704,20 @@ class MCluster(Cluster):
                 for k in profilemap:
                     if k == 0: continue
                     _h = _hs[k]
-                    _d = _dist[np.where(_profileid == k)]
-                    np.vectorize(_h.add)(_d) # TODO compile the universal function once
+                    _d = _dist[ np.where(_profileid == k)]
+                    if len(_d) > 0:
+                        np.vectorize(_h.add)(_d) # TODO compile the universal function once
 
                 for k, v in _hs.items():
                     _bs[k].add_histogram(v, options={'type':'p','profile':'c', 'length':_l1-_l0})
+
+    def assembly_from_molecules(self, molecule_name):
+        ''' Return an assembly consist of the molecules of the cluster. The kind
+            for each molecules is defined from its name given in molecule_name
+            argument. '''
+        assembly = None
+        if not self.molecules is None:
+            _nodes = list( map( lambda i: Node(i,{'kind':molecule_name[i]}), self.molecules))
+            assembly = Assembly(-1, _nodes)
+        return assembly
 

@@ -29,7 +29,6 @@ from .mclusterutils import MClusterTracker, MCluster # pylint: disable=import-er
 from .mclusterlog import ClPropertiesLog, ClMolecularLog, ClOrderLog, ClDetailsLog # pylint: disable=import-error
 
 # global flags
-_critical_size = 2
 _wholeused = True
 _debug = False
 _extend = True  # use the extended pyvoro version
