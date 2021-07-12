@@ -25,7 +25,7 @@ from pysimpp.utils.statisticsutils import Binning, Histogram, Histogram2D, Histo
 from pysimpp.fastpost import fastunwrapv, order_parameter # pylint: disable=no-name-in-module
 from pysimpp.utils.clusterutils import Node, Connection
 import pysimpp.utils.voropputils as voropputils
-from .mclusterutils import MClusterTracker, MCluster # pylint: disable=import-error
+from .mclusterutils import MCluster # pylint: disable=import-error
 from .mclusterlog import ClPropertiesLog, ClMolecularLog, ClOrderLog, ClDetailsLog # pylint: disable=import-error
 
 # global flags
