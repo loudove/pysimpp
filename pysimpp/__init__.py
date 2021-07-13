@@ -60,8 +60,7 @@ def __find_commands():
                     _short = __chk_module(_modname)
                     if _short is not None:
                         if _f in _commands:
-                            print( 'WARNING: command "%s" (%s) is already registed in pysimpp.' % (
-                                _modname, _d))
+                            print( 'WARNING: command "%s" (%s) is already registed in pysimpp.' % ( _modname, _d))
                         else:
                             _commands[_modname] = (_modname,_short)
 

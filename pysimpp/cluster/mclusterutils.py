@@ -4,6 +4,7 @@
 import os
 from collections import defaultdict, Counter
 from pysimpp.cluster import mcluster
+import inspect
 
 import numpy as np
 import networkx as nx
@@ -503,6 +504,7 @@ class MCluster(Cluster):
     def shape( cluster, r, atom_mass, molecule_atoms):
         ''' Calculate cluster shape and order characteristics. The calculated
             properties are added as cluster attributes. '''
+        # cluster atoms based on molecucles
         _catoms = []
         for im in cluster.molecules:
             _catoms += molecule_atoms[im]
@@ -632,6 +634,8 @@ class MCluster(Cluster):
                 _d = _dist[np.where(profileid == k)]
                 if len(_d):
                     np.vectorize(_h.add)(_d) # TODO compile the universal function once
+                else:
+                    print( 'WARNING: something is wrong with profiles calculation in %s(@%d)' % (inspect.currentframe().f_code.co_name, inspect.currentframe().f_lineno))
             for k, v in _hs.items():
                 _bs[k].add_histogram(v, options={'type':'p','profile':'c', 'length':_hbox.length})
 
@@ -649,6 +653,8 @@ class MCluster(Cluster):
                 _d = _dist[np.where(profileid == k)]
                 if len(_d) > 0:
                     np.vectorize(_h.add)(_d) # TODO compile the universal function once
+                else:
+                    print( 'WARNING: something is wrong with profiles calculation in %s(@%d)' % (inspect.currentframe().f_code.co_name, inspect.currentframe().f_lineno))
             for k, v in _hs.items():
                 _bs[k].add_histogram(v, options={'type':'p','profile':'s'})
 
@@ -662,7 +668,8 @@ class MCluster(Cluster):
                 box.set_to_minimum(_r)
                 # projection length on cylinder axis.
                 _rp = np.dot(_r, _axis) / np.dot(_axis, _axis)
-                _min, _max = np.min(_rp), np.max(_rp)
+                _rp_cluster = _rp[cluster._catoms]
+                _min, _max = np.min(_rp_cluster), np.max(_rp_cluster)
                 _l0 = _min+_rest
                 _cp0 = _l0 * _axis
                 _l1 = _max-_rest
@@ -689,6 +696,8 @@ class MCluster(Cluster):
                     _d = _dist[np.where(_profileid == k)]
                     if len(_d) > 0:
                         np.vectorize(_h.add)(_d) # TODO compile the universal function once
+                    else:
+                        print( 'WARNING: something is wrong with profiles calculation in %s(@%d)' % (inspect.currentframe().f_code.co_name, inspect.currentframe().f_lineno))
 
                 for k, v in _hs.items():
                     _bs[k].add_histogram(v, options={'type':'p','profile':'s'})
@@ -697,6 +706,7 @@ class MCluster(Cluster):
                 _hs = defaultdict(lambda: Histogram.free(0.2, 0.0, False))
 
                 _where = ~ _where
+                _profileid = profileid[ _where]
                 _rpv = np.outer(_rp[_where], _axis)
                 _dr = _r[_where] - _rpv
                 box.set_to_minimum(_dr)
@@ -707,6 +717,8 @@ class MCluster(Cluster):
                     _d = _dist[ np.where(_profileid == k)]
                     if len(_d) > 0:
                         np.vectorize(_h.add)(_d) # TODO compile the universal function once
+                    else:
+                        print( 'WARNING: something is wrong with profiles calculation in %s(@%d)' % (inspect.currentframe().f_code.co_name, inspect.currentframe().f_lineno))
 
                 for k, v in _hs.items():
                     _bs[k].add_histogram(v, options={'type':'p','profile':'c', 'length':_l1-_l0})
