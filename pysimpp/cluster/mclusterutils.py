@@ -617,23 +617,35 @@ class MCluster(Cluster):
         return hbox
 
     @staticmethod
-    def profile(cluster, r, box, profileid, profilemap, bprofiles):
+    def profile(cluster, r, box, profileid, profilemap, bprofiles, hprofiles, h2dprofiles, vprofiles):
         # TODO support triclinic boxes (work in fractional coordinates)
         # (currently on cubic boxes are supported)
 
+        _profilebin = mcluster._profilebin
         # TODO add criteria/cases based on the molecular weight
         # cylindrical column
         if cluster._infinit:
             _hbox = MCluster.chkaxis(cluster, box)
             _bs = bprofiles['c']
-            _hs = defaultdict(lambda: Histogram.free(0.2, 0.0, False))
+            _hs = defaultdict(lambda: Histogram.free(_profilebin, 0.0, False))
+
+            _h1ds = hprofiles['c']
+            _h2ds = h2dprofiles['c']
+            _vs = vprofiles['c']
+            _size = len(cluster.molecules)
+            _vs.set(_size)
+
             _dist = _hbox.distance(r)
             for k in profilemap:
                 if k == 0: continue
                 _h = _hs[k]
+                _h1d = _h1ds[k]
+                _h2d = _h2ds[k]
                 _d = _dist[np.where(profileid == k)]
                 if len(_d):
                     np.vectorize(_h.add)(_d) # TODO compile the universal function once
+                    np.vectorize(_h1d.add)(_d)
+                    for _dx in _d: _h2d.add((_size,_dx))
                 else:
                     print( 'WARNING: something is wrong with profiles calculation in %s(@%d)' % (inspect.currentframe().f_code.co_name, inspect.currentframe().f_lineno))
             for k, v in _hs.items():
@@ -642,7 +654,14 @@ class MCluster(Cluster):
         # spherical
         elif cluster._b < 0.2 and cluster._c < 0.3 and cluster._sqk < 0.2:
             _bs = bprofiles['s']
-            _hs = defaultdict(lambda: Histogram.free(0.2, 0.0, False))
+            _hs = defaultdict(lambda: Histogram.free(_profilebin, 0.0, False))
+
+            _h1ds = hprofiles['s']
+            _h2ds = h2dprofiles['s']
+            _vs = vprofiles['s']
+            _size = len(cluster.molecules)
+            _vs.set(_size)
+
             _cm = cluster._com
             _dr = r - _cm
             box.set_to_minimum(_dr)
@@ -650,9 +669,13 @@ class MCluster(Cluster):
             for k in profilemap:
                 if k == 0: continue
                 _h = _hs[k]
+                _h1d = _h1ds[k]
+                _h2d = _h2ds[k]                
                 _d = _dist[np.where(profileid == k)]
                 if len(_d) > 0:
                     np.vectorize(_h.add)(_d) # TODO compile the universal function once
+                    np.vectorize(_h1d.add)(_d)
+                    for _dx in _d: _h2d.add((_size,_dx))
                 else:
                     print( 'WARNING: something is wrong with profiles calculation in %s(@%d)' % (inspect.currentframe().f_code.co_name, inspect.currentframe().f_lineno))
             for k, v in _hs.items():
@@ -687,15 +710,25 @@ class MCluster(Cluster):
                 _dist[_minimum] = _dist0[_minimum]
 
                 _bs = bprofiles['es']
-                _hs = defaultdict(lambda: Histogram.free(0.2, 0.0, False))
+                _hs = defaultdict(lambda: Histogram.free(_profilebin, 0.0, False))
+
+                _h1ds = hprofiles['es']
+                _h2ds = h2dprofiles['es']
+                _vs = vprofiles['es']
+                _size = len(cluster.molecules)
+                _vs.set(_size)
 
                 _profileid = profileid[ _where]
                 for k in profilemap:
                     if k == 0: continue
                     _h = _hs[k]
+                    _h1d = _h1ds[k]
+                    _h2d = _h2ds[k]                       
                     _d = _dist[np.where(_profileid == k)]
                     if len(_d) > 0:
                         np.vectorize(_h.add)(_d) # TODO compile the universal function once
+                        np.vectorize(_h1d.add)(_d)
+                        for _dx in _d: _h2d.add((_size,_dx))
                     else:
                         print( 'WARNING: something is wrong with profiles calculation in %s(@%d)' % (inspect.currentframe().f_code.co_name, inspect.currentframe().f_lineno))
 
@@ -703,7 +736,12 @@ class MCluster(Cluster):
                     _bs[k].add_histogram(v, options={'type':'p','profile':'s'})
 
                 _bs = bprofiles['ec']
-                _hs = defaultdict(lambda: Histogram.free(0.2, 0.0, False))
+                _hs = defaultdict(lambda: Histogram.free(_profilebin, 0.0, False))
+                _h1ds = hprofiles['ec']
+                _h2ds = h2dprofiles['ec']
+                _vs = vprofiles['ec']
+                _size = len(cluster.molecules)
+                _vs.set(_size)
 
                 _where = ~ _where
                 _profileid = profileid[ _where]
@@ -714,22 +752,36 @@ class MCluster(Cluster):
                 for k in profilemap:
                     if k == 0: continue
                     _h = _hs[k]
+                    _h1d = _h1ds[k]
+                    _h2d = _h2ds[k]                      
                     _d = _dist[ np.where(_profileid == k)]
                     if len(_d) > 0:
                         np.vectorize(_h.add)(_d) # TODO compile the universal function once
+                        np.vectorize(_h1d.add)(_d)
+                        for _dx in _d: _h2d.add((_size,_dx))
                     else:
                         print( 'WARNING: something is wrong with profiles calculation in %s(@%d)' % (inspect.currentframe().f_code.co_name, inspect.currentframe().f_lineno))
 
                 for k, v in _hs.items():
                     _bs[k].add_histogram(v, options={'type':'p','profile':'c', 'length':_l1-_l0})
 
-    def assembly_from_molecules(self, molecule_name):
+    def assembly_from_molecules(self, molecule_name, step):
         ''' Return an assembly consist of the molecules of the cluster. The kind
             for each molecules is defined from its name given in molecule_name
             argument. '''
         assembly = None
         if not self.molecules is None:
-            _nodes = list( map( lambda i: Node(i,{'kind':molecule_name[i]}), self.molecules))
-            assembly = Assembly(-1, _nodes)
+            _nodes = list( map( lambda i: Node(i,kind=molecule_name[i]), self.molecules))
+            assembly = Assembly( _nodes, -1)
+            _data = {}
+            _data['n'] = len(_nodes)
+            _data['sqrg'] = self._sqrg
+            _data['b'] = self._b
+            _data['c'] = self._c
+            _data['sqk'] = self._sqk
+            _data["diff_previous"] = 0.0
+            _data["diff_cumulative"] = 0.0
+            _data["diff_initial"] = 0.0
+            assembly.data[step] = _data
         return assembly
 

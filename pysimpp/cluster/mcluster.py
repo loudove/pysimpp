@@ -17,13 +17,11 @@ from scipy import stats
 import networkx as nx
 
 import pysimpp.readers
-# import pysimpp.readers.lammpsreader as lmp
-# import pysimpp.readers.groreader as gmp
 
 from pysimpp.utils.utils import chk_filename, parse_radii, isrange, isfile, IsList, IsListOfList, IsListOfNamedList
-from pysimpp.utils.statisticsutils import Binning, Histogram, Histogram2D, Histogram3D
+from pysimpp.utils.statisticsutils import Binning, Histogram, Histogram2D, Histogram3D, Variable
 from pysimpp.fastpost import fastunwrapv, order_parameter # pylint: disable=no-name-in-module
-from pysimpp.utils.clusterutils import Node, Connection
+from pysimpp.utils.clusterutils import Node, Connection, Assembly, EvolutionTracker, Reaction
 import pysimpp.utils.voropputils as voropputils
 from .mclusterutils import MCluster # pylint: disable=import-error
 from .mclusterlog import ClPropertiesLog, ClMolecularLog, ClOrderLog, ClDetailsLog # pylint: disable=import-error
@@ -36,6 +34,7 @@ _runext = True  # run voro++ cmd
 _typeattribute = 'type'
 _typebased = "types"
 _probecritical = 0.0
+_profilebin = 0.5
 
 def clusters(filename,
              finfo,
@@ -169,7 +168,12 @@ def clusters(filename,
     doprofiles = len(profiles) > 0
     if doprofiles:
         bprofiles = defaultdict(
-            lambda: defaultdict(lambda: Binning.free(0.25, 0.0, False)))
+            lambda: defaultdict(lambda: Binning.free(_profilebin, 0.0, False)))
+        hprofiles = defaultdict(
+            lambda: defaultdict(lambda: Histogram.free(_profilebin, 0.0, False)))
+        h2dprofiles = defaultdict(
+            lambda: defaultdict(lambda: Histogram2D((10.0, _profilebin), (0, 0), addref=False)))
+        vprofiles = defaultdict( lambda: Variable() )
         profileid = np.zeros(natoms, dtype=int)
         profilemap = {}
         for ik, k in enumerate( sorted( profiles.keys())):
@@ -179,6 +183,8 @@ def clusters(filename,
             profilemap[ ik+1] = k
         if excluded:
             profileid[ atom_excluded ] = 0
+
+        tracer = EvolutionTracker()
 
     # check ends (add missing residues)
     # TODO finish "-ends" implementation (remove or generalize)
@@ -215,14 +221,13 @@ def clusters(filename,
     hprop['sqk'] = Histogram.free(0.1, 0, addref=False)
     hprop['sqk_mol'] = Histogram.free(0.1, 0, addref=False)
     hprop['qlong'] = Histogram.free(0.1, 0, addref=False)
-    hprop['b_sqrg'] = Histogram.free(0.1, 0, addref=False)
+    # hprop['b_sqrg'] = Histogram.free(0.1, 0, addref=False)
+    hprop['b'] = Histogram.free(0.1, 0, addref=False)
     # properties,size histograms
     hprop2D = defaultdict(lambda: Histogram2D(1.0, (0, 0), addref=False))
     hprop2D['sqk'] = Histogram2D((0.1, 1.0), (0, 0), addref=False)
     hprop2D['sqk_mol'] = Histogram2D((0.1, 1.0), (0, 0), addref=False)
     hprop2D['qlong'] = Histogram2D((0.1, 1.0), (0, 0), addref=False)
-
-    # tracer = MClusterTracker()
 
     # prepare on the fly log
     log = ClPropertiesLog(dirname)
@@ -405,8 +410,6 @@ def clusters(filename,
                 _c.update_molecules(atom_molecule)
             _clusters = MCluster.defrag(_subclusters)
 
-            # analyse
-            # tracer.update(_clusters, step*reader.timestep)
             r = rw if _wholeused else reader.get_unwrapped()
             for i, _cl in enumerate(_clusters):
                 MCluster.udpate_coordinates(_cl, box, rw, r, atom_molecule,
@@ -434,7 +437,7 @@ def clusters(filename,
                 MCluster.order(_cl, r, atom_mass, molecule_atoms, molecule_name, neighbors, res_ends)
                 MCluster.shape(_cl, r, atom_mass, molecule_atoms)
                 if doprofiles:
-                    MCluster.profile(_cl, r, box, profileid, profilemap, bprofiles)
+                    MCluster.profile(_cl, r, box, profileid, profilemap, bprofiles, hprofiles, h2dprofiles, vprofiles)
                 _size = len(_cl.molecules)
                 # group q matrix eigenvalues based on three basic shapes:
                 # spherical: all eigenvalues are close to zero (a threshold of 0.1 will be used)
@@ -442,7 +445,7 @@ def clusters(filename,
                 # planar: two negative (close to -0.5) and one positive (close to 1.0)
                 # other: anything else
                 if not _cl._infinit:
-                    hprop['b_sqrg'].add(_cl._b / _cl._sqrg)
+                    # hprop['b_sqrg'].add(_cl._b / _cl._sqrg)
                     hprop['sqrg'].add(_cl._sqrg)
                     hprop['b'].add(_cl._b)
                     hprop['c'].add(_cl._c)
@@ -473,6 +476,12 @@ def clusters(filename,
                     hprop2D['qloc_mol'].add((_cl._qloc, _size))
 
                     hprop['qlong'].add(_cl._qlong)
+
+            # analyse
+            if doprofiles:
+                _assemplies = [ _c.assembly_from_molecules(molecule_name, step) for _c in _clusters]
+                tracer.update_current(_assemplies, step)
+            #########
 
             # if any( [_cl._infinit for _cl in _clusters ]):
             if True:
@@ -582,9 +591,24 @@ def clusters(filename,
     # write down profiles
     if doprofiles:
         for k, v in bprofiles.items():
+            _var = vprofiles[k]
             for _k, _v in v.items():
-                _name = dirname + os.sep + "%s_%s.prof"%(profilemap[_k],k)
-                _v.write( _name, header="# Number density profile")
+                _name = dirname + os.sep + "%s_%s.bprof"%(profilemap[_k],k)
+                _v.write( _name, header="# Number density profile of %s for clusters of molecular size %d(%d)" %(k,_var.mean(),_var.std()))
+        for k, v in hprofiles.items():
+            _var = vprofiles[k]
+            for _k, _v in v.items():
+                _name = dirname + os.sep + "%s_%s.hprof"%(profilemap[_k],k)
+                _v.write( _name, header="# Number density profile of %s for clusters of molecular size %d(%d)" %(k,_var.mean(),_var.std()))
+        for k, v in h2dprofiles.items():
+            for _k, _v in v.items():
+                _name = dirname + os.sep + "%s_%s.h2dprof"%(profilemap[_k],k)
+                _v.normalize()
+                _v.write( _name )
+
+        _dir = dirname + os.sep + "evolution"
+        if not os.path.exists(_dir): os.mkdir(_dir)
+        tracer.write(_dir)
 
     if True:
         mollog.close()

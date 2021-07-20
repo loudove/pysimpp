@@ -2,7 +2,7 @@
 
 import os
 import threading
-from collections import defaultdict, Counter
+from collections import defaultdict, Counter, OrderedDict
 
 import numpy as np
 import networkx as nx
@@ -303,16 +303,19 @@ class Assembly(set):
         a non connected cluster. To identify the specie of the assembly, the
         kind of the constituent node is used. '''
 
-    def __init__( self, uid, s):
+    def __init__( self, s, uid=-1 ):
         ''' Initialize an Assembly object.
         Args:
             uid (int): cluster id. It will be used also as hash for the object.
             s : a container of Node like objects.
         '''
-        super(Cluster, self).__init__( s)
-        self.formula = Assembly.find_formula(s)
-        self.uid = uid
-        self.life = 0.0 # in number of configurations processed
+        super(Assembly, self).__init__( s) # initialize
+        self.formula = Assembly.find_formula(s) # find formula (simple syntactic)
+        self.uid = uid # unique id
+        self.data = OrderedDict() # {time:info} dict
+        self.cumulative = None # cumulative set of nodes
+        self.intial = None # initial set of nodes
+        self.ref = None # reference assembly
 
     def __str__( self):
         ''' Return str(self). '''
@@ -320,7 +323,7 @@ class Assembly(set):
 
     def __repr__( self):
         ''' Return repr(self). '''
-        return "%s %s %d" % (self.__class__.__name__, self.name, self.uid)
+        return "%s %s %d" % (self.__class__.__name__, self.formula, self.uid)
 
     def __eq__( self, other):
         ''' Return self==other. '''
@@ -334,9 +337,7 @@ class Assembly(set):
     def find_formula( assembly):
         try:
             _kinds = Counter( list( map( lambda x: x.kind, assembly)))
-            _formula = ""
-            for _k in sorted( _kinds):
-                _formula += "%s_%s_" %(str(_k),str(_kinds[_k]))
+            _formula = "_".join( [ "%s_%s" %(str(_k),str(_kinds[_k])) for _k in sorted( _kinds)])
         except AttributeError:
             _formula = "*_%s" % str(len(assembly))
         return _formula
@@ -345,26 +346,83 @@ class Assembly(set):
     def find_node_assembly( assemblies):
         ''' Create the current state. The clusters list should be
             sorted based on cluster size (i.e. number of molecules). '''
-        node_assembly = defaultdict(int)
+        node_assembly = defaultdict(lambda:-1)
         for _ic, _c  in enumerate(assemblies):
             for _m in _c:
-                node_assembly[_m] = _ic+1
+                node_assembly[ _m] = _ic
         return node_assembly
+
+    def write(self, dir):
+        ''' Write down the assembly '''
+        f = open(dir+os.sep+"assembly_%d.dat"%self.uid,'w')
+        f.write('#   n   sqrg   b   c   sqk   diff_previous   diff_cumulative   diff_initial\n')
+        for _s, _d in self.data.items():
+            f.write("%.2f %.2f %.2f %.2f %.2f %6.2f %6.2f %6.2f\n"%
+            (_d['n'],_d['sqrg'],_d['b'],_d['c'],_d['sqk'],_d['diff_previous'],_d['diff_cumulative'],_d['diff_initial']))
+        f.close()
+
 
 class EvolutionTracker():
 
     __uid = -1
     __lock = threading.Lock()
+    __reset_critical = 0.3
+    __fusion_critical = 0.1
+    __fission_critical = 0.1
+    __change_critical = 0.1
 
-    def __get_uid(self):
+    def __register(self, assembly):
+        ''' Assign assembly uid. '''
         EvolutionTracker.__lock.acquire()
         EvolutionTracker.__uid += 1
+        assembly.uid = EvolutionTracker.__uid
+        assembly.ref = assembly
+        self.assemblies[ EvolutionTracker.__uid] = assembly
         EvolutionTracker.__lock.release()
-        return EvolutionTracker.__uid
+
+    def __update(self, previous, current):
+        ''' Update previous assembly from its current state (as identified at the a latest time step). '''
+        _ref = previous.ref
+        if len( _ref.data) == 1: # lazy attributes initialization
+            _ref.initial = set( previous)
+            _ref.cumulative = set( previous)
+        _lenprevious = len( previous)
+        _lencurrent = len( current)
+        _leninitial = len( _ref.initial)
+        _diff_previous = len(previous ^ current) // _lenprevious # not in both previous and current
+        _diff_cumulative = len( current - _ref.cumulative) // _lencurrent # brand new nodes
+        _diff_initial = len( current ^ _ref.initial) // _leninitial # not in both initial and current
+        _ref.cumulative.update(current) # update cumulatice set
+        _ref.clear() # update current
+        _ref.update(current)
+        _item = current.data.popitem() # update data
+        _item[1]["diff_previous"] = _diff_previous
+        _item[1]["diff_cumulative"] = _diff_cumulative
+        _item[1]["diff_initial"] = _diff_initial
+        _ref.data[_item[0]]=_item[1]
+        current.uid = _ref.uid
+        current.ref = _ref
+        _reset_critical = 0.3
+
+        if _diff_initial > _reset_critical:
+            _ref.initial.clear() # reset initial
+            _ref.initial.update(current)
+            _ref.cumulative.clear() # reset cumulative
+            _ref.cumulative.update(current)
+
+    def __terminate(self, assembly, reactions, step):
+        ''' Terminate assembly consumed in a reaction. '''
+        pass
+
+    def __initiate(self, assembly, reactions, step):
+        ''' Initialize assembly produced in in a reaction. '''
+        pass
 
     def __init__(self):
         # {assembly UID: [] }
         self.assemblies = {}
+        # [reaction]
+        self.reactions = []
         # previous step configuration data
         self.previous_t = 0.0   # time
         self.previous_node_assembly = None  # {moleculeID:assemblyID}
@@ -374,7 +432,7 @@ class EvolutionTracker():
         self.current_node_assembly = None
         self.current = None
 
-    def update_current(self, assemblies, t):
+    def update_current(self, assemblies, step):
 
         # move current to previous
         self.previous = self.current
@@ -384,54 +442,127 @@ class EvolutionTracker():
         # set current
         self.current = assemblies
         self.current_node_assembly = Assembly.find_node_assembly(assemblies)
-        self.current_t = t
+        self.current_t = step
+
+        # parameters
+        _fusion_critical = 0.1
+        _fission_critical = 0.1
+        _change_critical = 0.1
 
         if not self.previous is None:
-            # track assemblies evolution from the previous to the current state. 
+            # track assemblies evolution from the previous to the current state.
             # this evolution is modeled as a set if reactions where the assemblies
             # of the  previous state (reactants or left side assmblies) react to
             # give the assemblies of the current state (products or righ side assemblies).
             _assemblies = (self.previous, self.current)
             _node_assembly = (self.previous_node_assembly, self.current_node_assembly)
-            _used = ( [False]*len(_assemblies[0]), [False]*len(_assemblies[1]))
-            for _p in _assemblies[0]:
-                _candidates = [_p]
+            _used = tuple( map( lambda x: [False]*len(x), _assemblies))
+            for _ip, _p in enumerate(_assemblies[0]):
+                # has alreaedy been processed
+                if _used[0][ _ip]:
+                    continue
+                _candidates = [ _p]
+                _sides = ( [ _p], [])
+                _used[0][ _ip] = True
                 i, j = 0, 1
-                _sides = ( [], [])
                 while not len( _candidates) == 0:
-                    _candidates = self._track(_candidates, _node_assembly[i], _assemblies[i], _node_assembly[j], _used[j], _sides[j])
+                    _candidates = self._track(_candidates, _node_assembly[i], _assemblies[j], _node_assembly[j], _used[j], _sides[j])
+                    i, j = (i+1)%2, (j+1)%2
+                _nreactants, _nproducts = tuple(map(len,_sides))
+                if _nreactants == _nproducts == 1:
+                    # no reaction took place; no need to check further
+                    self.__update(_sides[0][0], _sides[1][0])
+                elif _nreactants > 1 == _nproducts:
+                    # fusion R0 + R1 + R2 + ... -> P0
+                    # check if any of the reactants is the main contributor in
+                    # the formation of the product. If yes use its uid.
+                    _r0 = max( _sides[0], key=len)
+                    _p0 = _sides[1][0]
+                    _lenr0 = len(_r0)
+                    _lenp0 = len(_p0)
+                    if (_lenr0-_lenp0)/_lenr0 < _fusion_critical:
+                        self.__register( _p0)
+                    else:
+                        self.__update(_r0, _p0)
+                    self.reactions.append( Reaction(_sides[0], _sides[1], step))
+                elif _nreactants == 1 < _nproducts:
+                    # fission R0 -> P0 + P1 + P2 + ...
+                    # check if any of the products is the main successor of
+                    # the reactant. If yes use its uid.
+                    _sides1 = sorted( _sides[1], key=len, reverse = True)
+                    _p0 = _sides1[0]
+                    _r0 = _sides[0][0]
+                    _lenp0 = len(_p0)
+                    _lenr0 = len(_r0)
+                    if (_lenr0-_lenp0)//_lenp0 < _fission_critical:
+                        self.__update( _r0, _p0)
+                    # assing uid to each of the remaining products.
+                    for _p in _sides1:
+                        if _p.uid == -1:
+                            self.__register(_p)
+                    self.reactions.append( Reaction(_sides[0], _sides1, step))
+                else:
+                    # complex reaction
+                    _sides = [ sorted( _sides[0], key=len, reverse = True),
+                               sorted( _sides[1], key=len, reverse = True) ]
+                    for _r in _sides[0]:
+                        _lenr = len(_r)
+                        for _p in _sides[1]:
+                            if _p.uid == -1:
+                                _lendiff = len(_r ^ _p)
+                                # most of _r constituents are now included in _p
+                                if _lendiff // _lenr < _change_critical:
+                                    self.__update(_r, _p)
+                                    break
+                    for _p in _sides[1]:
+                        if _p.uid == -1:
+                            self.__register(_p)
+                    self.reactions.append( Reaction(_sides[0], _sides[1], step))
 
         else:
             for _a in assemblies: # just set assemblies uid
-                _a.uid = self.__get_uid()
-                self.assemblies[_a.uid]._a
-
+                self.__register(_a)
 
     def _track(self, ls_candidates, ls_node_assembly, rs_assemblies, rs_node_assembly, rs_used, rs_side):
         ''' Track the righ side (rs) assemblies containing nodes from the assemblies of the left side (ls). '''
         _candidates = []
         for _ls in ls_candidates:
-            for pair in [ (k,v) for k, v in sorted( Counter([ rs_node_assembly[i] for i in _ls]).items(), key=lambda item: item[1]) if not k == 0 ]:
-                _assembly = rs_assemblies[k]
-                rs_side.append( _assembly)
-                _candidates.append( _assembly)
+            for _k, _v in sorted( Counter([ rs_node_assembly[i] for i in _ls]).items(), key=lambda item: item[1]):
+                if not _k == -1 and not rs_used[_k]:
+                    rs_used[ _k] = True
+                    _assembly = rs_assemblies[ _k]
+                    rs_side.append( _assembly)
+                    _candidates.append( _assembly)
+        return _candidates
 
+    def write(self, dir):
+
+        for _k, _v in self.assemblies.items():
+            _v.write(dir)
+
+        f=open(dir+os.sep+"reactions.dat",'w')
+        f.write("# step   reaction")
+        for _r in self.reactions:
+            f.write("%f %s"%( _r.step,str(_r)))
+        f.close()
+            
 
 class Reaction():
     ''' Implements a reaction. '''
 
-    def __init__(self, reactants, products):
+    def __init__(self, reactants, products, step):
         ''' Initialize a reaction object. '''
         self.reactants = Counter(reactants) # stoichiometry dict for reactants {reactant:#}
         self.reactants_string = Reaction.__get_string(self.reactants)
         self.products = Counter(products)  # stoichiometry dict for products {products:#}
-        self.products_string = Reaction.__get_string(self.reactants)
-        self.steps = defaultdict( int)  # dict {step : number of reactions}
+        self.products_string = Reaction.__get_string(self.products)
+        self.step = step
+        # self.steps = defaultdict( int)  # dict {step : number of reactions}
 
     @staticmethod
     def __get_string( side):
         ''' Return the string corespond to the given stoichiometry dict. '''
-        return " + ".join( [ k if side[k] == 1 else "%d %s"% (side[k], k) for k in sorted( side.keys())])
+        return " + ".join( [ k.formula if side[k] == 1 else "%d %s"% (side[k], k.formula) for k in sorted( side.keys())])
 
     def __str__(self):
         ''' Return str(self). '''
@@ -447,6 +578,6 @@ class Reaction():
         # return self.reactants_string == other.products_string and self.products_string == other.reactants_string
         return self.reactants == other.products and self.products == other.reactants
 
-    def add_step(self, step):
-        ''' Update steps dict (record). '''
-        self.steps[step] += 1
+    # def add_step(self, step):
+    #     ''' Update steps dict (record). '''
+    #     self.steps[step] += 1
