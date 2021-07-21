@@ -34,7 +34,7 @@ _runext = True  # run voro++ cmd
 _typeattribute = 'type'
 _typebased = "types"
 _probecritical = 0.0
-_profilebin = 0.5
+_profilebin = 1.0
 
 def clusters(filename,
              finfo,
@@ -169,6 +169,8 @@ def clusters(filename,
     if doprofiles:
         bprofiles = defaultdict(
             lambda: defaultdict(lambda: Binning.free(_profilebin, 0.0, False)))
+        b2dprofiles = defaultdict(
+            lambda: defaultdict(lambda: defaultdict( lambda: Binning.free(_profilebin, 0.0, False))))            
         hprofiles = defaultdict(
             lambda: defaultdict(lambda: Histogram.free(_profilebin, 0.0, False)))
         h2dprofiles = defaultdict(
@@ -437,7 +439,7 @@ def clusters(filename,
                 MCluster.order(_cl, r, atom_mass, molecule_atoms, molecule_name, neighbors, res_ends)
                 MCluster.shape(_cl, r, atom_mass, molecule_atoms)
                 if doprofiles:
-                    MCluster.profile(_cl, r, box, profileid, profilemap, bprofiles, hprofiles, h2dprofiles, vprofiles)
+                    MCluster.profile(_cl, r, box, profileid, profilemap, bprofiles, b2dprofiles, hprofiles, h2dprofiles, vprofiles)
                 _size = len(_cl.molecules)
                 # group q matrix eigenvalues based on three basic shapes:
                 # spherical: all eigenvalues are close to zero (a threshold of 0.1 will be used)
@@ -590,19 +592,33 @@ def clusters(filename,
 
     # write down profiles
     if doprofiles:
+        _dir = dirname + os.sep + "profiles"
+        if not os.path.exists(_dir): os.mkdir(_dir)
+
         for k, v in bprofiles.items():
             _var = vprofiles[k]
             for _k, _v in v.items():
-                _name = dirname + os.sep + "%s_%s.bprof"%(profilemap[_k],k)
-                _v.write( _name, header="# Number density profile of %s for clusters of molecular size %d(%d)" %(k,_var.mean(),_var.std()))
+                _name = _dir + os.sep + "%s_%s.bprof"%(profilemap[_k],k)
+                _nsamples = int(_v.variable._n)
+                _v.write( _name, header="# Number density profile of %s for clusters of molecular size %d(%d), from %d samples" %(k,_var.mean(),_var.std(),_nsamples))
+
+        for k, v in b2dprofiles.items():
+            _var = vprofiles[k]
+            for _s, _h in v.items():
+                for _k, _v in _h.items():
+                    _size="%d-%d_"%(_s*10,(_s+1)*10)
+                    _name = _dir + os.sep + "%s_%s_%s.bprof"%(profilemap[_k],k,_size)
+                    _nsamples = int(_v.variable._n)
+                    _v.write( _name, header="# Number density profile of %s for clusters of molecular size %d(%d), from %d samples" %(k,_var.mean(),_var.std(),_nsamples))
+
         for k, v in hprofiles.items():
             _var = vprofiles[k]
             for _k, _v in v.items():
-                _name = dirname + os.sep + "%s_%s.hprof"%(profilemap[_k],k)
+                _name = _dir + os.sep + "%s_%s.hprof"%(profilemap[_k],k)
                 _v.write( _name, header="# Number density profile of %s for clusters of molecular size %d(%d)" %(k,_var.mean(),_var.std()))
         for k, v in h2dprofiles.items():
             for _k, _v in v.items():
-                _name = dirname + os.sep + "%s_%s.h2dprof"%(profilemap[_k],k)
+                _name = _dir + os.sep + "%s_%s.h2dprof"%(profilemap[_k],k)
                 _v.normalize()
                 _v.write( _name )
 

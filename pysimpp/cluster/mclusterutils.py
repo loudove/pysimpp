@@ -617,7 +617,7 @@ class MCluster(Cluster):
         return hbox
 
     @staticmethod
-    def profile(cluster, r, box, profileid, profilemap, bprofiles, hprofiles, h2dprofiles, vprofiles):
+    def profile(cluster, r, box, profileid, profilemap, bprofiles, b2dprofiles, hprofiles, h2dprofiles, vprofiles):
         # TODO support triclinic boxes (work in fractional coordinates)
         # (currently on cubic boxes are supported)
 
@@ -631,8 +631,11 @@ class MCluster(Cluster):
 
             _h1ds = hprofiles['c']
             _h2ds = h2dprofiles['c']
+            _b2ds = b2dprofiles['c']
             _vs = vprofiles['c']
             _size = len(cluster.molecules)
+            _sizebin = int(_size // 10.0)
+            _b2d = _b2ds[_sizebin]
             _vs.set(_size)
 
             _dist = _hbox.distance(r)
@@ -650,6 +653,7 @@ class MCluster(Cluster):
                     print( 'WARNING: something is wrong with profiles calculation in %s(@%d)' % (inspect.currentframe().f_code.co_name, inspect.currentframe().f_lineno))
             for k, v in _hs.items():
                 _bs[k].add_histogram(v, options={'type':'p','profile':'c', 'length':_hbox.length})
+                _b2d[k].add_histogram(v, options={'type':'p','profile':'c', 'length':_hbox.length})
 
         # spherical
         elif cluster._b < 0.2 and cluster._c < 0.3 and cluster._sqk < 0.2:
@@ -658,8 +662,11 @@ class MCluster(Cluster):
 
             _h1ds = hprofiles['s']
             _h2ds = h2dprofiles['s']
+            _b2ds = b2dprofiles['s']
             _vs = vprofiles['s']
             _size = len(cluster.molecules)
+            _sizebin = int(_size // 10.0)
+            _b2d = _b2ds[_sizebin]
             _vs.set(_size)
 
             _cm = cluster._com
@@ -680,6 +687,7 @@ class MCluster(Cluster):
                     print( 'WARNING: something is wrong with profiles calculation in %s(@%d)' % (inspect.currentframe().f_code.co_name, inspect.currentframe().f_lineno))
             for k, v in _hs.items():
                 _bs[k].add_histogram(v, options={'type':'p','profile':'s'})
+                _b2d[k].add_histogram(v, options={'type':'p','profile':'s'})
 
         # cylindrical
         elif 0.2 < cluster._b < 0.65 and cluster._c < 0.3 and 0.1 < cluster._sqk < 0.4:
@@ -712,10 +720,13 @@ class MCluster(Cluster):
                 _bs = bprofiles['es']
                 _hs = defaultdict(lambda: Histogram.free(_profilebin, 0.0, False))
 
+                _b2ds = b2dprofiles['es']
                 _h1ds = hprofiles['es']
                 _h2ds = h2dprofiles['es']
                 _vs = vprofiles['es']
                 _size = len(cluster.molecules)
+                _sizebin = int(_size // 10.0)
+                _b2d = _b2ds[_sizebin]
                 _vs.set(_size)
 
                 _profileid = profileid[ _where]
@@ -734,13 +745,18 @@ class MCluster(Cluster):
 
                 for k, v in _hs.items():
                     _bs[k].add_histogram(v, options={'type':'p','profile':'s'})
+                    _b2d[k].add_histogram(v, options={'type':'p','profile':'s'})
 
                 _bs = bprofiles['ec']
                 _hs = defaultdict(lambda: Histogram.free(_profilebin, 0.0, False))
+
+                _b2ds = b2dprofiles['ec']
                 _h1ds = hprofiles['ec']
                 _h2ds = h2dprofiles['ec']
                 _vs = vprofiles['ec']
                 _size = len(cluster.molecules)
+                _sizebin = int(_size // 10.0)
+                _b2d = _b2ds[_sizebin]
                 _vs.set(_size)
 
                 _where = ~ _where
@@ -764,6 +780,7 @@ class MCluster(Cluster):
 
                 for k, v in _hs.items():
                     _bs[k].add_histogram(v, options={'type':'p','profile':'c', 'length':_l1-_l0})
+                    _b2d[k].add_histogram(v, options={'type':'p','profile':'c', 'length':_l1-_l0})
 
     def assembly_from_molecules(self, molecule_name, step):
         ''' Return an assembly consist of the molecules of the cluster. The kind

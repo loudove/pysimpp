@@ -355,10 +355,10 @@ class Assembly(set):
     def write(self, dir):
         ''' Write down the assembly '''
         f = open(dir+os.sep+"assembly_%d.dat"%self.uid,'w')
-        f.write('#   n   sqrg   b   c   sqk   diff_previous   diff_cumulative   diff_initial\n')
+        f.write('#   step   n   sqrg   b   c   sqk   diff_previous   diff_cumulative   diff_initial\n')
         for _s, _d in self.data.items():
-            f.write("%.2f %.2f %.2f %.2f %.2f %6.2f %6.2f %6.2f\n"%
-            (_d['n'],_d['sqrg'],_d['b'],_d['c'],_d['sqk'],_d['diff_previous'],_d['diff_cumulative'],_d['diff_initial']))
+            f.write("%f %.2f %.2f %.2f %.2f %.2f %6.2f %6.2f %6.2f\n"%
+            (_s, _d['n'],_d['sqrg'],_d['b'],_d['c'],_d['sqk'],_d['diff_previous'],_d['diff_cumulative'],_d['diff_initial']))
         f.close()
 
 
