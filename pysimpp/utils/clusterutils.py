@@ -519,8 +519,9 @@ class EvolutionTracker():
                             self.__register(_p)
                     self.reactions.append( Reaction(_sides[0], _sides[1], step))
 
-        else:
-            for _a in assemblies: # just set assemblies uid
+        # just set the uid for non registered assemblies
+        for _a in assemblies:
+            if _a.uid == -1:
                 self.__register(_a)
 
     def _track(self, ls_candidates, ls_node_assembly, rs_assemblies, rs_node_assembly, rs_used, rs_side):
