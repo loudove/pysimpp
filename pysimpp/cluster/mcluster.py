@@ -223,8 +223,10 @@ def clusters(filename,
     hprop['sqk'] = Histogram.free(0.1, 0, addref=False)
     hprop['sqk_mol'] = Histogram.free(0.1, 0, addref=False)
     hprop['qlong'] = Histogram.free(0.1, 0, addref=False)
-    # hprop['b_sqrg'] = Histogram.free(0.1, 0, addref=False)
     hprop['b'] = Histogram.free(0.1, 0, addref=False)
+    hprop['bp'] = Histogram.free(0.1, 0, addref=False)
+    hprop['c'] = Histogram.free(0.1, 0, addref=False)
+    hprop['cp'] = Histogram.free(0.1, 0, addref=False)
     # properties,size histograms
     hprop2D = defaultdict(lambda: Histogram2D(1.0, (0, 0), addref=False))
     hprop2D['sqk'] = Histogram2D((0.1, 1.0), (0, 0), addref=False)
@@ -447,10 +449,11 @@ def clusters(filename,
                 # planar: two negative (close to -0.5) and one positive (close to 1.0)
                 # other: anything else
                 if not _cl._infinit:
-                    # hprop['b_sqrg'].add(_cl._b / _cl._sqrg)
                     hprop['sqrg'].add(_cl._sqrg)
                     hprop['b'].add(_cl._b)
+                    hprop['bp'].add(_cl._bp)
                     hprop['c'].add(_cl._c)
+                    hprop['cp'].add(_cl._cp)
                     hprop['sqk'].add(_cl._sqk)
                     hprop['bbox_x'].add(_cl._bbox[0])
                     hprop['bbox_y'].add(_cl._bbox[1])

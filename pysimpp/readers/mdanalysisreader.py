@@ -51,6 +51,8 @@ class MDAnalysisReader(abcReader):
         self.data = {}          # gro file data
         self.natom = 0          # number of atoms
         self.nsteps = 0         # number of steprs read from trajectory file
+        self.timeoffset = 0.0   # fix timestep (in case of time reset and multiple trajectory files)
+        self.istepoffset = 0     # fix integration step
 
     def set_files(self, filename, topo=None):
         ''' Set the topology and the trajectory files. The convention is that
@@ -178,8 +180,9 @@ class MDAnalysisReader(abcReader):
                 data['z'][:] = ts.positions[:,2]
 
                 # the step of the trajectory frame (inline with LammpsReader)
-                istep = ts.data['step']
-                self.frames.append( (ts.frame, ts.time, ts.data['step'])) # keep frames info (debug info)
+                _istepoffset = self.istepoffset
+                istep = ts.data['step'] + _istepoffset
+                self.frames.append( (ts.frame, ts.time+self.timeoffset, ts.data['step']+_istepoffset)) # keep frames info (debug info)
 
                 if _inform:
                     print('>> ... reading %d step dump' % istep, end="\r")
@@ -261,7 +264,7 @@ class MDAnalysisReader(abcReader):
                 ts = self._next_frame()
                 if  ts == None:
                     break
-                istep = ts.data['step']
+                istep = ts.data['step']+self.istepoffset
                 if istep >= start:
                     if istep <= end:
                         icnt+=1
@@ -271,6 +274,8 @@ class MDAnalysisReader(abcReader):
             self._next_file = self.__next_file()
             self.trajfile = next(self._next_file) # get the first file (always available)
             self._prepare()
+            self.timeoffset = 0.0
+            self.istepoffset = 0
 
         return  icnt
 
@@ -299,7 +304,19 @@ class MDAnalysisReader(abcReader):
             filename = next(self._next_file)   # chek if there is a next trj file
             if not filename == None:           # if yes the
                 self.trajfile = filename       # prepare it for reading
+                # keep the last time-step
+                lastframe = self.u.trajectory[-1]
+                tlast = lastframe.time
+                ilast = lastframe.data['step']
                 self._prepare()
+                # if the timestep is correct reset timeoffset
+                firstframe = self.u.trajectory[0]
+                tfirst = firstframe.time
+                ifirst = firstframe.data['step']
+                # assuming the same dump frequency with previous trajectory file
+                self.timeoffset = tlast - tfirst
+                self.istepoffset = ilast - ifirst
+
                 ts = next(self._next_timestep) # skip the first frame
                 ts = next(self._next_timestep) # and return the second
         return ts
@@ -315,7 +332,8 @@ class MDAnalysisReader(abcReader):
             adds them in self.files and terminates this list with None. '''
         i = 1
         while True:
-            name = self.filename + ".%d" % i
+            # name = self.filename + ".%d" % i
+            name = self.dir + os.sep + self.basename + ".%d" % i + self.fileext
             if not os.path.isfile( name): break
             i += 1
             self.files.append( name)

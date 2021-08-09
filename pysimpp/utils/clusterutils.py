@@ -542,9 +542,9 @@ class EvolutionTracker():
             _v.write(dir)
 
         f=open(dir+os.sep+"reactions.dat",'w')
-        f.write("# step   reaction")
+        f.write("# step   reaction\n")
         for _r in self.reactions:
-            f.write("%f %s"%( _r.step,str(_r)))
+            f.write("%f %s\n"%( _r.step,str(_r)))
         f.close()
             
 

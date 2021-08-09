@@ -521,16 +521,15 @@ class MCluster(Cluster):
         sqrg = _e.sum()              # square radious of gyration
         b = _e[0]-0.5*(_e[1]+_e[2])    # aspherisity
         c = _e[1]-_e[2]                # acylindricity
-        cp = _e[0]-_e[1]               # acylindricity prime
         sqk = (b*b+0.75*c*c)/(sqrg*sqrg)# anisotropy
         # "normalize" asphericity dividing by Rg^2
-        # b = b / _e[0]  # aspherisity
+        bp = b / _e[0]  # aspherisity
         b = b / sqrg  # aspherisity
         # or following gromacs implementation
         # b = (3./2.) * (np.sum((_e - sqrg/3.)**2))/sqrg**2
         # "normalize" acylindricity dividing by _e[1]
-        c = c / _e[1]
-        cp = cp / _e[0]
+        cp = c / _e[1]
+        c = c / sqrg
         # bounding ortho box: find the probability distribution along
         # each principal axis. check which range is higher that the
         # value of the corresponding uniform distribution scaled by f
@@ -577,7 +576,9 @@ class MCluster(Cluster):
         # _inert, _eigval, _eigvec, _ierr =  inertia(_r, _masses, _molecules, _exclude)
         cluster._sqrg = sqrg
         cluster._b = b
+        cluster._bp = bp
         cluster._c = c
+        cluster._cp = cp
         cluster._sqk = sqk
         cluster._bbox = bbox
         cluster._rgval = _eigval[0]
