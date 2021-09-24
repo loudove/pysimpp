@@ -34,7 +34,7 @@ _runext = True  # run voro++ cmd
 _typeattribute = 'type'
 _typebased = "types"
 _probecritical = 0.0
-_profilebin = 1.0
+_profilebin = 0.25
 
 def clusters(filename,
              finfo,
@@ -175,7 +175,7 @@ def clusters(filename,
             lambda: defaultdict(lambda: Histogram.free(_profilebin, 0.0, False)))
         h2dprofiles = defaultdict(
             lambda: defaultdict(lambda: Histogram2D((10.0, _profilebin), (0, 0), addref=False)))
-        vprofiles = defaultdict( lambda: Variable() )
+        vprofiles = defaultdict( lambda: defaultdict( lambda: Variable() ))
         profileid = np.zeros(natoms, dtype=int)
         profilemap = {}
         for ik, k in enumerate( sorted( profiles.keys())):
@@ -220,18 +220,27 @@ def clusters(filename,
                                addref=False)  # number of clusters histogram
     # properties histograms
     hprop = defaultdict(lambda: Histogram.free(1, 0, addref=False))
-    hprop['sqk'] = Histogram.free(0.1, 0, addref=False)
-    hprop['sqk_mol'] = Histogram.free(0.1, 0, addref=False)
-    hprop['qlong'] = Histogram.free(0.1, 0, addref=False)
-    hprop['b'] = Histogram.free(0.1, 0, addref=False)
-    hprop['bp'] = Histogram.free(0.1, 0, addref=False)
-    hprop['c'] = Histogram.free(0.1, 0, addref=False)
-    hprop['cp'] = Histogram.free(0.1, 0, addref=False)
+    hprop['sqk'] = Histogram.free(0.05, 0, addref=False)
+    hprop['sqk_mol'] = Histogram.free(0.05, 0, addref=False)
+    hprop['qlong'] = Histogram.free(0.05, 0, addref=False)
+    hprop['b'] = Histogram.free(0.05, 0, addref=False)
+    hprop['bp'] = Histogram.free(0.05, 0, addref=False)
+    hprop['c'] = Histogram.free(0.05, 0, addref=False)
+    hprop['cp'] = Histogram.free(0.05, 0, addref=False)
+    hprop['qloc_mol'] = Histogram.free(0.05, 0, addref=False)
+    hprop['qloc_mol_s'] = Histogram.free(0.05, 0, addref=False)
+    hprop['qloc_mol_ec'] = Histogram.free(0.05, 0, addref=False)
+    hprop['ld_s'] = Histogram.free(0.05, 0, addref=False)
+    hprop['ld_ec'] = Histogram.free(0.05, 0, addref=False)
+    
     # properties,size histograms
     hprop2D = defaultdict(lambda: Histogram2D(1.0, (0, 0), addref=False))
-    hprop2D['sqk'] = Histogram2D((0.1, 1.0), (0, 0), addref=False)
+    hprop2D['b'] = Histogram2D((0.05, 1.0), (0, 0), addref=False)
+    hprop2D['c'] = Histogram2D((0.05, 1.0), (0, 0), addref=False)
+    hprop2D['sqk'] = Histogram2D((0.05, 1.0), (0, 0), addref=False)
     hprop2D['sqk_mol'] = Histogram2D((0.1, 1.0), (0, 0), addref=False)
-    hprop2D['qlong'] = Histogram2D((0.1, 1.0), (0, 0), addref=False)
+    hprop2D['qlong'] = Histogram2D((0.05, 1.0), (0, 0), addref=False)
+    hprop2D['qloc_mol'] = Histogram2D((0.05, 1.0), (0, 0), addref=False)
 
     # prepare on the fly log
     log = ClPropertiesLog(dirname)
@@ -290,8 +299,11 @@ def clusters(filename,
     vis = not visfreq == sys.maxsize
 
     print('>> reading dump file(s) ...')
+    fndx = open(dirname + os.sep + "assemblies.ndx",'w')
+    istep=-1
     while (True):
         step, box, data = reader.read_next_frame()
+        istep+=1
         if step is None:
             break
         elif step < start:
@@ -418,6 +430,8 @@ def clusters(filename,
             for i, _cl in enumerate(_clusters):
                 MCluster.udpate_coordinates(_cl, box, rw, r, atom_molecule,
                                            molecule_atoms)
+                if istep == 0:
+                    MCluster.writendx( fndx, i, _cl, molecule_atoms)
                 if vis and step % visfreq == 0:
                     # if True:
                     # MCluster.write(_cl, r, fmt='xyz',
@@ -462,16 +476,23 @@ def clusters(filename,
                     hprop2D['b'].add((_cl._b, _size))
                     hprop2D['c'].add((_cl._c, _size))
                     hprop2D['sqk'].add((_cl._sqk, _size))
+                    # TODO :not needed remove them
                     hprop2D['bbox_x'].add((_cl._bbox[0], _size))
                     hprop2D['bbox_y'].add((_cl._bbox[1], _size))
                     hprop2D['bbox_z'].add((_cl._bbox[2], _size))
 
-                    hprop['sqee_mol'].add(_cl._msqee)
-                    hprop['sqrg_mol'].add(_cl._msqrg)
-                    hprop['b_mol'].add(_cl._mb)
-                    hprop['c_mol'].add(_cl._mc)
-                    hprop['sqk_mol'].add(_cl._msqk)
-                    hprop['qloc_mol'].add(_cl._qloc)
+                    if _cl._shape == 's':
+                        hprop['sqrg_s'].add(_cl._sqrg)
+                        hprop['sqee_mol_s'].add(_cl._msqee)
+                        hprop['qloc_mol_s'].add(_cl._qloc)
+                        hprop['ld_s'].add(_cl._ldensity[0])
+                    elif _cl._shape == 'ec':
+                        hprop['sqrg_ec'].add(_cl._sqrg)
+                        hprop['sqee_mol_ec'].add(_cl._msqee)
+                        hprop['qloc_mol_ec'].add(_cl._qloc)
+                        hprop['ld_ec'].add(_cl._ldensity[0])
+                        hprop['ldn_ec'].add(_cl._ldensity[2])
+                        hprop['ldl_ec'].add(_cl._ldensity[3])
 
                     hprop2D['sqee_mol'].add((_cl._msqee, _size))
                     hprop2D['sqrg_mol'].add((_cl._msqrg, _size))
@@ -480,7 +501,14 @@ def clusters(filename,
                     hprop2D['sqk_mol'].add((_cl._msqk, _size))
                     hprop2D['qloc_mol'].add((_cl._qloc, _size))
 
-                    hprop['qlong'].add(_cl._qlong)
+                hprop['sqee_mol'].add(_cl._msqee)
+                hprop['sqrg_mol'].add(_cl._msqrg)
+                # TODO :use normalized b and c
+                hprop['b_mol'].add(_cl._mb)
+                hprop['c_mol'].add(_cl._mc)
+                hprop['sqk_mol'].add(_cl._msqk)
+                hprop['qloc_mol'].add(_cl._qloc)
+                hprop['qlong'].add(_cl._qlong)
 
             # analyse
             if doprofiles:
@@ -534,6 +562,8 @@ def clusters(filename,
     #     for ic in clusterlen:
     #         a[ ic] += 1
 
+    fndx.close()
+    
     if len(steps) == 0:
         print("No frames processed")
         return
@@ -599,15 +629,15 @@ def clusters(filename,
         if not os.path.exists(_dir): os.mkdir(_dir)
 
         for k, v in bprofiles.items():
-            _var = vprofiles[k]
+            _var = vprofiles[k]['total']
             for _k, _v in v.items():
                 _name = _dir + os.sep + "%s_%s.bprof"%(profilemap[_k],k)
                 _nsamples = int(_v.variable._n)
                 _v.write( _name, header="# Number density profile of %s for clusters of molecular size %d(%d), from %d samples" %(k,_var.mean(),_var.std(),_nsamples))
 
         for k, v in b2dprofiles.items():
-            _var = vprofiles[k]
             for _s, _h in v.items():
+                _var = vprofiles[k][_s]
                 for _k, _v in _h.items():
                     _size="%d-%d_"%(_s*10,(_s+1)*10)
                     _name = _dir + os.sep + "%s_%s_%s.bprof"%(profilemap[_k],k,_size)
@@ -615,15 +645,17 @@ def clusters(filename,
                     _v.write( _name, header="# Number density profile of %s for clusters of molecular size %d(%d), from %d samples" %(k,_var.mean(),_var.std(),_nsamples))
 
         for k, v in hprofiles.items():
-            _var = vprofiles[k]
+            _var = vprofiles[k]['total']
             for _k, _v in v.items():
                 _name = _dir + os.sep + "%s_%s.hprof"%(profilemap[_k],k)
                 _v.write( _name, header="# Number density profile of %s for clusters of molecular size %d(%d)" %(k,_var.mean(),_var.std()))
         for k, v in h2dprofiles.items():
+            _var = vprofiles[k]['total']
             for _k, _v in v.items():
                 _name = _dir + os.sep + "%s_%s.h2dprof"%(profilemap[_k],k)
                 _v.normalize()
-                _v.write( _name )
+                _header = "# Number density profile of %s for clusters of molecular size %d(%d)" %(k,_var.mean(),_var.std())
+                _v.write( _name, header=_header )
 
         _dir = dirname + os.sep + "evolution"
         if not os.path.exists(_dir): os.mkdir(_dir)

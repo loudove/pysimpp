@@ -453,7 +453,7 @@ class Histogram2D():
         range[1, 1] = max_
         return range
 
-    def write(self, fname, include=True):
+    def write(self, fname, header="", include=True):
         ''' Write the histogram data. NOTE that the histogram should be normalized if
             the print out of the estimated probability distribution function is desired. '''
         if len(list(self.h.keys())) == 0: return
@@ -464,6 +464,7 @@ class Histogram2D():
         #n1=i[1,1]-i[1,0]+1
 
         f = open(fname, 'w')
+        f.write("%s\n" % header)
         if not include:
             for i0 in range(i[0, 0], i[0, 1] + 1):
                 if i0 not in self.h: continue
@@ -473,8 +474,7 @@ class Histogram2D():
                     if i1 not in hash: continue
                     v = hash[i1]
                     hi1 = self.min[1] + self.d[1] * i1 + hd[1]
-                    line = str(hi0).ljust(15) + str(hi1).ljust(15) + str(v).ljust(15)
-                    f.write(line + "\n")
+                    f.write( "%s %s %s\n" % ( str(hi0).ljust(15), str(hi1).ljust(15), str(v).ljust(15)) )
                 f.write("\n")
         else:
             for i0 in range(i[0, 0], i[0, 1] + 1):
@@ -482,8 +482,7 @@ class Histogram2D():
                 if i0 not in self.h:
                     for i1 in range(i[1, 0], i[1, 1] + 1):
                         hi1 = self.min[1] + self.d[1] * i1 + hd[1]
-                        line = str(hi0).ljust(15) + str(hi1).ljust(15) + "0.0".ljust(15)
-                        f.write(line + "\n")
+                        f.write( "%s %s 0.0\n" % ( str(hi0).ljust(15), str(hi1).ljust(15)) )
                     f.write("\n")
                 else:
                     hash = self.h[i0]
@@ -493,12 +492,11 @@ class Histogram2D():
                         else:
                             v = 0.0
                         hi1 = self.min[1] + self.d[1] * i1 + hd[1]
-                        line = str(hi0).ljust(15) + str(hi1).ljust(15) + str(v).ljust(15)
-                        f.write(line + "\n")
+                        f.write( "%s %s %s\n" % ( str(hi0).ljust(15), str(hi1).ljust(15), str(v).ljust(15)) )
                     f.write("\n")
         f.close()
 
-    def write_conditional(self, fname, include=True, condv=0, condp=None):
+    def write_conditional(self, fname, header="", include=True, condv=0, condp=None):
         ''' Write the histogram data. NOTE that the histogram should be normalized
             prior to the call of this method. '''
         if len(list(self.h.keys())) == 0: return
@@ -509,6 +507,7 @@ class Histogram2D():
         #n1=i[1,1]-i[1,0]+1
 
         f = open(fname, 'w')
+        f.write("%s\n" % header)
         if not include:
             for i0 in range(i[0, 0], i[0, 1] + 1):
                 if i0 not in self.h: continue
@@ -523,8 +522,7 @@ class Histogram2D():
                         elif condv==2: v/=condp[i1]
 
                     hi1 = self.min[1] + self.d[1] * i1 - hd[1]
-                    line = str(hi0).ljust(15) + str(hi1).ljust(15) + str(v).ljust(15)
-                    f.write(line + "\n")
+                    f.write( "%s %s %s\n" % ( str(hi0).ljust(15), str(hi1).ljust(15), str(v).ljust(15)) )
                 f.write("\n")
         else:
             for i0 in range(i[0, 0], i[0, 1] + 1):
@@ -532,8 +530,7 @@ class Histogram2D():
                 if i0 not in self.h:
                     for i1 in range(i[1, 0], i[1, 1] + 1):
                         hi1 = np.float32(self.min[1] + self.d[1] * i1 - hd[1])
-                        line = str(hi0).ljust(15) + str(hi1).ljust(15) + "0.0".ljust(15)
-                        f.write(line + "\n")
+                        f.write( "%s %s 0.0\n" % ( str(hi0).ljust(15), str(hi1).ljust(15)) )
                     f.write("\n")
                 else:
                     hash = self.h[i0]
@@ -556,12 +553,13 @@ class Histogram2D():
                                     else: raise HistogramException("error: conditional probability is zero for x=%f" % hi1)
                         else:
                             v = 0.0
-                        line = str(hi0).ljust(15) + str(hi1).ljust(15) + str(v).ljust(15)
-                        f.write(line + "\n")
+                        # line = str(hi0).ljust(15) + str(hi1).ljust(15) + str(v).ljust(15)
+                        # f.write(line + "\n")
+                        f.write( "%s %s %s\n" % ( str(hi0).ljust(15), str(hi1).ljust(15), str(v).ljust(15)) )
                     f.write("\n")
         f.close()
 
-    def write_conditional_(self, fname, include=True):
+    def write_conditional_(self, fname, header="", include=True):
         ''' Write the histogram data with the conditional probabilities
             given the first dimension. '''
 
@@ -577,6 +575,7 @@ class Histogram2D():
         #n1=i[1,1]-i[1,0]+1
 
         f = open(fname, 'w')
+        f.write("%s\n" % header)
         if not include:
             for i0 in range(i[0, 0], i[0, 1] + 1):
                 if i0 not in self.h: continue
@@ -589,8 +588,7 @@ class Histogram2D():
                     v = hash[i1] / px0
 
                     hi1 = self.min[1] + self.d[1] * i1 - hd[1]
-                    line = str(hi0).ljust(15) + str(hi1).ljust(15) + str(v).ljust(15)
-                    f.write(line + "\n")
+                    f.write( "%s %s %s\n" % ( str(hi0).ljust(15), str(hi1).ljust(15), str(v).ljust(15)) )
                 f.write("\n")
         else:
             for i0 in range(i[0, 0], i[0, 1] + 1):
@@ -598,8 +596,7 @@ class Histogram2D():
                 if i0 not in self.h:
                     for i1 in range(i[1, 0], i[1, 1] + 1):
                         hi1 = np.float32(self.min[1] + self.d[1] * i1 - hd[1])
-                        line = str(hi0).ljust(15) + str(hi1).ljust(15) + "0.0".ljust(15)
-                        f.write(line + "\n")
+                        f.write( "%s %s 0.0\n" % (str(hi0).ljust(15), str(hi1).ljust(15) ))
                     f.write("\n")
                 else:
                     hash = self.h[i0]
@@ -610,8 +607,7 @@ class Histogram2D():
                             v = hash[i1] / px0
                         else:
                             v = 0.0
-                        line = str(hi0).ljust(15) + str(hi1).ljust(15) + str(v).ljust(15)
-                        f.write(line + "\n")
+                        f.write( "%s %s %s\n" % ( str(hi0).ljust(15), str(hi1).ljust(15), str(v).ljust(15)) )
                     f.write("\n")
         f.close()
 
@@ -746,8 +742,7 @@ class Histogram3D():
                         if i2 not in h2: continue
                         hi2 = self.min[2] + self.d[2] * i2 + hd[2]
                         v = h2[i2]
-                        line = str(hi0).ljust(15) + str(hi1).ljust(15) + str(hi2).ljust(15) + str(v).ljust(15)
-                        f.write(line + "\n")
+                        f.write( "%s %s %s %s\n" % ( str(hi0).ljust(15), str(hi1).ljust(15), str(hi2).ljust(15) , str(v).ljust(15)) )
                     # f.write("\n")
                 # f.write("\n")
         else:
@@ -758,8 +753,7 @@ class Histogram3D():
                         hi1 = self.min[1] + self.d[1] * i1 + hd[1]
                         for i2 in range(i[2, 0], i[2, 1] + 1):
                             hi2 = self.min[2] + self.d[2] * i1 + hd[2]
-                            line = str(hi0).ljust(15) + str(hi1).ljust(15) + str(hi2).ljust(15) + "0.0".ljust(15)
-                            f.write(line + "\n")
+                            f.write( "%s %s %s 0.0\n" % ( str(hi0).ljust(15), str(hi1).ljust(15), str(hi2).ljust(15)) )
                         # f.write("\n")
                     # f.write("\n")
                 else:
@@ -769,16 +763,14 @@ class Histogram3D():
                         if i1 not in h1:
                             for i2 in range(i[2, 0], i[2, 1] + 1):
                                 hi2 = self.min[2] + self.d[2] * i1 + hd[2]
-                                line = str(hi0).ljust(15) + str(hi1).ljust(15) + str(hi2).ljust(15) + "0.0".ljust(15)
-                                f.write(line + "\n")
+                                f.write( "%s %s %s 0.0\n" % ( str(hi0).ljust(15), str(hi1).ljust(15), str(hi2).ljust(15)) )
                             # f.write(line + "\n")
                         else:
                             h2 = h1[i1]
                             for i2 in range(i[2, 0], i[2, 1] + 1):
                                 hi2 = self.min[2] + self.d[2] * i1 + hd[2]
                                 v = h2[i2] if i2 in h2 else 0.0
-                                line = str(hi0).ljust(15) + str(hi1).ljust(15) + str(hi2).ljust(15) + str(v).ljust(15)
-                                f.write(line + "\n")
+                                f.write( "%s %s %s %s\n" % ( str(hi0).ljust(15), str(hi1).ljust(15), str(hi2).ljust(15) , str(v).ljust(15)) )
                             # f.write(line + "\n")
                     # f.write("\n")
         f.close()

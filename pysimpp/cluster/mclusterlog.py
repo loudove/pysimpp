@@ -117,7 +117,7 @@ class ClDetailsLog(ClusterLog):
     def __init__(self, dirname, filename="details.dat"):
         super(ClDetailsLog, self).__init__(dirname, filename)
         header = "# " + " ".join(
-            ("step", "id", "isinf", "nmols", "ldens", "ldens_std", "grval[1]",
+            ("step", "id", "isinf", "nmols", "ldens", "ldens_std", "ldens_n", "ldens_L", "grval[1]",
              "grval[2]", "grval[3]", "bboxl[1]", "bbox[2]", "bbox[3]",
              "order[1]", "order[2]", "order[3]", "grvec[0][0]", "grvec[0][1]",
              "grvec[0][2]", "grvec[1][0]", "grvec[1][1]", "grvec[1][2]",
@@ -137,8 +137,8 @@ class ClDetailsLog(ClusterLog):
             qvec = cl._qvec
             inf = 1 if cl._infinit else 0
             self.f.write(
-                "%d %d %d %d %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n"
-                % (step, icl, inf, nmols, cl._ldensity[0], cl._ldensity[1],
+                "%d %d %d %d %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n"
+                % (step, icl, inf, nmols, cl._ldensity[0], cl._ldensity[1], cl._ldensity[2], cl._ldensity[3],
                    grval[0], grval[1], grval[2], bbox[0], bbox[1], bbox[2],
                    qval[0], qval[1], qval[2], grvec[0], grvec[1], grvec[2],
                    grvec[3], grvec[4], grvec[5], grvec[6], grvec[7], grvec[8],

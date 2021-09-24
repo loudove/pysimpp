@@ -56,7 +56,7 @@ class UnitHexagolal2D():
         if np.all( np.isclose(absaxis, u, atol = atol)) and iscubic:
             normal = u * sign # plane normal vector (space diagonal)
 
-            # sign indicats the box apex where the space diagonal points
+            # sign indicates the box apex where the space diagonal points
             # if the origin is located at the center of the box.
             # Get the box apex in box coordinates (i,j,k) with i,j,k := {0,1}
             # (with the origin being located at the start of the box)
@@ -77,8 +77,6 @@ class UnitHexagolal2D():
             a, b, c = v
             # the total length of the column equals box space diagonal
             length = np.sqrt(a*a+b*b+c*c)
-            # 2d h1 unit cell edge length
-            d = a * _sqrt23
             obj = cls()
             obj.pbc = obj._pbc_space_diagonal
 
@@ -116,8 +114,6 @@ class UnitHexagolal2D():
                     diagonal = np.sqrt(a*a+b*b)
                     # not necessary but set a convinient length for the normal vector
                     normal *= diagonal
-                    # 2d unit cell edge length
-                    d = a * b / diagonal
                     # the total length of the column equals box space diagonal
                     length = diagonal
 
@@ -140,7 +136,6 @@ class UnitHexagolal2D():
                         ip, jp = jp, ip
                     kp = _box[ np.array( mask, dtype=bool)]
                     a, b, c = get_length(ip), get_length(jp), get_length(kp)
-                    d = 0.0
 
                     # not necessary but set a convinient length for the normal vector
                     normal[:] *= c
@@ -167,7 +162,6 @@ class UnitHexagolal2D():
             obj.b = float(b)
             obj.c = float(c)
             obj.length = float(length)
-            obj.d = float(d)
             obj.box = np.array( (get_length(ip),get_length(jp)))
             return obj
 
@@ -235,6 +229,7 @@ class MCluster(Cluster):
         self.molecules = None
         self.molecules_shift = None
         self.molecules_first = None
+        self._shape = ''
 
     def update_molecules( self, atom_molecule):
         ''' Update the list with the global indexes of the molecules in the
@@ -377,6 +372,39 @@ class MCluster(Cluster):
             _dr = dr + shift_vector( shift)
             ruw[imatoms,:] += _dr
             used.append(im)
+
+    @staticmethod
+    def writendx( fndx, icluster, cluster, molecule_atoms):
+        _every = 20
+        fndx.write("[ ASSMBL%d ]\n"%icluster)
+        iatom = 0
+        for im in cluster.molecules:
+            for iat in molecule_atoms[im]:
+                iatom+=1
+                s = "\n" if iatom % _every == 0 else " " 
+                fndx.write("%d%s"%(iat,s))
+        if not iatom % _every == 0: fndx.write("\n")
+        fndx.write("\n")
+        _head=[15,16,17,18,19,53,54,55,56,57,58,59,60,61]
+        _tail=list(set(range(62))-set(_head))
+        fndx.write("[ ASSMBL%d_HEAD ]\n"%icluster)
+        iatom = 0
+        for im in cluster.molecules:
+            for iat in np.array(molecule_atoms[im])[_head]:
+                iatom+=1
+                s = "\n" if iatom % _every == 0 else " " 
+                fndx.write("%d%s"%(iat,s))                
+        if not iatom % _every == 0: fndx.write("\n")
+        fndx.write("\n")
+        fndx.write("[ ASSMBL%d_TAIL ]\n"%icluster)
+        iatom = 0
+        for im in cluster.molecules:
+            for iat in np.array(molecule_atoms[im])[_tail]:
+                iatom+=1
+                s = "\n" if iatom % _every == 0 else " " 
+                fndx.write("%d%s"%(iat,s))                
+        if not iatom % _every == 0: fndx.write("\n")
+        fndx.write("\n")
 
     @staticmethod
     def write( cluster, r, **kwargs):
@@ -549,7 +577,10 @@ class MCluster(Cluster):
 
         # estimate the total linear number molecular density
         # find the real molecule for each atom of the cluster
-        if len(cluster.molecules) > 50:
+        _eps = np.sqrt( cluster._msqee)
+        _epsxmin = on[0][0]+_eps
+        _epsxmax = on[0][1]-_eps
+        if len(cluster.molecules) > 50 and (_epsxmax-_epsxmin)>0.5*_eps:
             _rmolecules = []
             for i, im in enumerate(cluster.molecules):
                 _atoms = molecule_atoms[im]
@@ -557,7 +588,7 @@ class MCluster(Cluster):
                 _rmolecules += [i]*len(_atoms)
             _cm = fastcom( _rp, _masses, _rmolecules, len(cluster.molecules))
             _x = _cm[:,0]
-            _xL = 2.0
+            _xL = _eps # 2.0
             _dL = 10.0
             _xmin = on[0][0]+_xL
             _xmax = on[0][1]-_xL-_dL
@@ -567,9 +598,10 @@ class MCluster(Cluster):
             for i in range(100000):
                 _x0 = _xmin + _delta*rand()
                 _v.set( float(len(_x[ (_x>=_x0) & (_x<=_x0+_dL)]))/_dL)
-            cluster._ldensity = (_v.mean(),_v.std())
+            _natoms = len(_x[ (_x>=_epsxmin) & (_x<=_epsxmax)])
+            cluster._ldensity = (_v.mean(),_v.std(),_natoms,_xmax-_xmin)
         else:
-            cluster._ldensity = (0.0,0.0)
+            cluster._ldensity = (0.0,0.0,0.0,0.0)
 
         # gives the same results as in the case of gyration tensor
         # (ie. different eigenvalues but the same eigenvectors)
@@ -626,17 +658,18 @@ class MCluster(Cluster):
         # TODO add criteria/cases based on the molecular weight
         # cylindrical column
         if cluster._infinit:
+            cluster._shape = 'c'
             _hbox = MCluster.chkaxis(cluster, box)
             _bs = bprofiles['c']
             _hs = defaultdict(lambda: Histogram.free(_profilebin, 0.0, False))
 
             _h1ds = hprofiles['c']
-            _h2ds = h2dprofiles['c']
-            _b2ds = b2dprofiles['c']
-            _vs = vprofiles['c']
+            # _h2ds = h2dprofiles['c']
+            # _b2ds = b2dprofiles['c']
+            _vs = vprofiles['c']['total']
             _size = len(cluster.molecules)
-            _sizebin = int(_size // 10.0)
-            _b2d = _b2ds[_sizebin]
+            # _sizebin = int(_size // 10.0)
+            # _b2d = _b2ds[_sizebin]
             _vs.set(_size)
 
             _dist = _hbox.distance(r)
@@ -644,31 +677,32 @@ class MCluster(Cluster):
                 if k == 0: continue
                 _h = _hs[k]
                 _h1d = _h1ds[k]
-                _h2d = _h2ds[k]
+                # _h2d = _h2ds[k]
                 _d = _dist[np.where(profileid == k)]
                 if len(_d):
                     np.vectorize(_h.add)(_d) # TODO compile the universal function once
                     np.vectorize(_h1d.add)(_d)
-                    for _dx in _d: _h2d.add((_size,_dx))
+                    # for _dx in _d: _h2d.add((_size,_dx))
                 else:
                     print( 'WARNING: something is wrong with profiles calculation in %s(@%d)' % (inspect.currentframe().f_code.co_name, inspect.currentframe().f_lineno))
             for k, v in _hs.items():
                 _bs[k].add_histogram(v, options={'type':'p','profile':'c', 'length':_hbox.length})
-                _b2d[k].add_histogram(v, options={'type':'p','profile':'c', 'length':_hbox.length})
+                # _b2d[k].add_histogram(v, options={'type':'p','profile':'c', 'length':_hbox.length})
 
         # spherical
-        elif cluster._b < 0.2 and cluster._c < 0.3 and cluster._sqk < 0.2:
+        elif cluster._b < 0.2 and cluster._c < 0.3 and cluster._sqk < 0.2 and len(cluster.molecules) > 40:
+            cluster._shape = 's'
             _bs = bprofiles['s']
             _hs = defaultdict(lambda: Histogram.free(_profilebin, 0.0, False))
 
             _h1ds = hprofiles['s']
             _h2ds = h2dprofiles['s']
             _b2ds = b2dprofiles['s']
-            _vs = vprofiles['s']
             _size = len(cluster.molecules)
             _sizebin = int(_size // 10.0)
             _b2d = _b2ds[_sizebin]
-            _vs.set(_size)
+            vprofiles['s']['total'].set(_size)
+            vprofiles['s'][_sizebin].set(_size)
 
             _cm = cluster._com
             _dr = r - _cm
@@ -690,10 +724,11 @@ class MCluster(Cluster):
                 _bs[k].add_histogram(v, options={'type':'p','profile':'s'})
                 _b2d[k].add_histogram(v, options={'type':'p','profile':'s'})
 
-        # cylindrical
+        # rod-like
         elif 0.2 < cluster._b < 0.65 and cluster._c < 0.3 and 0.1 < cluster._sqk < 0.4:
             _rest = (cluster._bbox[1]+cluster._bbox[2])/4.0 # estimate end-to-end
-            if cluster._bbox[0] > 2.0*_rest:
+            if cluster._bbox[0] > 2.0*_rest and len(cluster.molecules) > 100:
+                cluster._shape = 'ec'
                 _cm = cluster._com
                 _axis = cluster._rgvec[:3]
                 _r = r - _cm
@@ -724,11 +759,11 @@ class MCluster(Cluster):
                 _b2ds = b2dprofiles['es']
                 _h1ds = hprofiles['es']
                 _h2ds = h2dprofiles['es']
-                _vs = vprofiles['es']
                 _size = len(cluster.molecules)
                 _sizebin = int(_size // 10.0)
                 _b2d = _b2ds[_sizebin]
-                _vs.set(_size)
+                vprofiles['es']['total'].set(_size)
+                vprofiles['es'][_sizebin].set(_size)                
 
                 _profileid = profileid[ _where]
                 for k in profilemap:
@@ -754,11 +789,11 @@ class MCluster(Cluster):
                 _b2ds = b2dprofiles['ec']
                 _h1ds = hprofiles['ec']
                 _h2ds = h2dprofiles['ec']
-                _vs = vprofiles['ec']
                 _size = len(cluster.molecules)
                 _sizebin = int(_size // 10.0)
                 _b2d = _b2ds[_sizebin]
-                _vs.set(_size)
+                vprofiles['ec']['total'].set(_size)
+                vprofiles['ec'][_sizebin].set(_size)                
 
                 _where = ~ _where
                 _profileid = profileid[ _where]
