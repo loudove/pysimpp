@@ -306,8 +306,8 @@ class MDAnalysisReader(abcReader):
                 self.trajfile = filename       # prepare it for reading
                 # keep the last time-step
                 lastframe = self.u.trajectory[-1]
-                tlast = lastframe.time
-                ilast = lastframe.data['step']
+                tlast = self.timeoffset + lastframe.time
+                ilast = self.istepoffset + lastframe.data['step']
                 self._prepare()
                 # if the timestep is correct reset timeoffset
                 firstframe = self.u.trajectory[0]

@@ -447,6 +447,9 @@ class LammpsReader(abcReader):
     # known blocks nameσ in data file
     _blk_names = ("Masses", "Atoms", "Bonds", "Angles", "Dihedrals",
                 "Pair Coeffs", "Bond Coeffs", "Angle Coeffs", "Dihedral Coeffs", "Improper Coeffs")
+    # "BondBond Coeffs", "BondAngle Coeffs", "MiddleBondTorsion Coeffs", "EndBondTorsion Coeffs" ,
+    # "AngleTorsion Coeffs", "AngleAngleTorsion Coeffs", "BondBond13 Coeffs", "AngleAngle Coeffs" 
+
     # known dump attributes
     _keyDump = [' '+x+' ' for x in [
            'id', 'type', 'q', 'x', 'y', 'z', 'xs', 'ys', 'zs',
@@ -1251,10 +1254,60 @@ class LammpsReader(abcReader):
                         blocks["box"].append(line)
                     elif line in LammpsReader._blk_names:
                         blk = blocks[line]
+                    elif " Coeffs" in line:
+                        blk = blocks[line]
                     else:
                         if not blk == None:
                             blk.append(line)
         return lines, blocks
+
+    @staticmethod
+    def write_data(blocks, datafile):
+        ''' Parse lammps data file.
+            Args:
+                blocks (dict): dictionary with data blocks.
+                datafile (str): data file full name.
+        '''
+        with open(datafile,'w') as f:
+            # get the keywords
+            keys = list( blocks.keys())
+
+            lines = []
+            # comment lines
+            line = blocks['comment'] if 'comment' in blocks else "LAMMPS data file %s whole." % datafile
+            lines.append( line)
+
+            # integer value keywords (atoms, bonded terms and types)
+            for key in ['', 
+                    'atoms', 'bonds', 'angles', 'dihedrals', 'impropers', 
+                    '',
+                    'atom types', 'bond types', 'angle types', 'dihedral types', 'improper types', 
+                    '' ]:
+                value = blocks[key] if key in blocks else 0
+                lines.append( '' if key == '' else str(value) + ' '+ key)
+                if key in keys: keys.remove( key)
+
+            # box keyword
+            lines += blocks['box']
+            lines.append('')
+            keys.remove( 'box')
+
+            # topology and coefficients keywords
+            common = ['Masses', 'Atoms', 'Bonds', 'Angles', 'Dihedrals', 'Pair Coeffs', 'Bond Coeffs', 'Angle Coeffs', 'Dihedral Coeffs', 'Improper Coeffs']
+            extra = list( set(keys) - set(common))
+            all = common + extra
+            for key in all:
+                if not key in blocks: continue
+                lines.append(key)
+                lines.append('')
+                lines += blocks[key]
+                keys.remove( key)
+                lines.append('')
+
+            # write down the lines
+            for line in lines:
+                f.write(line+"\n")
+
 
     def _unwrap_frame(self, coords, images, box):
         ''' Unwrap the give frame.

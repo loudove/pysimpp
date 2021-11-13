@@ -116,7 +116,6 @@ subroutine fastunwrap(n, rw, ip, va, vb, vc, r)
     real*8, dimension( 0:2, 0:n-1), intent(out) :: r    !< atoms unwrapped coordinates
 
     integer :: i
-    real*8, dimension( 0:2) :: v
 
     r = 0.d0
 !$omp parallel do private(i)
@@ -127,48 +126,37 @@ subroutine fastunwrap(n, rw, ip, va, vb, vc, r)
 
 end subroutine fastunwrap
 
-!> Accelerate making molecules whole again (ONLY cubic boxes)
-subroutine fastwhole(n, rw, molecule, nbonds, bonds, a, b, c, r)
+!> Accelerate the bookkeeping of the molecule's atoms
+subroutine fast_molecule_atoms(n, molecule, m, molnat, moliat, molat, iatmol, ierr)
+
     implicit none
-    integer, intent(in) :: n                        !< number of atoms
-    real*8, dimension(0:n-1,0:2), intent(in) :: rw  !< atoms wrapped coordinates
-    !> atoms molecule (zero indexed array)
-    integer, dimension(0:n-1), intent(in) :: molecule
-    integer, intent(in) :: nbonds                   !< number of bonds
-    !> bond atoms b(i,:) = (atom1, atom2) for ith bond
-    integer, dimension(0:nbonds-1,0:1), intent(in) :: bonds
-    real*8, intent(in) :: a, b, c                   !< box edges
-    real*8, dimension(0:n-1,0:2), intent(out) :: r  !< atoms whole coordinates
 
-    integer :: nmolecules, i, ii, j, jj, k, kk, it, im, ib, ib1, ib2, maxn
-
-    integer, allocatable, dimension(:) :: molnat    !< # of atoms per molecule
+    integer, intent(in) :: n                          !< number of atoms
+    integer, dimension(0:n-1), intent(in) :: molecule !> atom's molecules
+    integer, intent(in) :: m                          !< number of molecules
+    integer, dimension(0:m-1), intent(out) :: molnat  !< # of atoms per molecule
     !> starting index for the atoms of the molecules in the molat array
-    integer, allocatable, dimension(:) :: moliat
-    integer, dimension(0:n-1) :: molat  !< atoms per molecule array
-    integer, dimension(0:n-1) :: iatmol !< atom local numbering in the molecule
+    integer, dimension(0:m-1), intent(out) :: moliat
+    integer, dimension(0:n-1), intent(out) :: molat  !< atoms per molecule array
+    integer, dimension(0:n-1), intent(out) :: iatmol !< atom local numbering in the molecule
+    integer, intent(out) :: ierr                     ! error flag (0 on normal exit)
 
-    integer, dimension(0:n-1) :: atnbnd !< # of bonds per atom
-    !> starting index for the bonds of the atoms in the atbnd array
-    integer, dimension(0:n-1) :: atibnd
-    integer, allocatable, dimension(:) :: atbnd     !< atoms bonds
+    integer :: nmolecules, im, i, ii
 
-    integer :: ntrack, itrack, nmask, maxmolnat, nbuff
-    integer, allocatable, dimension(:) :: track, buff
-    logical, allocatable, dimension(:) :: mask
-    real(8), dimension(0:2) :: box, dr
-
-    box = (/ a, b, c /) ! box array
-    r = rw              ! initialize whole coordinates
+    ierr = 0
+    nmolecules = maxval( molecule) + 1
+    if ( m .ne. nmolecules) then
+        ierr = 1
+        return
+    end if
 
     ! find the number of atoms per molecules
-    nmolecules = maxval( molecule) + 1
-    allocate( molnat(0:nmolecules-1), moliat(0:nmolecules-1))
     molnat = 0
-    do i=0,n-1
+    do i = 0, n-1
         im = molecule(i)
         molnat( im) = molnat( im) + 1
     enddo
+
     ! construct the atoms per molecule (molat) array and
     ! the corresponding indexing array (moiat)
     ! construct the atoms local numbering array (iatmol)
@@ -177,13 +165,28 @@ subroutine fastwhole(n, rw, molecule, nbonds, bonds, a, b, c, r)
         moliat(im) = moliat(im-1)+molnat(im-1)
     enddo
     molnat = 0
-    do i=0,n-1
+    do i = 0, n-1
         im = molecule(i)
         ii = moliat(im)+molnat(im)
         molat( ii) = i
-        iatmol(i) = ii
+        iatmol(i) = molnat(im)
         molnat( im) = molnat( im) + 1
     enddo
+
+end subroutine fast_molecule_atoms
+
+!> Accelerate the bookkeeping of the atoms' bonds
+subroutine fast_atom_bonds(nbonds, bonds, n, atnbnd, atibnd, atbnd)
+    integer, intent(in) :: nbonds                   !< number of bonds
+    !> bond atoms b(i,:) = (atom1, atom2) for ith bond
+    integer, dimension(0:nbonds-1,0:1), intent(in) :: bonds
+    integer, intent(in) :: n
+    integer, dimension(0:n-1) :: atnbnd !< # of bonds per atom
+    !> starting index for the bonds of the atoms in the atbnd array
+    integer, dimension(0:n-1) :: atibnd
+    integer, dimension(0:2*nbonds-1) :: atbnd     !< atoms bonds
+
+    integer :: i, ib1, ib2
 
     ! find the number of bonds per atom
     atnbnd = 0
@@ -199,7 +202,6 @@ subroutine fastwhole(n, rw, molecule, nbonds, bonds, a, b, c, r)
     do i = 1, n-1
         atibnd(i) = atibnd(i-1)+atnbnd(i-1)
     enddo
-    allocate( atbnd( int( sum(atnbnd))))
     atnbnd = 0
     do i=0,nbonds-1
         ib1 = bonds(i,0)
@@ -210,17 +212,66 @@ subroutine fastwhole(n, rw, molecule, nbonds, bonds, a, b, c, r)
         atnbnd(ib2) = atnbnd(ib2) + 1
     enddo
 
+end subroutine fast_atom_bonds
+
+!> Accelerate making molecules whole again (only ortho boxes are supported for now)
+subroutine fastwhole(n, rw, molecule, nbonds, bonds, a, b, c, r)
+    implicit none
+    integer, intent(in) :: n                        !< number of atoms
+    real*8, dimension(0:n-1,0:2), intent(in) :: rw  !< atoms wrapped coordinates
+    !> atoms molecule (zero indexed array)
+    integer, dimension(0:n-1), intent(in) :: molecule
+    integer, intent(in) :: nbonds                   !< number of bonds
+    !> bond atoms b(i,:) = (atom1, atom2) for ith bond
+    integer, dimension(0:nbonds-1,0:1), intent(in) :: bonds
+    real*8, intent(in) :: a, b, c                   !< box edges
+    real*8, dimension(0:n-1,0:2), intent(out) :: r  !< atoms whole coordinates
+
+    integer :: nmolecules, i, ii, j, jj, k, kk, it, im, ib, maxn
+
+    integer, allocatable, dimension(:) :: molnat    !< # of atoms per molecule
+    !> starting index for the atoms of the molecules in the molat array
+    integer, allocatable, dimension(:) :: moliat
+    integer, dimension(0:n-1) :: molat  !< atoms per molecule array
+    integer, dimension(0:n-1) :: iatmol !< atom local numbering in the molecule
+
+    integer, dimension(0:n-1) :: atnbnd !< # of bonds per atom
+    !> starting index for the bonds of the atoms in the atbnd array
+    integer, dimension(0:n-1) :: atibnd
+    integer, allocatable, dimension(:) :: atbnd     !< atoms bonds
+
+    integer :: ntrack, itrack, nmask, maxmolnat, nbuff, ierr
+    integer, allocatable, dimension(:) :: track, buff
+    logical, allocatable, dimension(:) :: mask
+    real(8), dimension(0:2) :: box, dr
+
+    box = (/ a, b, c /) ! box array
+    r = rw              ! initialize whole coordinates
+
+    ! find the number of atoms per molecules
+    nmolecules = maxval( molecule) + 1
+    allocate( molnat(0:nmolecules-1), moliat(0:nmolecules-1))
+    call fast_molecule_atoms(n, molecule, nmolecules, molnat, moliat, molat, iatmol, ierr)
+
+    ! find the number of bonds per atom
+    allocate( atbnd(0:2*nbonds-1))
+    call fast_atom_bonds(nbonds, bonds, n, atnbnd, atibnd, atbnd)
+
     ! allocate utility arrays and make the molecules whole
     maxmolnat = int( maxval(molnat))
     allocate ( track( 0:maxmolnat-1), mask( 0:maxmolnat-1))
     allocate ( buff(maxmolnat))
+
+!$omp parallel do private(im, ntrack, track, itrack, &
+!$omp & nbuff, buff, mask, nmask, maxn, dr, &
+!$omp & i, ii, j, jj, k, kk, ib, it)
     do im = 0, nmolecules-1 ! loop over the molecules
         ! track the fragments in the molecule
-        ntrack= 0
-        track = -1
-        do while ( .not. any(track .eq. -1) ) ! do while every atom is assigned to a track/fragment
+        ntrack= 0  ! initialize
+        track = -1 ! (traks counting starts from zero)
+        do while ( any(track(0:molnat(im)-1) .eq. -1) ) ! do while every atom is assigned to a track/fragment
             ! find the first atom of the current track/fragment
-            nbuff = 0
+            nbuff = 0 !initialize
             do ii = 0, molnat(im)-1
                 if ( track(ii) .eq. -1 ) then
                     track(ii) = ntrack
@@ -233,16 +284,19 @@ subroutine fastwhole(n, rw, molecule, nbonds, bonds, a, b, c, r)
             do while ( nbuff .gt. 0)
                 ii = buff(nbuff)
                 nbuff = nbuff - 1
-                i = molat( moliat(im)+ii)
+                i = molat( moliat(im)+ii) ! global index
                 ! loop over atom bonded neighbors and if they are not
                 ! tracked already and their corresponding bonds do not
                 ! cross box boundaries assign them in the same fragment
                 do ib = atibnd(i), atibnd(i)+atnbnd(i)-1
-                    j = atbnd(ib)
-                    jj = iatmol(j)
-                    if ( .not. track(jj) .eq. -1 ) continue
+                    j = atbnd(ib)  ! global index
+                    jj = iatmol(j) ! local index
+                    ! check fragment (fast check first)
+                    if ( .not. track(jj) .eq. -1 ) cycle
+                    ! check crossing (slow test second)
                     dr = rw(j,:) - rw(i,:)
                     if ( all( anint(dr/box) .eq. 0 ) ) then
+                        ! if not crossing, add it to buffer
                         track(jj) = ntrack
                         nbuff = nbuff + 1
                         buff(nbuff) = jj
@@ -255,15 +309,15 @@ subroutine fastwhole(n, rw, molecule, nbonds, bonds, a, b, c, r)
 
         ! if only one fragment has been identified for the molecule do nothing
         ! (either the whole molecule is in the box or it is infinit periodic)
-        if ( ntrack .eq. 1 ) continue
+        if ( ntrack .eq. 1 ) cycle
 
         ! make it whole
         ! trace the larger fragment and start from there
         itrack = 0
-        maxn = count(track .eq. itrack)
+        maxn = count( track(0:molnat(im)-1) .eq. itrack)
         do it = 1, ntrack-1
             mask = track .eq. it
-            nmask = count(mask)
+            nmask = count( mask(0:molnat(im)-1))
             if ( nmask .gt. maxn ) then
                 itrack = it
                 maxn = nmask
@@ -279,29 +333,29 @@ subroutine fastwhole(n, rw, molecule, nbonds, bonds, a, b, c, r)
         do while ( nbuff .gt. 0)
             it = buff(nbuff)
             nbuff = nbuff - 1
-            ! loop over the atoms fo the current fragment
+            ! loop over the atoms of the current fragment
             do ii = 0, molnat(im)-1
                 if (track(ii) .eq. it) then
-                    i = molat( moliat(im)+ii)
+                    i = molat( moliat(im)+ii) ! global index
                     ! loop over the neighbors and check the ones that
                     ! are not placed to find neighboring fragments not
                     ! processed so far
                     do ib = atibnd(i), atibnd(i)+atnbnd(i)-1
-                        j = atbnd(ib)
-                        jj = iatmol(j)
+                        j = atbnd(ib)   ! global index
+                        jj = iatmol(j)  ! local index
                         ! if its allready placed continue
-                        if ( mask(jj)) continue
+                        if ( mask(jj)) cycle
                         ! append the track/fragment of the atom into the buffer
                         nbuff = nbuff + 1
                         buff(nbuff) = track(jj)
-                        ! translate all the atoms of the track/fragmet and mark
-                        ! them as placed
-                        dr = rw(j,:) - rw(i,:)
-                        dr = - anint(dr/box)
+                        ! translate all the atoms of the non placed track/fragmet
+                        ! and mark them as placed
+                        dr = r(j,:) - r(i,:)
+                        dr = - box * anint(dr/box)
                         do kk = 0, molnat(im)-1
                             if ( track(kk) .eq. track(jj) ) then
-                                k = molat( moliat(im)+ii)
-                                r(k,:) = r(i,:) + dr
+                                k = molat( moliat(im)+kk)
+                                r(k,:) = r(k,:) + dr
                                 mask(kk) = .true.
                             endif
                         enddo
@@ -310,13 +364,440 @@ subroutine fastwhole(n, rw, molecule, nbonds, bonds, a, b, c, r)
             enddo
         enddo
     enddo
+!$omp end parallel do
 
-    deallocate( track, mask, buff)
-    deallocate( atbnd)
-    deallocate( molnat)
-    deallocate( moliat)
+    if ( allocated( track) )deallocate( track)
+    if ( allocated( mask) )deallocate( mask)
+    if ( allocated( buff) )deallocate( buff)
+    if ( allocated( atbnd) ) deallocate( atbnd)
+    if ( allocated( molnat) ) deallocate( molnat)
+    if ( allocated( moliat) ) deallocate( moliat)
 
 end subroutine fastwhole
+
+!> Accelerate checking for concatenations/penetrations (only ortho boxes are supported for now)
+subroutine fastconcatenation(n, r, group, nbonds, bonds, v0, va, vb, vc, rchk, precision)
+
+    use domain3d
+
+    implicit none
+
+    integer, intent(in) :: n                        !< number of atoms
+    real*8, dimension(0:n-1,0:2), intent(in) :: r   !< atoms wrapped coordinates
+    !> atoms molecule (zero indexed array)
+    integer, dimension(0:n-1), intent(in) :: group
+    integer, intent(in) :: nbonds                   !< number of bonds
+    !> bond atoms b(i,:) = (atom1, atom2) for ith bond
+    integer, dimension(0:nbonds-1,0:1), intent(in) :: bonds
+    real*8, dimension(0:2), intent(in) :: v0, va, vb, vc  !< box edges vectors
+    real*8, intent(in) :: rchk !< check critical distanse
+    real*8, intent(in) :: precision !< afine precision for ray-triangle test
+
+    integer :: ngroups !< number of groups
+    integer, allocatable, dimension(:) :: grpnat !< groups' number of atoms
+    !> starting index for the atoms of the group in the grpat array
+    integer, allocatable, dimension(:) :: grpiat
+    integer, allocatable, dimension(:) :: grpat
+    integer :: maxgrpnat !< maximum number of atoms in a group
+    integer :: grpsnatoms
+
+    integer, dimension(0:n-1) :: atnbnd !< # of bonds per atom
+    !> starting index for the bonds of the atoms in the atbnd array
+    integer, dimension(0:n-1) :: atibnd
+    integer, allocatable, dimension(:) :: atbnd     !< atoms' bonds
+
+    type(SimulationBox) :: box
+    type(BoxCells) :: cells
+    integer, dimension(0:2) :: dn
+    real*8, dimension(0:2) :: cm
+    real*8, allocatable, dimension(:,:) :: rw
+    integer :: it, jt, kt, iat, jat, icell, jcell
+    integer :: ig, i, ii, j, jj, jb, jc,  k, kk
+    integer*4 :: ngrpbndd
+    integer, allocatable, dimension(:) :: grpbndd
+
+    real*8, dimension(0:2,0:n-1) :: rtmp
+    integer*4 :: ncc                         ! number of neighbor cells
+    integer*4, dimension(27) :: cc           ! neighbor cells indexes
+    integer*4 :: cnat                        ! cell number of atoms
+    integer*4, pointer, dimension (:) :: cat ! cell atoms
+
+    real*8 :: a(0:2,0:2), inv(0:2,0:2)
+    real*8 :: c(0:2), p1(0:2), p2(0:2), sol(0:2)
+    real*8 :: det
+    real*8, parameter :: EPS=1.D-12, CROSSEPS=1.D-12
+    real*8 :: NPRECISION, PPRECISION
+
+    NPRECISION = - precision - CROSSEPS;
+    PPRECISION = 1.0 + precision + CROSSEPS;
+
+    ! find the number of atoms per molecules
+    ngroups = maxval( group) + 1
+    allocate( grpnat(0:ngroups-1), grpiat(0:ngroups-1))
+    grpnat = 0
+    do i = 0, n-1
+        ig = group(i)
+        if ( ig == -1) cycle
+        grpnat( ig) = grpnat( ig) + 1
+    enddo
+
+    ! construct the atoms per group (grpat) array and
+    ! the corresponding indexing array (moiat)
+    ! construct the atoms local numbering array (iatmol)
+    grpsnatoms = sum(grpnat(0:ngroups-1))
+    allocate( grpat(0:grpsnatoms-1))
+    grpiat(0) = 0
+    do ig = 1, ngroups-1
+        grpiat(ig) = grpiat(ig-1)+grpnat(ig-1)
+    enddo
+    grpnat = 0
+    do i = 0, n-1
+        ig = group(i)
+        if ( ig == -1) cycle
+        ii = grpiat(ig)+grpnat(ig)
+        grpat( ii) = i
+        grpnat( ig) = grpnat( ig) + 1
+    enddo
+    maxgrpnat = maxval(grpnat)
+
+    allocate( rw( 0:2, 0:maxgrpnat-1))
+
+    ! decompose domain to accelerate checks
+    rtmp = transpose(r)
+    call box%initialize( v0, va, vb, vc, .true.)
+    dn = [ int(1.d0/box%px/rchk), int(1.d0/box%py/rchk), int(1.d0/box%pz/rchk) ]
+    call cells%splitAndfill( box, dn(0), dn(1), dn(2), n, r)
+
+    ! find atoms' bonds stuff
+    allocate( atbnd(0:2*nbonds-1))
+    call fast_atom_bonds(nbonds, bonds, n, atnbnd, atibnd, atbnd)
+
+    ! allocate the array for group atoms and their bonded neighbours
+    allocate( grpbndd( 0:maxval(grpnat)*( 1 + maxval( atnbnd))-1))
+
+!$omp parallel do private( ig, grpbndd, ngrpbndd, &
+!$omp & i, it, j, jj, jt, jb, jc, k, kk, kt, iat, jat, &
+!$omp & icell, jcell, cc, ncc, cnat, cat, &
+!$omp & rw, cm, p1, p2, a, c, det, inv, sol)
+    GRPLOOP: do ig = 0, ngroups-1
+        ! gather global indexes of group atoms and their bonded neigbors
+        grpbndd( 0:grpnat(ig)-1) = grpat(grpiat(ig):grpiat(ig)+grpnat(ig)-1)
+        ngrpbndd = grpnat(ig)
+        ! use a lab frame centerd at group's first atom
+        it =  grpat( grpiat(ig))
+        rw(:,0) = 0.d0
+        cm(:) = 0.d0
+        do jj = 1, grpnat(ig)-1
+            jt = grpat( grpiat(ig)+jj)
+            rw(:,jj) = rtmp(:,jt) - rtmp(:,it)
+            call box%minImgTo(  rw(:,jj))
+            cm = cm + rw(:,jj)
+            ! add bonded neighbors to group's atoms array grpbndd
+            do kk = 0, atnbnd(jt)-1
+                k = atbnd( atibnd(jt)+kk)
+                if ( ANY( grpbndd(0:ngrpbndd-1)==k)) cycle
+                grpbndd( ngrpbndd) = k
+                ngrpbndd = ngrpbndd + 1
+            end do
+        end do
+        ! find cm and wrap it in the simulation cell
+        ! cm = rtmp(:,it) + sum( rtmp ( :, 1:grpnat(ig)), DIM=2) / dble(grpnat(ig))
+        cm = rtmp(:,it) + cm / dble( grpnat(ig))
+        icell = cells%findcell( cm)
+        ! get the neighbour cells
+        call cells%getNeighbourCells( icell, ncc, cc)
+        ! assuming convexity, loop over triangles
+        ! loop over the neighbors' boxes
+        NBCELLSLOOP: do jc = 1, 27
+            jcell = cc(jc)
+            if ( jcell .eq. -1) cycle
+            ! loop over cell's atoms
+            call cells%getCellAtoms(jcell, cnat, cat)
+            NBATOMSLOOP: do i = 1, cnat
+                iat = cat(i) - 1
+                if ( ANY( grpbndd( 0:ngrpbndd-1) == iat) ) cycle
+                ! place iat atom in the group's local frame
+                p1 = rtmp(:,iat) - cm(:)
+                call box%minImgTo( p1)
+                p1 = cm + p1 - rtmp(:,it)
+                NBBONDSLOOP: do jb = 0, atnbnd(iat)-1
+                    jat = atbnd(atibnd(iat)+jb)
+                    if ( iat > jat) cycle
+                    if ( any( grpbndd( 0:ngrpbndd-1) == jat) ) cycle
+                    ! place jat atom in the group's local frame
+                    p2 = rtmp(:,jat) - cm(:)
+                    call box%minImgTo( p2)
+                    p2 = cm + p2 - rtmp(:,it)
+                    TRIANGLESLOOP: do jj = 1, grpnat(ig)-2
+                        jt = grpat( grpiat(ig)+jj)
+                        kk = jj + 1
+                        kt = grpat( grpiat(ig)+kk)
+                        ! loop over the neighbors' boxes                        
+                        ! check for concatenation
+                        ! construct the transformation matrix a, from the triangle's
+                        ! local to the lab frame (the coloumns are the vectors of the
+                        ! local frame in lab frame coordinates). NOTE that the first
+                        ! apex of the triangle in group's local lab frame is always
+                        ! (0.0,0.0,0.0)
+                        a(:,0) = rw(:,jj)
+                        a(:,1) = rw(:,kk)
+                        a(:,2) = p2 - p1
+                        c(:) = p2
+                        det = a(0,0) * ( a(1,1) * a(2,2) - a(2,1) * a(1,2) ) &
+                            - a(0,1) * ( a(1,0) * a(2,2) - a(2,0) * a(1,2) ) &
+                            + a(0,2) * ( a(1,0) * a(2,1) - a(2,0) * a(1,1) )
+                        if ( dabs(det) < EPS) cycle
+                        det = 1.D0 / det
+
+                        inv(2,0) = a(1,0) * a(2,1) - a(2,0) * a(1,1)
+                        inv(2,1) = a(0,1) * a(2,0) - a(2,1) * a(0,0)
+                        inv(2,2) = a(0,0) * a(1,1) - a(1,0) * a(0,1)
+                        sol(2) = inv(2,0)*c(0)+inv(2,1)*c(1)+inv(2,2)*c(2)
+                        sol(2) = sol(2) * det
+                        if ( sol(2) > 1.d0 .or. sol(2) < 0.D0 ) cycle
+                        ! if ( sol(2) > 1.d0+EPS .or. sol(2) < -EPS ) cycle
+
+                        inv(0,0) = a(1,1) * a(2,2) - a(2,1) * a(1,2)
+                        inv(0,1) = a(0,2) * a(2,1) - a(2,2) * a(0,1)
+                        inv(0,2) = a(0,1) * a(1,2) - a(1,1) * a(0,2)
+                        sol(0) = inv(0,0)*c(0)+inv(0,1)*c(1)+inv(0,2)*c(2)
+                        sol(0) = sol(0) * det
+                        if ( sol(0) > PPRECISION .or. sol(0) < NPRECISION ) cycle
+
+                        inv(1,0) = a(1,2) * a(2,0) - a(2,2) * a(1,0)
+                        inv(1,1) = a(0,0) * a(2,2) - a(2,0) * a(0,2)
+                        inv(1,2) = a(0,2) * a(1,0) - a(1,2) * a(0,0)
+                        sol(1) = inv(1,0)*c(0)+inv(1,1)*c(1)+inv(1,2)*c(2)
+                        sol(1) = sol(1) * det;
+
+                        if ( sol(1) > PPRECISION .or. sol(1) < NPRECISION ) cycle
+
+                        if ( sol(1) <= 1.0 - sol(0) + precision ) then
+write(*,'("Bond ", I0, "-", I0, " concatenates with the group (", I0,") of atoms : ", I0)', advance='no') &
+    iat, jat, ig, grpat( grpiat(ig))
+    do j = grpiat(ig)+1,grpiat(ig)+grpnat(ig)-1
+write(*,'(", ",I0)', advance='no') grpat(j)
+    end do
+write(*,*)
+write(*,'("detetrminant : ", F14.6)') det    
+write(*,'("solution :( ", F14.6,",",x,F14.6,",",x,F14.6,")")') sol(0), sol(1), sol(2)
+cycle NBATOMSLOOP
+
+                        end if
+                    end do TRIANGLESLOOP
+                end do NBBONDSLOOP
+            end do NBATOMSLOOP
+        end do NBCELLSLOOP
+    end do GRPLOOP
+!$omp end parallel do
+
+    if ( allocated(grpnat)) deallocate(grpnat)
+    if ( allocated(grpiat)) deallocate(grpiat)
+    if ( allocated(grpat)) deallocate(grpat)
+    if ( allocated(atbnd)) deallocate(atbnd)
+    if ( allocated(grpbndd)) deallocate(grpbndd)
+
+end subroutine fastconcatenation
+
+!> Accelerate checking for concatenations/penetrations (only ortho boxes are supported for now)
+subroutine fastconcatenation2(n, r, ngroups, grpnat, ngrpat, grpat, nbonds, bonds, v0, va, vb, vc, rchk, precision)
+
+    use domain3d
+
+    implicit none
+
+    integer, intent(in) :: n                        !< number of atoms
+    real*8, dimension(0:n-1,0:2), intent(in) :: r   !< atoms wrapped coordinates
+    integer, intent(in) :: nbonds                   !< number of bonds
+    !> bond atoms b(i,:) = (atom1, atom2) for ith bond
+    integer, dimension(0:nbonds-1,0:1), intent(in) :: bonds
+    real*8, dimension(0:2), intent(in) :: v0, va, vb, vc  !< box edges vectors
+    real*8, intent(in) :: rchk !< check critical distanse
+    real*8, intent(in) :: precision !< afine precision for ray-triangle test
+
+    integer, intent(in) :: ngroups !< number of groups
+    integer, dimension(0:ngroups-1), intent(in) :: grpnat !< groups' number of atoms
+    integer, intent(in) :: ngrpat !< total number of atom in the groups
+    !> flatten array with the groups' atoms
+    integer, dimension(0:ngrpat-1), intent(in) :: grpat
+    !> starting index for the atoms of the group in the grpat array
+    integer, dimension(0:ngroups-1) :: grpiat
+
+    integer :: maxgrpnat !< maximum number of atoms in a group
+
+    integer, dimension(0:n-1) :: atnbnd !< # of bonds per atom
+    !> starting index for the bonds of the atoms in the atbnd array
+    integer, dimension(0:n-1) :: atibnd
+    integer, allocatable, dimension(:) :: atbnd     !< atoms' bonds
+
+    type(SimulationBox) :: box
+    type(BoxCells) :: cells
+    integer, dimension(0:2) :: dn
+    real*8, dimension(0:2) :: cm
+    real*8, allocatable, dimension(:,:) :: rw
+    integer :: it, jt, kt, iat, jat, icell, jcell
+    integer :: ig, i, j, jj, jb, jc,  k, kk
+    integer*4 :: ngrpbndd
+    integer, allocatable, dimension(:) :: grpbndd
+
+    real*8, dimension(0:2,0:n-1) :: rtmp
+    integer*4 :: ncc                         ! number of neighbor cells
+    integer*4, dimension(27) :: cc           ! neighbor cells indexes
+    integer*4 :: cnat                        ! cell number of atoms
+    integer*4, pointer, dimension (:) :: cat ! cell atoms
+
+    real*8 :: a(0:2,0:2), inv(0:2,0:2)
+    real*8 :: c(0:2), p1(0:2), p2(0:2), sol(0:2)
+    real*8 :: det
+    real*8, parameter :: EPS=1.D-12, CROSSEPS=1.D-12
+    real*8 :: NPRECISION, PPRECISION
+
+    NPRECISION = - precision - CROSSEPS;
+    PPRECISION = 1.0 + precision + CROSSEPS;
+
+    ! find starting index for the grpat flatten array
+    grpiat = 0
+    do i = 1, ngroups-1
+        grpiat(i) = grpiat(i-1)+grpnat(i-1)
+    enddo
+
+    maxgrpnat = maxval(grpnat)
+    allocate( rw( 0:2, 0:maxgrpnat-1))
+
+    ! decompose domain to accelerate checks
+    rtmp = transpose(r)
+    call box%initialize( v0, va, vb, vc, .true.)
+    dn = [ int(1.d0/box%px/rchk), int(1.d0/box%py/rchk), int(1.d0/box%pz/rchk) ]
+    call cells%splitAndfill( box, dn(0), dn(1), dn(2), n, rtmp)
+
+    ! find atoms' bonds stuff
+    allocate( atbnd(0:2*nbonds-1))
+    call fast_atom_bonds(nbonds, bonds, n, atnbnd, atibnd, atbnd)
+
+    ! allocate the array for group atoms and their bonded neighbours
+    allocate( grpbndd( 0:maxval(grpnat)*( 1 + maxval( atnbnd))-1))
+
+!$omp parallel do private( ig, grpbndd, ngrpbndd, &
+!$omp & i, it, j, jj, jt, jb, jc, k, kk, kt, iat, jat, &
+!$omp & icell, jcell, cc, ncc, cnat, cat, &
+!$omp & rw, cm, p1, p2, a, c, det, inv, sol)
+    GRPLOOP: do ig = 0, ngroups-1
+        ! gather global indexes of group atoms and their bonded neigbors
+        grpbndd( 0:grpnat(ig)-1) = grpat(grpiat(ig):grpiat(ig)+grpnat(ig)-1)
+        ngrpbndd = grpnat(ig)
+        ! use a lab frame centerd at group's first atom
+        it =  grpat( grpiat(ig))
+        rw(:,0) = 0.d0
+        cm(:) = 0.d0
+        do jj = 1, grpnat(ig)-1
+            jt = grpat( grpiat(ig)+jj)
+            rw(:,jj) = rtmp(:,jt) - rtmp(:,it)
+            call box%minImgTo(  rw(:,jj))
+            cm = cm + rw(:,jj)
+            ! add bonded neighbors to group's atoms array grpbndd
+            do kk = 0, atnbnd(jt)-1
+                k = atbnd( atibnd(jt)+kk)
+                if ( ANY( grpbndd(0:ngrpbndd-1)==k)) cycle
+                grpbndd( ngrpbndd) = k
+                ngrpbndd = ngrpbndd + 1
+            end do
+        end do
+        ! find cm and wrap it in the simulation cell
+        ! cm = rtmp(:,it) + sum( rtmp ( :, 1:grpnat(ig)), DIM=2) / dble(grpnat(ig))
+        cm = rtmp(:,it) + cm / dble( grpnat(ig))
+        icell = cells%findcell( cm)
+        ! get the neighbour cells
+        call cells%getNeighbourCells( icell, ncc, cc)
+        ! assuming convexity, loop over triangles
+        ! loop over the neighbors' boxes
+        NBCELLSLOOP: do jc = 1, 27
+            jcell = cc(jc)
+            if ( jcell .eq. -1) cycle
+            ! loop over cell's atoms
+            call cells%getCellAtoms(jcell, cnat, cat)
+            NBATOMSLOOP: do i = 1, cnat
+                iat = cat(i) - 1
+                if ( ANY( grpbndd( 0:ngrpbndd-1) == iat) ) cycle
+                ! place iat atom in the group's local frame
+                p1 = rtmp(:,iat) - cm(:)
+                call box%minImgTo( p1)
+                p1 = cm + p1 - rtmp(:,it)
+                NBBONDSLOOP: do jb = 0, atnbnd(iat)-1
+                    jat = atbnd(atibnd(iat)+jb)
+                    if ( iat > jat) cycle
+                    if ( any( grpbndd( 0:ngrpbndd-1) == jat) ) cycle
+                    ! place jat atom in the group's local frame
+                    p2 = rtmp(:,jat) - cm(:)
+                    call box%minImgTo( p2)
+                    p2 = cm + p2 - rtmp(:,it)
+                    TRIANGLESLOOP: do jj = 1, grpnat(ig)-2
+                        jt = grpat( grpiat(ig)+jj)
+                        kk = jj + 1
+                        kt = grpat( grpiat(ig)+kk)
+                        ! loop over the neighbors' boxes                        
+                        ! check for concatenation
+                        ! construct the transformation matrix a, from the triangle's
+                        ! local to the lab frame (the coloumns are the vectors of the
+                        ! local frame in lab frame coordinates). NOTE that the first
+                        ! apex of the triangle in group's local lab frame is always
+                        ! (0.0,0.0,0.0)
+                        a(:,0) = rw(:,jj)
+                        a(:,1) = rw(:,kk)
+                        a(:,2) = p2 - p1
+                        c(:) = p2
+                        det = a(0,0) * ( a(1,1) * a(2,2) - a(2,1) * a(1,2) ) &
+                            - a(0,1) * ( a(1,0) * a(2,2) - a(2,0) * a(1,2) ) &
+                            + a(0,2) * ( a(1,0) * a(2,1) - a(2,0) * a(1,1) )
+                        if ( dabs(det) < EPS) cycle
+                        det = 1.D0 / det
+
+                        inv(2,0) = a(1,0) * a(2,1) - a(2,0) * a(1,1)
+                        inv(2,1) = a(0,1) * a(2,0) - a(2,1) * a(0,0)
+                        inv(2,2) = a(0,0) * a(1,1) - a(1,0) * a(0,1)
+                        sol(2) = inv(2,0)*c(0)+inv(2,1)*c(1)+inv(2,2)*c(2)
+                        sol(2) = sol(2) * det
+                        if ( sol(2) > 1.d0 .or. sol(2) < 0.D0 ) cycle
+                        ! if ( sol(2) > 1.d0+EPS .or. sol(2) < -EPS ) cycle
+
+                        inv(0,0) = a(1,1) * a(2,2) - a(2,1) * a(1,2)
+                        inv(0,1) = a(0,2) * a(2,1) - a(2,2) * a(0,1)
+                        inv(0,2) = a(0,1) * a(1,2) - a(1,1) * a(0,2)
+                        sol(0) = inv(0,0)*c(0)+inv(0,1)*c(1)+inv(0,2)*c(2)
+                        sol(0) = sol(0) * det
+                        if ( sol(0) > PPRECISION .or. sol(0) < NPRECISION ) cycle
+
+                        inv(1,0) = a(1,2) * a(2,0) - a(2,2) * a(1,0)
+                        inv(1,1) = a(0,0) * a(2,2) - a(2,0) * a(0,2)
+                        inv(1,2) = a(0,2) * a(1,0) - a(1,2) * a(0,0)
+                        sol(1) = inv(1,0)*c(0)+inv(1,1)*c(1)+inv(1,2)*c(2)
+                        sol(1) = sol(1) * det;
+
+                        if ( sol(1) > PPRECISION .or. sol(1) < NPRECISION ) cycle
+
+                        if ( sol(1) <= 1.0 - sol(0) + precision ) then
+			
+write(*,'("Bond ", I0, "-", I0, " concatenates with the group (", I0,") of atoms : ", I0)', advance='no') &
+    iat, jat, ig, grpat( grpiat(ig))
+    do j = grpiat(ig)+1,grpiat(ig)+grpnat(ig)-1
+write(*,'(" ",I0)', advance='no') grpat(j)
+    end do
+write(*,*)
+write(*,'("detetrminant : ", F14.6)') det    
+write(*,'("solution :( ", F14.6,",",x,F14.6,",",x,F14.6,")")') sol(0), sol(1), sol(2)
+cycle GRPLOOP
+
+                        end if
+                    end do TRIANGLESLOOP
+                end do NBBONDSLOOP
+            end do NBATOMSLOOP
+        end do NBCELLSLOOP
+    end do GRPLOOP
+!$omp end parallel do
+
+    if ( allocated(atbnd)) deallocate(atbnd)
+    if ( allocated(grpbndd)) deallocate(grpbndd)
+
+end subroutine fastconcatenation2
 
 !> Accelerate wrapping coordinates per configuration for orthogonal boxes
 subroutine fastwrapo(n, r, v0, a, b, c, rw)
@@ -363,8 +844,6 @@ subroutine fastwrap(n, r, v0, va, vb, vc, rw)
     real*8, dimension( 0:2), intent(in) :: va, vb, vc !< box spaning vectors
     real*8, dimension( 0:2, 0:n-1), intent(out) :: rw !< atoms wrapped coordinates
 
-    integer :: i, j, k
-    real*8, dimension( 0:2) :: v, d
     type(SimulationBox) :: box
 
     rw = r
@@ -659,7 +1138,7 @@ subroutine peconftens(n, r, nch, maxnatch, natch, chat , ct)
     return
 end subroutine peconftens
 
-!> Accelerate wrapped coordinates check (ONLY cubic boxes)
+!> Accelerate wrapped coordinates check (only ortho boxes are supported for now)
 !> This call fixes wrapped coordinates which are slightly out of the box
 subroutine chkwrap(n, r, r0, a, b, c, rw)
     implicit none
@@ -845,106 +1324,6 @@ subroutine fastcom_exclude(n, r, mass, molecule, exclude, m, cm)
 
 end subroutine fastcom_exclude
 
-!> Accelerate bond lengths calculateion
-! subroutine fastbonds(n, r, nb, b, lengths)
-!     implicit none
-!     integer, intent(in) :: n                          !< number of atoms
-!     real*8, dimension(0:n-1,0:2), intent(in)  :: r    !< atoms unwrapped coordinates
-!     integer, intent(in) :: nb                         !< number of bonds
-!     integer, dimension(0:nb-1,0:1), intent(in) :: b   !< bond info b(i,:) = (type, atom1, atom2) for ith bond
-!     real*8, dimension(0:nb-1), intent(out) :: lengths !< bond lengths
-
-!     integer :: i
-!     real*8, dimension(0:2) :: dr
-
-!     do i = 0, nb-1
-!       dr = r( b(i,0), :) - r( b(i,1), :)
-!       lengths(i) = dsqrt( dr(0)*dr(0) + dr(1)*dr(1) + dr(2)*dr(2))
-!     end do
-
-! end subroutine fastbonds
-
-!> Accelerate bend angles calculation
-! subroutine fastangles(n, r, na, a, angles)
-!     implicit none
-!     integer, intent(in) :: n                          !< number of atoms
-!     real*8, dimension(0:n-1,0:2), intent(in) :: r     !< atoms unwrapped coordinates
-!     integer, intent(in) :: na                         !< number of angles
-!     integer, dimension(0:na-1,0:3), intent(in) :: a   !< angle info b(i,:) = (type, atom1, atom2, atom3) for ith angle
-!     real*8, dimension(0:na-1), intent(out) :: angles  !< angle value
-
-!     integer :: i
-!     real*8, dimension(0:2) :: dr1, dr2
-!     real*8 :: length1, length2
-!     real*8 :: c
-!     real*8 :: pi, RAD2DEG
-
-!     real*8, parameter :: EPS = 1.0D-12
-
-!     pi = dacos(-1.d0)
-!     RAD2DEG = pi / 180.d0
-!     angles = 0.D0
-
-!     do i = 0, na-1
-!       dr1 = r( a(i,0), :) - r( a(i,1), :)
-!       dr2 = r( a(i,2), :) - r( a(i,1), :)
-!       length1 = dsqrt( dr1(0)*dr1(0) + dr1(1)*dr1(1) + dr1(2)*dr1(2))
-!       length2 = dsqrt( dr2(0)*dr2(0) + dr2(1)*dr2(1) + dr2(2)*dr2(2))
-!       c = ( dr1(0)*dr2(0) + dr1(1)*dr2(1) + dr1(2)*dr2(2)) / length1 / length2
-!       c = dabs( c)
-!       if ( c > 1.D0) then
-!           if ( c - 1.D0 < EPS) c = dsign( 1.D0, c)
-!       endif
-!       angles( i) = dacos( c)
-!     end do
-
-! end subroutine fastangles
-
-!> Accelerate bend angles calculation
-! subroutine fastdihedrals(n, r, vo, va, vb, vc ,nd, d, angles)
-
-!     use vector3d
-!     use domain3d
-
-!     implicit none
-!     integer, intent(in) :: n                          !< number of atoms
-!     real*8, dimension(0:n-1,0:2), intent(in) :: r     !< atoms unwrapped coordinates
-!     real*8, dimension(0:2), intent(in) :: vo, va, vb, vc
-!     integer, intent(in) :: nd                         !< number of angles
-!     integer, dimension(0:nd-1,0:3), intent(in) :: d   !< angle info b(i,:) = (type, atom1, atom2, atom3) for ith angle
-!     real*8, dimension(0:nd-1), intent(out) :: angles  !< angle value
-
-!     integer :: i
-!     real*8, dimension(0:2) :: dr1, dr2, dr3
-!     real*8, dimension(0:2) :: dr1xdr2, dr2xdr3
-!     real*8 dih, s
-!     real*8 :: pi, RAD2DEG
-
-!     real*8, parameter :: EPS = 1.0D-12
-
-!     pi = dacos(-1.d0)
-!     RAD2DEG = pi / 180.d0
-!     angles = 0.D0
-
-!     do i = 0, nd-1
-!         ! bond vectors
-!         dr1 = r( d(i,1), :) - r( d(i,0), :)
-!         dr2 = r( d(i,2), :) - r( d(i,1), :)
-!         dr3 = r( d(i,3), :) - r( d(i,2), :)
-
-!         ! cis zero righ-handed
-!         dr1xdr2 = unit( cross(dr1, dr2))
-!         dr2xdr3 = unit( cross(dr2, dr3))
-
-!         dih = angle(dr1xdr2, dr2xdr3)
-!         s = dot(dr1xdr2, dr3)
-
-!         angles(i) = dsign(dih, s)
-
-!     end do
-
-! end subroutine fastdihedrals
-
 !> get the size for the seed array (used to initialize the random_number fortran intrinsic
 subroutine random_seed_size( n)
     implicit none
@@ -955,7 +1334,7 @@ subroutine random_seed_size( n)
 end subroutine random_seed_size
 
 !> Accelerate the calculation of the local density using randomly inserted cell
-!> (ONLY cubic boxes)
+!> (only ortho boxes are supported for now)
 subroutine localdensity(n, r, mass, r0, a0, b0, c0, a, b, c, nseed, seed, np, d)
 
       implicit none
@@ -968,10 +1347,10 @@ subroutine localdensity(n, r, mass, r0, a0, b0, c0, a, b, c, nseed, seed, np, d)
       real*8, dimension(0:n-1), intent(in) :: mass
       !> simulation box origin
       real*8, dimension(0:2), intent(in) :: r0
-      !> simulation box dimensions (cubic)
+      !> simulation box dimensions (ortho)
       real*8, intent(in) :: a0, b0, c0
       !> box dimension to be used for the calculation of the local density
-      !> (cubic)
+      !> (ortho)
       real*8, intent(in) :: a, b, c
       !> size of the randomo number generator seed. Should be obtained by calling
       !> the random_seed_size subroutine
@@ -1018,7 +1397,7 @@ subroutine localdensity(n, r, mass, r0, a0, b0, c0, a, b, c, nseed, seed, np, d)
 
 end subroutine localdensity
 
-!> Accelerate the calculation of the local density using a grid (ONLY cubic boxes)
+!> Accelerate the calculation of the local density using a grid (only ortho boxes are supported for now)
 subroutine grd_localdensity(n, r, mass, r0, a0, b0, c0, f, na, nb, nc, d)
 
       implicit none
@@ -1031,11 +1410,11 @@ subroutine grd_localdensity(n, r, mass, r0, a0, b0, c0, f, na, nb, nc, d)
       real*8, dimension(0:n-1), intent(in) :: mass
       !> simulation box origin
       real*8, dimension(0:2), intent(in) :: r0
-      !> simulation box dimensions (cubic)
+      !> simulation box dimensions (ortho)
       real*8, intent(in) :: a0, b0, c0
       !> fraction of the original volume to be considered
       real*8, intent(in) :: f
-      !> number grid points for each edge (cubic)
+      !> number grid points for each edge (ortho)
       integer, intent(in) :: na, nb, nc
       !> the sequence of local densities calculated
       real*8, dimension(0:na*nb*nc-1), intent(out) :: d
@@ -1049,9 +1428,9 @@ subroutine grd_localdensity(n, r, mass, r0, a0, b0, c0, f, na, nb, nc, d)
       ! check
       np = na * nb * nc
 
-      ! calculate cubic box corners
+      ! calculate ortho box corners
       tmp = 0.5d0 * f**(1.d0/3.d0)
-      ! calculate the grid on the cubic box
+      ! calculate the grid on the ortho box
       x0 = r0 + (/ a0, b0, c0 /) * tmp
       x1 = r0 + (/ a0, b0, c0 /) * (1.d0 - tmp)
       fdelta = x1 - x0
@@ -1360,7 +1739,7 @@ subroutine order_parameter( v, exclude, m, Q, eigval, eigvec, IERR)
     allocate ( WORK_(LWORK_))
 
     do im = 0, m-1
-        if ( exclude(im)) continue
+        if ( exclude(im)) cycle
         u = unit( v(im,:))
         Q(0) = Q(0) + u(0)*u(0)
         Q(1) = Q(1) + u(1)*u(1)

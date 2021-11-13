@@ -30,7 +30,6 @@ subroutine fastbonds(n, r, va, vb, vc, nbnd, bnd, lengths)
 
 end subroutine fastbonds
 
-
 subroutine fastbondstest(n, r, va, vb, vc, nbnd, bnd, lengths)
 
     use vector3d

@@ -78,7 +78,7 @@ if ( CMAKE_SYSTEM_NAME STREQUAL Linux OR
     add_custom_command(
       OUTPUT fastpost${MODSUFFIX}
       COMMAND  ${F2PY_EXECUTABLE} -m fastpost -I${PROJECT_SOURCE_DIR}/src -I${PROJECT_BINARY_DIR} -L${PROJECT_BINARY_DIR} -lfastcore -c ${MODSOURCES}
-      DEPENDS fastcore
+      DEPENDS fastcore ${MODSOURCES}
     )
 elseif(CMAKE_SYSTEM_NAME STREQUAL Windows)
     message( FATAL_ERROR "configuration for windows is still pending." )

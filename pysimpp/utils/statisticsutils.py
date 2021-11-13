@@ -41,16 +41,16 @@ class Variable():
         self._sum = 0.0                   # sum of values
         self._sumsq = 0.0                 # sum of values squares
 
-    def set(self, value):
-        ''' Set the current value and udpate the info.'''
+    def set(self, value, m=1):
+        ''' Set the current value with multiplicity m and udpate the info.'''
         self._current = value
         if (value < self._min):
             self._min = value
         elif (value > self._max):
             self._max = value
-        self._n += 1.0
-        self._sum += value
-        self._sumsq += value * value
+        self._n += 1.0 * m
+        self._sum += value * m
+        self._sumsq += value * value * m
 
     def value(self):
         ''' Get the current value. '''
@@ -95,7 +95,7 @@ class Binning():
         self.max = sys.float_info.max # max value in fixed
         self.range = 0.0              # range = max - min
         self.h = None                 # histogram data
-        self.variable = Variable()  # global variable
+        self.variable = Variable()    # global variable
 
     @classmethod
     def fixed(cls, min, max, d):
@@ -129,55 +129,70 @@ class Binning():
             self.h.clear()
         self.variable.reset()
 
-    def add(self, b, value=1.0):
-        ''' Add a value in the histogram. '''
+    def add(self, b, value=1.0, m=1):
+        ''' Add a value in the histogram with multiplicity m. '''
         if self.type == -1: return
         self.variable.set(value)
         n = int(floor((b-self.min) / self.d))
         if self.type == Histogram.FIXED:
             if (n < 0 or n > self.n): raise HistogramException("value out of range")
-        self.h[n].set( value)
+        self.h[n].set( value, m)
 
-    def addat(self, n, value=1.0):
-        ''' Add a value in the histogram at the specific bin. '''
+    def addat(self, n, value=1.0, m=1):
+        ''' Add a value in the histogram at the specific bin with multiplicity m.. '''
         if self.type == -1: return
         self.variable.set(value)
         if self.type == Histogram.FIXED:
             if (n < 0 or n > self.n): raise HistogramException("value out of range")
-        self.h[n].set( value)
+        self.h[n].set( value, m)
 
-    def add_histogram(self, histogram, options):
+    def add_histogram(self, other, options):
         ''' Add the given histogram . The options dict contains
             the keys defining the addition details. Currently
             works only for free type histograms.
         '''
         if not self.type == Histogram.FREE: return
 
-        _h = histogram.h
+        _h_other = other.h
+        _h_self = self.h
         _add = self.addat
+
+        # check for bins only in self or other histograms and
+        # make sure that all bins have the same number of hits
+        if len(_h_self):
+            _self_set = set(_h_self)
+            _other_set = set(_h_other)
+            _nhits = next(iter(_h_self.values()))._n
+            # for bins only in self histogram add 0.0
+            for k in _self_set-_other_set: _add(k,value=0.0)
+            # for bins only in other histogram (i.e. new bins) add
+            # 0.0 a number of times since all bins should have the
+            # same number of hits.
+            for k in _other_set-_self_set: _add(k,value=0.0,m=_nhits)
+
         if options['type'] == 'r': # raw data, just add
-            for k in _h.keys(): _add( k, value=_h[k])
+            for k in _h_other.keys(): _add( k, value=_h_other[k])
         else:
             _profile = options['profile']
-            _d = histogram.d
+            _d = other.d
             _pi = np.pi
             if _profile == 's': # spherical
-                for k in _h.keys():
+                for k in _h_other.keys():
                     r1 = (k*_d)
                     r2 = r1+_d
                     _v = 4.0 / 3.0 * _pi * (r2**3-r1**3)
-                    _add( k, value=_h[k]/_v)
+                    _add( k, value=_h_other[k]/_v)
             elif _profile == 'c': # cylindrical
                 _length = options['length']
-                for k in _h.keys():
+                for k in _h_other.keys():
                     r1 = (k*_d)
                     r2 = r1+_d
                     _s = _pi * (r2**2-r1**2)
-                    _add( k, value=_h[k]/(_s*_length))
+                    _add( k, value=_h_other[k]/(_s*_length))
             elif _profile == 'a': # axial
                 _surface = options['surface']
-                _v = _surface * _h.b
-                for k in _h.keys(): _add( k, value=_h[k]/_v)
+                _v = _surface * _h_other.b
+                for k in _h_other.keys(): _add( k, value=_h_other[k]/_v)
 
     def bin_range(self):
         ''' Get the bin range. '''

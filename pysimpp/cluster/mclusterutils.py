@@ -385,7 +385,8 @@ class MCluster(Cluster):
                 fndx.write("%d%s"%(iat,s))
         if not iatom % _every == 0: fndx.write("\n")
         fndx.write("\n")
-        _head=[15,16,17,18,19,53,54,55,56,57,58,59,60,61]
+        _head=[16,17,18,19,53,54,55,56,57,58,59,60,61]
+        # _head=[15,16,17,18,19,47,48,53,54,55,56,57,58,59,60,61]
         _tail=list(set(range(62))-set(_head))
         fndx.write("[ ASSMBL%d_HEAD ]\n"%icluster)
         iatom = 0

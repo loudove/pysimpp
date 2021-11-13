@@ -95,6 +95,7 @@ module domain3d
         procedure :: setOrdered => m_setOrdered
         procedure :: split => m_split
         procedure :: fill => m_fill
+        procedure :: findCell => m_findCell
         procedure :: fillCells => m_fillCells
         procedure :: splitAndfill => m_splitAndfill
         procedure :: getAtomCell => m_getAtomCell
@@ -275,7 +276,7 @@ module domain3d
             x(2,i)=       (x(2,i)               -x(3,i)*this%matrix(5))*this%matrix(4)
             x(1,i)=(x(1,i)-x(2,i)*this%matrix(2)-x(3,i)*this%matrix(3))*this%matrix(1)
         end do
-!$omp end parallel
+!$omp end parallel do
         return
     end subroutine m_toFractional
 
@@ -368,6 +369,44 @@ module domain3d
         call m_fillcells(this, n, x)
 
     end subroutine m_fill
+
+    function m_findCell(this, xin) result (icell)
+        class(BoxCells), intent(inout) :: this
+        real(8), dimension(3), intent(in) :: xin
+        integer*4 :: icell
+
+        integer, parameter :: n = 1
+        real(8), dimension(3,1) :: r
+        integer*4 :: j, ix, iy, iz
+
+        r(:,1) = xin(:)
+        call m_toFractional(this%pbox, n, r)	
+
+        do j=1, 3
+            r(j,1) = r(j,1) - int(r(j,1))
+            if ( r(j,1) > 1.d0 ) then
+                if ( r(j,1) - 1.d0 < EPS ) then
+                r(j,1) = 1.d0
+                else
+                r(j,1) = r(j,1) - 1.d0
+                end if
+            else if ( r(j,1) < 0.d0 ) then
+                if ( r(j,1) > -EPS ) then
+                r(j,1) = 0.d0
+                else
+                r(j,1) = r(j,1) + 1.d0
+                end if
+            end if
+            end do
+            ix = int(r(1,1)*this%rdx)
+            if ( ix == this%nxCells ) ix = ix - 1
+            iy = int(r(2,1)*this%rdy)
+            if ( iy == this%nyCells ) iy = iy - 1
+            iz = int(r(3,1)*this%rdz)
+            if ( iz == this%nzCells ) iz = iz - 1
+            icell = 1 + ix + iy*this%nxCells + iz*this%nxyCells
+
+    end function m_findCell
 
     subroutine m_fillCells(this, n, xin)
         class(BoxCells), intent(inout) :: this
