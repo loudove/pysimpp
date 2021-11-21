@@ -381,7 +381,7 @@ class MCluster(Cluster):
         for im in cluster.molecules:
             for iat in molecule_atoms[im]:
                 iatom+=1
-                s = "\n" if iatom % _every == 0 else " " 
+                s = "\n" if iatom % _every == 0 else " "
                 fndx.write("%d%s"%(iat,s))
         if not iatom % _every == 0: fndx.write("\n")
         fndx.write("\n")
@@ -393,8 +393,8 @@ class MCluster(Cluster):
         for im in cluster.molecules:
             for iat in np.array(molecule_atoms[im])[_head]:
                 iatom+=1
-                s = "\n" if iatom % _every == 0 else " " 
-                fndx.write("%d%s"%(iat,s))                
+                s = "\n" if iatom % _every == 0 else " "
+                fndx.write("%d%s"%(iat,s))
         if not iatom % _every == 0: fndx.write("\n")
         fndx.write("\n")
         fndx.write("[ ASSMBL%d_TAIL ]\n"%icluster)
@@ -402,8 +402,8 @@ class MCluster(Cluster):
         for im in cluster.molecules:
             for iat in np.array(molecule_atoms[im])[_tail]:
                 iatom+=1
-                s = "\n" if iatom % _every == 0 else " " 
-                fndx.write("%d%s"%(iat,s))                
+                s = "\n" if iatom % _every == 0 else " "
+                fndx.write("%d%s"%(iat,s))
         if not iatom % _every == 0: fndx.write("\n")
         fndx.write("\n")
 
@@ -477,41 +477,70 @@ class MCluster(Cluster):
         _r = r[ _catoms]
         _masses = atom_mass[ _catoms]
         _molecules = np.array( _molecules)
+        eigvec = np.zeros( (len(cluster.molecules),9), dtype=np.float64)
+        exclude = np.zeros( len(cluster.molecules), dtype=np.bool)
         _exclude = np.zeros( len(cluster.molecules), dtype=np.bool)
+        _molecule_name = molecule_name[ list(cluster.molecules)]
+
+        # groups molecules per species
+        _matoms = defaultdict(list)
+        for im in cluster.molecules:
+            _matoms[ molecule_name[im]].append( molecule_atoms[im])
+        cluster.nspecies = { _k:len(_v) for _k, _v in _matoms.items() }
+
+        exclude[:] = False
+        _exclude[:] = True
 
         ### LDP specific for CTAC and the connectivity used
         # TODO finish "-ends" implementation (remove or generalize)
         if len(ends) >0 :
-            _matoms = [ molecule_atoms[im] for im in cluster.molecules]
-            # _catoms = [ _at for _mat in _matoms for _at in _mat ]
-            _end0, _end1 = ends['CTAC']
-            _start = [ _mat[_end0] for _mat in _matoms ]
-            _end = [ _mat[_end1] for _mat in _matoms ]
-            _ee = r[_end] - r[_start]
-            # no pbc needed for coordinates since they are already whole
-            _msqee = (_ee*_ee).sum(axis=1).mean()
-            cluster._msqee = _msqee
-            #######################
+            cluster._msqee = {}
+            cluster._msqrg = {}
+            cluster._mb = {}
+            cluster._mc = {}
+            cluster._msqk = {}            
+            for _mname, _ends in ends.items():
+                _end0, _end1 = ends[ _mname]
+                _start = [ _mat[_end0] for _mat in _matoms[_mname] ]
+                _end = [ _mat[_end1] for _mat in _matoms[_mname] ]
+                _ee = r[_end] - r[_start]
+                # no pbc needed for coordinates since they are already whole
+                _msqee = (_ee*_ee).sum(axis=1).mean()
+                cluster._msqee[_mname] = _msqee
+                setattr(cluster,'sqee_%s'%_mname,_msqee)
+                #######################
+                _mask = _molecule_name == _mname
+                exclude[ _mask] = False
+                _exclude[:] = True
+                _exclude[ _mask] = False
+                _rp, _rg, _eigval, _eigvec, _ierr =  gyration(_r, _masses, _molecules, _exclude)
+                eigvec[ _mask,:] =  _eigvec[ _mask,:]               
 
-        _rp, _rg, _eigval, _eigvec, _ierr =  gyration(_r, _masses, _molecules, _exclude)
-        _sqrg = _eigval.sum(axis=1)
-        sqrg = _sqrg.mean() # square radious of gyration
-        _b = _eigval[:,0] - 0.5*(_eigval[:,1]+_eigval[:,2])
-        b = _b.mean()       # aspherisity
-        _c = _eigval[:,1]-_eigval[:,2]
-        c = _c.mean()       # acylindricity
-        _sqk = (_b*_b+0.75*_c*_c)/(_sqrg*_sqrg)
-        sqk = _sqk.mean()   # anisotropy
-        cluster._msqrg = sqrg
-        cluster._mb = b
-        cluster._mc = c
-        cluster._msqk = sqk
+                _sqrg = _eigval.sum(axis=1)
+                sqrg = _sqrg.mean() # square radious of gyration
+                _b = _eigval[:,0] - 0.5*(_eigval[:,1]+_eigval[:,2])
+                b = _b.mean()       # aspherisity
+                _c = _eigval[:,1]-_eigval[:,2]
+                c = _c.mean()       # acylindricity
+                _sqk = (_b*_b+0.75*_c*_c)/(_sqrg*_sqrg)
+                sqk = _sqk.mean()   # anisotropy
+                cluster._msqrg[_mname]  = sqrg
+                cluster._mb[_mname]  = b
+                cluster._mc[_mname]  = c
+                cluster._msqk[_mname]  = sqk
+                setattr(cluster,'b_%s'%_mname,b)
+                setattr(cluster,'c_%s'%_mname,c)
+                setattr(cluster,'sqk_%s'%_mname,sqk)
+                setattr(cluster,'sqrg_%s'%_mname,sqrg)
+        else:
+            _rp, _rg, _eigval, eigvec, _ierr =  gyration(_r, _masses, _molecules, exclude)
+
         # molecular axes array
-        _v = _eigvec[:,0:3]
+        _v = eigvec[:,0:3]
         # cluster order tensor
-        _q, _eigval, _eigvec, _ierr = order_parameter( _v, _exclude)
-        cluster._qval = _eigval  # order parameters
-        cluster._qvec = _eigvec  # directors
+        _q, _eigval, _eigvec, _ierr = order_parameter( _v, exclude)
+        cluster.qval = _eigval  # order parameters
+        cluster.qvec = _eigvec  # directors
         # cluster local order (map molecules in cluster local numbering)
         _map = { im:i for i,im in enumerate(cluster.molecules) }
         _nneighbors = []
@@ -525,8 +554,8 @@ class MCluster(Cluster):
         _bin = 0.1
         _nbins = int(1.5/_bin)+1
         # _h = np.zeros(_nbins, dtype=np.float32)
-        _qloc, _qlochist, _ierr = order_parameter_local( _v, _nneighbors, _neighbors, _bin, _nbins )
-        cluster._qloc = _qloc
+        _qlocal, _qlochist, _ierr = order_parameter_local( _v, _nneighbors, _neighbors, _bin, _nbins )
+        cluster.qlocal = _qlocal
         cluster._qlochist = _qlochist
 
     @staticmethod
@@ -552,13 +581,13 @@ class MCluster(Cluster):
         c = _e[1]-_e[2]                # acylindricity
         sqk = (b*b+0.75*c*c)/(sqrg*sqrg)# anisotropy
         # "normalize" asphericity dividing by Rg^2
-        bp = b / _e[0]  # aspherisity
-        b = b / sqrg  # aspherisity
+        b = b / sqrg 
+        # b = b / _e[0]  # dividing by max eigenvalue
         # or following gromacs implementation
         # b = (3./2.) * (np.sum((_e - sqrg/3.)**2))/sqrg**2
         # "normalize" acylindricity dividing by _e[1]
-        cp = c / _e[1]
         c = c / sqrg
+        # c = c / _e[1] #  dividing by max eigenvalue
         # bounding ortho box: find the probability distribution along
         # each principal axis. check which range is higher that the
         # value of the corresponding uniform distribution scaled by f
@@ -578,7 +607,8 @@ class MCluster(Cluster):
 
         # estimate the total linear number molecular density
         # find the real molecule for each atom of the cluster
-        _eps = np.sqrt( cluster._msqee)
+        # _eps = np.sqrt( cluster._msqee['CTAC'])
+        _eps = 20.0
         _epsxmin = on[0][0]+_eps
         _epsxmax = on[0][1]-_eps
         if len(cluster.molecules) > 50 and (_epsxmax-_epsxmin)>0.5*_eps:
@@ -607,47 +637,28 @@ class MCluster(Cluster):
         # gives the same results as in the case of gyration tensor
         # (ie. different eigenvalues but the same eigenvectors)
         # _inert, _eigval, _eigvec, _ierr =  inertia(_r, _masses, _molecules, _exclude)
-        cluster._sqrg = sqrg
-        cluster._b = b
-        cluster._bp = bp
-        cluster._c = c
-        cluster._cp = cp
-        cluster._sqk = sqk
-        cluster._bbox = bbox
-        cluster._rgval = _eigval[0]
-        cluster._rgvec = _eigvec[0]
-        cluster._com = _com[0]
-
-        if _debug:
-            print( "{0:.2f}  {1:.2f}  {2:.2f}  {3:.2f}  {4:.2f}  {5:.2f}  {6:.2f} \
- {7:.2f}  {8:7.2f}  {9:7.2f}  {10:7.2f}  {11:.2f}  {12:d}".format(
-                (_e[0]-0.5*(_e[1]+_e[2]))/sqrg,
-                (_e[0]-0.5*(_e[1]+_e[2]))/_e[0],
-                (3./2.) * (np.sum((_e - sqrg/3.)**2))/sqrg**2,
-                (_e[1]-_e[2])/sqrg,
-                (_e[1]-_e[2])/_e[1],
-                (_e[0]-_e[1])/sqrg,
-                (_e[0]-_e[1])/_e[0],
-                sqk,
-                bbox[0],
-                bbox[1],
-                bbox[2],
-                np.sqrt(cluster._msqee),
-                len(cluster.molecules) ))
+        cluster.sqrg = sqrg
+        cluster.b = b
+        cluster.c = c
+        cluster.sqk = sqk
+        cluster.bbox = bbox
+        cluster.rgval = _eigval[0]
+        cluster.rgvec = _eigvec[0]
+        cluster.com = _com[0]
 
         # retrieve the q matrix for the cluster and check if any
         # of the primary axes coinsides with a director
-        dirs = cluster._qvec.reshape(3,3)
+        dirs = cluster.qvec.reshape(3,3)
         _crit = 10.0*np.pi/180.0
         # take the eigenvector corresponding to the larger eigenvalues
         # (longest molecular axis)
         _v = _eigvec[0][0:3]
         _dir = np.where(np.arccos( dirs.dot( _v)) < _crit)[0]
-        cluster._qlong = cluster._qval[_dir[0]] if not _dir.size == 0 else 0.0
+        cluster.qlong = cluster.qval[_dir[0]] if not _dir.size == 0 else 0.0
 
     @staticmethod
     def chkaxis(cluster, box, atol=0.11):
-        hbox = UnitHexagolal2D.create( cluster._rgvec[:3], cluster._com, box, atol=atol)
+        hbox = UnitHexagolal2D.create( cluster.rgvec[:3], cluster.com, box, atol=atol)
         return hbox
 
     @staticmethod
@@ -691,7 +702,7 @@ class MCluster(Cluster):
                 # _b2d[k].add_histogram(v, options={'type':'p','profile':'c', 'length':_hbox.length})
 
         # spherical
-        elif cluster._b < 0.2 and cluster._c < 0.3 and cluster._sqk < 0.2 and len(cluster.molecules) > 40:
+        elif cluster.b < 0.2 and cluster.c < 0.3 and cluster.sqk < 0.2 and len(cluster.molecules) > 40:
             cluster._shape = 's'
             _bs = bprofiles['s']
             _hs = defaultdict(lambda: Histogram.free(_profilebin, 0.0, False))
@@ -705,7 +716,7 @@ class MCluster(Cluster):
             vprofiles['s']['total'].set(_size)
             vprofiles['s'][_sizebin].set(_size)
 
-            _cm = cluster._com
+            _cm = cluster.com
             _dr = r - _cm
             box.set_to_minimum(_dr)
             _dist = np.sqrt( np.sum( _dr*_dr, axis=1))
@@ -713,7 +724,7 @@ class MCluster(Cluster):
                 if k == 0: continue
                 _h = _hs[k]
                 _h1d = _h1ds[k]
-                _h2d = _h2ds[k]                
+                _h2d = _h2ds[k]
                 _d = _dist[np.where(profileid == k)]
                 if len(_d) > 0:
                     np.vectorize(_h.add)(_d) # TODO compile the universal function once
@@ -726,12 +737,12 @@ class MCluster(Cluster):
                 _b2d[k].add_histogram(v, options={'type':'p','profile':'s'})
 
         # rod-like
-        elif 0.2 < cluster._b < 0.65 and cluster._c < 0.3 and 0.1 < cluster._sqk < 0.4:
-            _rest = (cluster._bbox[1]+cluster._bbox[2])/4.0 # estimate end-to-end
-            if cluster._bbox[0] > 2.0*_rest and len(cluster.molecules) > 100:
+        elif 0.2 < cluster.b < 0.65 and cluster.c < 0.3 and 0.1 < cluster.sqk < 0.4:
+            _rest = (cluster.bbox[1]+cluster.bbox[2])/4.0 # estimate end-to-end
+            if cluster.bbox[0] > 2.0*_rest and len(cluster.molecules) > 100:
                 cluster._shape = 'ec'
-                _cm = cluster._com
-                _axis = cluster._rgvec[:3]
+                _cm = cluster.com
+                _axis = cluster.rgvec[:3]
                 _r = r - _cm
                 box.set_to_minimum(_r)
                 # projection length on cylinder axis.
@@ -764,14 +775,14 @@ class MCluster(Cluster):
                 _sizebin = int(_size // 10.0)
                 _b2d = _b2ds[_sizebin]
                 vprofiles['es']['total'].set(_size)
-                vprofiles['es'][_sizebin].set(_size)                
+                vprofiles['es'][_sizebin].set(_size)
 
                 _profileid = profileid[ _where]
                 for k in profilemap:
                     if k == 0: continue
                     _h = _hs[k]
                     _h1d = _h1ds[k]
-                    _h2d = _h2ds[k]                       
+                    _h2d = _h2ds[k]
                     _d = _dist[np.where(_profileid == k)]
                     if len(_d) > 0:
                         np.vectorize(_h.add)(_d) # TODO compile the universal function once
@@ -794,7 +805,7 @@ class MCluster(Cluster):
                 _sizebin = int(_size // 10.0)
                 _b2d = _b2ds[_sizebin]
                 vprofiles['ec']['total'].set(_size)
-                vprofiles['ec'][_sizebin].set(_size)                
+                vprofiles['ec'][_sizebin].set(_size)
 
                 _where = ~ _where
                 _profileid = profileid[ _where]
@@ -806,7 +817,7 @@ class MCluster(Cluster):
                     if k == 0: continue
                     _h = _hs[k]
                     _h1d = _h1ds[k]
-                    _h2d = _h2ds[k]                      
+                    _h2d = _h2ds[k]
                     _d = _dist[ np.where(_profileid == k)]
                     if len(_d) > 0:
                         np.vectorize(_h.add)(_d) # TODO compile the universal function once
@@ -829,10 +840,10 @@ class MCluster(Cluster):
             assembly = Assembly( _nodes, -1)
             _data = {}
             _data['n'] = len(_nodes)
-            _data['sqrg'] = self._sqrg
-            _data['b'] = self._b
-            _data['c'] = self._c
-            _data['sqk'] = self._sqk
+            _data['sqrg'] = self.sqrg
+            _data['b'] = self.b
+            _data['c'] = self.c
+            _data['sqk'] = self.sqk
             _data["diff_previous"] = 0.0
             _data["diff_cumulative"] = 0.0
             _data["diff_initial"] = 0.0

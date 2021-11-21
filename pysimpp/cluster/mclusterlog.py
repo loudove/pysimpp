@@ -40,13 +40,13 @@ class ClPropertiesLog(ClusterLog):
         # total number of molecules in the clusters
         nmolecules = np.sum(molecules)
         # radious of gyration per cluster
-        sqrg = np.array([cl._sqrg for cl in clusters])
+        sqrg = np.array([cl.sqrg for cl in clusters])
         # asphericity per cluster
-        b = np.array([cl._b for cl in clusters])
+        b = np.array([cl.b for cl in clusters])
         # acylindricity per cluster
-        c = np.array([cl._c for cl in clusters])
+        c = np.array([cl.c for cl in clusters])
         # shape anisotropy per clustesr
-        sqk = np.array([cl._sqk for cl in clusters])
+        sqk = np.array([cl.sqk for cl in clusters])
 
         self.f.write("%d %d %f %f %f %f %f %f %f %f %f %f\n" % # pylint: disable=bad-string-format-type
                      (step, len(clusters), molecules.mean(), molecules.std(),
@@ -55,42 +55,45 @@ class ClPropertiesLog(ClusterLog):
 
 
 class ClMolecularLog(ClusterLog):
-    def __init__(self, dirname, filename="molecular.dat"):
+    def __init__(self, dirname, moltypes, filename="molecular.dat"):
         super(ClMolecularLog, self).__init__(dirname, filename)
-        header = "# " + " ".join(("step", "nmolecules", "molsqee", "molsqrg",
-                                  "molb", "molc", "molmsqk"))
+        header = "# step nmolecules"
+        for _mtype in moltypes:
+            header += ' ' + ' '.join( [ x+"_%s"%_mtype for x in ['n', 'sqee', 'sqrg', 'b', 'c', 'sqk'] ] )
         self.f.write("%s\n" % header)
 
-    def log(self, step, clusters):
-        # number of molecules per cluster
-        molecules = np.array([len(cl.molecules) for cl in clusters])
+    def log(self, step, clusters, moltypes):
         # total number of molecules in the clusters
-        nmolecules = np.sum(molecules)
-        # mean molecular square end-to-end of the molecules in the clusters
-        msqee = np.array([cl._msqee * len(cl.molecules)
-                          for cl in clusters]).sum() / nmolecules
-        # mean molecular square radious of gyration of the molecules in the clusters
-        msqrg = np.array([cl._msqrg * len(cl.molecules)
-                          for cl in clusters]).sum() / nmolecules
-        # mean molecular asphericity of the molecules in the clusters
-        mb = np.array([cl._mb * len(cl.molecules)
-                       for cl in clusters]).sum() / nmolecules
-        # mean molecular acylindricity of the molecules in the clusters
-        mc = np.array([cl._mc * len(cl.molecules)
-                       for cl in clusters]).sum() / nmolecules
-        # mean molecular shape anisotropy of the molecules in the clusters
-        msqk = np.array([cl._msqk * len(cl.molecules)
-                         for cl in clusters]).sum() / nmolecules
-
-        self.f.write("%d %d %f %f %f %f %f\n" % # pylint: disable=bad-string-format-type
-                     (step, nmolecules, msqee, msqrg, mb, mc, msqk))
+        nmolecules = np.sum( np.array([len(cl.molecules) for cl in clusters]))
+        line = "%d %d " % (step, nmolecules)
+        for _mtype in moltypes:
+            # total number of molecules of type _mtype in the clusters
+            nmol = np.sum( np.array([cl.nspecies[ _mtype] for cl in clusters]))
+            # mean molecular square end-to-end of the molecules in the clusters
+            msqee =  np.array([cl._msqee[ _mtype] * cl.nspecies[ _mtype]
+                            for cl in clusters]).sum() / nmol if "_msqee" in vars(clusters[0]) else 0.0
+            # mean molecular square radious of gyration of the molecules in the clusters
+            msqrg = np.array([cl._msqrg[ _mtype] * cl.nspecies[ _mtype] 
+                            for cl in clusters]).sum() / nmol if "_msqrg" in vars(clusters[0]) else 0.0
+            # mean molecular asphericity of the molecules in the clusters
+            mb = np.array([cl._mb[ _mtype] * cl.nspecies[ _mtype]
+                        for cl in clusters]).sum() / nmol if "_mb" in vars(clusters[0]) else 0.0
+            # mean molecular acylindricity of the molecules in the clusters
+            mc = np.array([cl._mc[ _mtype] * cl.nspecies[ _mtype]
+                        for cl in clusters]).sum() / nmol if "_mc" in vars(clusters[0]) else 0.0
+            # mean molecular shape anisotropy of the molecules in the clusters
+            msqk = np.array([cl._msqk[ _mtype] * cl.nspecies[ _mtype]
+                            for cl in clusters]).sum() / nmol if "_msqk" in vars(clusters[0]) else 0.0
+            line += '%d %f %f %f %f %f ' % (
+                nmol, msqee, msqrg, mb, mc, msqk)  # pylint: disable=bad-string-format-type
+        self.f.write(line + '\n')
 
 
 class ClOrderLog(ClusterLog):
     def __init__(self, dirname, filename="order.dat"):
         super(ClOrderLog, self).__init__(dirname, filename)
         header = "# " + " ".join(
-            ("step", "qloc", "std", "qlong", "std", "order[1]",
+            ("step", "qlocal", "std", "qlong", "std", "order[1]",
              "director[1][1]", "director[1][2]", "director[1][3]", "order[2]",
              "director[2][1]", "director[2][2]", "director[2][3]", "order[3]",
              "director[3][1]", "director[3][2]", "director[3][3]"))
@@ -98,16 +101,16 @@ class ClOrderLog(ClusterLog):
 
     def log(self, step, clusters):
         # molecular local order paramters
-        qloc = np.array([cl._qloc for cl in clusters])
+        qlocal = np.array([cl.qlocal for cl in clusters])
         # order parameters
-        qlong = np.array([cl._qlong for cl in clusters])
+        qlong = np.array([cl.qlong for cl in clusters])
         # order parameter based on the primary cluster axis
-        _v = np.array([cl._rgvec[0:3] for cl in clusters])
+        _v = np.array([cl.rgvec[0:3] for cl in clusters])
         _exclude = np.zeros(len(_v), dtype=np.bool)
         _q, _eigval, _eigvec, _ierr = order_parameter(_v, _exclude)
 
         self.f.write("%d %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n" % # pylint: disable=bad-string-format-type
-                     (step, qloc.mean(), qloc.std(), qlong.mean(), qlong.std(),
+                     (step, qlocal.mean(), qlocal.std(), qlong.mean(), qlong.std(),
                       _eigval[0], _eigvec[0], _eigvec[1], _eigvec[2],
                       _eigval[1], _eigvec[3], _eigvec[4], _eigvec[5],
                       _eigval[2], _eigvec[6], _eigvec[7], _eigvec[8]))
@@ -130,11 +133,11 @@ class ClDetailsLog(ClusterLog):
         for icl, cl in enumerate(clusters):
             nmols = len(cl.molecules)
             ldens = cl._ldensity
-            bbox = cl._bbox
-            grval = cl._rgval
-            grvec = cl._rgvec
-            qval = cl._qval
-            qvec = cl._qvec
+            bbox = cl.bbox
+            grval = cl.rgval
+            grvec = cl.rgvec
+            qval = cl.qval
+            qvec = cl.qvec
             inf = 1 if cl._infinit else 0
             self.f.write(
                 "%d %d %d %d %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n"

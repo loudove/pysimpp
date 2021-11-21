@@ -44,6 +44,8 @@ def clusters(filename,
              moleculesid=[],
              molnames=[],
              ends={},
+             phist={},
+             phist2d=[],
              specific=[],
              excluded=[],
              voropp="",
@@ -170,7 +172,7 @@ def clusters(filename,
         bprofiles = defaultdict(
             lambda: defaultdict(lambda: Binning.free(_profilebin, 0.0, False)))
         b2dprofiles = defaultdict(
-            lambda: defaultdict(lambda: defaultdict( lambda: Binning.free(_profilebin, 0.0, False))))            
+            lambda: defaultdict(lambda: defaultdict( lambda: Binning.free(_profilebin, 0.0, False))))
         hprofiles = defaultdict(
             lambda: defaultdict(lambda: Histogram.free(_profilebin, 0.0, False)))
         h2dprofiles = defaultdict(
@@ -190,13 +192,11 @@ def clusters(filename,
 
     # check ends (add missing residues)
     # TODO finish "-ends" implementation (remove or generalize)
-    res_ends = {}
+    mol_ends = {}
     if len(ends) > 0:
-        for _res in molnames:
-            _ends = ends.setdefault(_res,[])
-            res_ends[_res] = tuple(np.array(_ends)-1)
-    else:
-        res_ends['CTAC'] = (0,15)
+        for _res, _ends in ends.items():
+            if _res in molnames:
+                mol_ends[_res] = tuple(np.array(_ends)-1)
 
     # coordinates and conformation stuff
     rw = np.empty(shape=(natoms, ndims),
@@ -218,34 +218,47 @@ def clusters(filename,
     hclsize = Histogram.free(1, 0, addref=False)  # cluster size histogram
     hclnumber = Histogram.free(1, 0,
                                addref=False)  # number of clusters histogram
+
     # properties histograms
-    hprop = defaultdict(lambda: Histogram.free(1, 0, addref=False))
-    hprop['sqk'] = Histogram.free(0.05, 0, addref=False)
-    hprop['sqk_mol'] = Histogram.free(0.05, 0, addref=False)
-    hprop['qlong'] = Histogram.free(0.05, 0, addref=False)
-    hprop['b'] = Histogram.free(0.05, 0, addref=False)
-    hprop['bp'] = Histogram.free(0.05, 0, addref=False)
-    hprop['c'] = Histogram.free(0.05, 0, addref=False)
-    hprop['cp'] = Histogram.free(0.05, 0, addref=False)
-    hprop['qloc_mol'] = Histogram.free(0.05, 0, addref=False)
-    hprop['qloc_mol_s'] = Histogram.free(0.05, 0, addref=False)
-    hprop['qloc_mol_ec'] = Histogram.free(0.05, 0, addref=False)
-    hprop['ld_s'] = Histogram.free(0.05, 0, addref=False)
-    hprop['ld_ec'] = Histogram.free(0.05, 0, addref=False)
-    
-    # properties,size histograms
+    __properties = {
+        'cluster':{ 'b':(),'c':(),'sqk':(),'sqrg':(),'bbox':(0,1,2)},
+        'order':{ 'qlong':(),'qlocal':()},
+        'species': { "%s_%s"%(_p,_ends):() for _ends in mol_ends for _p in ('b','c','sqk','sqee','sqrg')}
+    }
+    _properties_known = [ _k for _t in ('cluster','order','species') for _k in __properties[_t] ]
+    __default_bins = {
+        'cluster':{ 'b':0.05, 'c':0.05, 'sqk':0.05, 'sqee':1.0, 'sqrg':1.0, 'bbox':0.5 },
+        'order':{ 'qlong':0.05, 'qlocal':0.05},
+        'species':{  "%s_%s"%(_p[0],_ends):_p[1] for _ends in mol_ends for _p in (('b',0.05),('c',0.05),('sqk',0.05),('sqee',1.0),('sqrg',1.0))}
+    }
+    _cases = { 'all': ('cluster', 'order', 'species'), 'clusters': ('cluster', 'order'), 'species': ('order', 'species') }
+    _given = [ _p.lower() for _p in phist]
+    _special = [ _k for _k in ('all','clusters','species') if _k in _given]
+    if len(_special) > 0:
+        _bin = { _k:_v for _t in _cases[ _special[0]] for _k, _v in __default_bins[_t].items() }
+        _properties = { _k:_v for _t in _cases[ _special[0]] for _k, _v in __properties[_t].items() }
+    else:
+        _bin = defaultdict( lambda: 0.1, { _k:_v[0] for _k, _v in phist.items() if _k in _properties_known })
+    hprop = defaultdict(lambda: Histogram.free(1.0, 0, addref=False))
+    for _k, _v in _bin.items():
+        hprop[_k] = Histogram.free(_v, 0, addref=False)
+    # hprop['qlocal_s'] = Histogram.free(0.05, 0, addref=False)
+    # hprop['qlocal_ec'] = Histogram.free(0.05, 0, addref=False)
+    # hprop['ld_s'] = Histogram.free(0.05, 0, addref=False)
+    # hprop['ld_ec'] = Histogram.free(0.05, 0, addref=False)
+
+    # size conditional properties histograms
     hprop2D = defaultdict(lambda: Histogram2D(1.0, (0, 0), addref=False))
-    hprop2D['b'] = Histogram2D((0.05, 1.0), (0, 0), addref=False)
-    hprop2D['c'] = Histogram2D((0.05, 1.0), (0, 0), addref=False)
-    hprop2D['sqk'] = Histogram2D((0.05, 1.0), (0, 0), addref=False)
-    hprop2D['sqk_mol'] = Histogram2D((0.1, 1.0), (0, 0), addref=False)
-    hprop2D['qlong'] = Histogram2D((0.05, 1.0), (0, 0), addref=False)
-    hprop2D['qloc_mol'] = Histogram2D((0.05, 1.0), (0, 0), addref=False)
+    __default_bins_all = { _k:_v for _d in __default_bins.values() for _k, _v in _d.items() }
+    for _k in phist2d:
+        if _k in _properties_known:
+            _v = _bin[_k] if _k in _bin else __default_bins_all[_k]
+            hprop2D[_k] = Histogram2D((_v, 1.0), (0, 0), addref=False)
 
     # prepare on the fly log
     log = ClPropertiesLog(dirname)
     if True:
-        mollog = ClMolecularLog(dirname)
+        mollog = ClMolecularLog(dirname, mol_ends.keys())
         orderlog = ClOrderLog(dirname)
         detailslog = ClDetailsLog(dirname)
 
@@ -315,9 +328,6 @@ def clusters(filename,
             continue
 
         if box:
-            if _debug and len(steps) == 0:
-                print("{0:4s}  {1:4s}  {2:4s}  {3:4s}  {4:4s}  {5:4s}  {6:4s} \
- {7:4s}  {8:7s}  {9:7s}  {10:7s}  {11:5s}  {12:3s}"                                                   .format('b','b1','b2','c','c1','d','d1','sqk','bb1','bb2','bb3','ee','n'))
 
             steps.append(step)
             boxes.append(box)
@@ -452,63 +462,31 @@ def clusters(filename,
                 # _b: asphericity
                 # _c: acylindricity
                 # _sqk: relative shape anisotropy
-                MCluster.order(_cl, r, atom_mass, molecule_atoms, molecule_name, neighbors, res_ends)
+                MCluster.order(_cl, r, atom_mass, molecule_atoms, molecule_name, neighbors, mol_ends)
                 MCluster.shape(_cl, r, atom_mass, molecule_atoms)
                 if doprofiles:
                     MCluster.profile(_cl, r, box, profileid, profilemap, bprofiles, b2dprofiles, hprofiles, h2dprofiles, vprofiles)
                 _size = len(_cl.molecules)
-                # group q matrix eigenvalues based on three basic shapes:
-                # spherical: all eigenvalues are close to zero (a threshold of 0.1 will be used)
-                # cylindrical:  one negative (close to -0.5) and two positives (close to 0.25)
-                # planar: two negative (close to -0.5) and one positive (close to 1.0)
-                # other: anything else
-                if not _cl._infinit:
-                    hprop['sqrg'].add(_cl._sqrg)
-                    hprop['b'].add(_cl._b)
-                    hprop['bp'].add(_cl._bp)
-                    hprop['c'].add(_cl._c)
-                    hprop['cp'].add(_cl._cp)
-                    hprop['sqk'].add(_cl._sqk)
-                    hprop['bbox_x'].add(_cl._bbox[0])
-                    hprop['bbox_y'].add(_cl._bbox[1])
-                    hprop['bbox_z'].add(_cl._bbox[2])
-                    hprop2D['sqrg'].add((_cl._sqrg, _size))
-                    hprop2D['b'].add((_cl._b, _size))
-                    hprop2D['c'].add((_cl._c, _size))
-                    hprop2D['sqk'].add((_cl._sqk, _size))
-                    # TODO :not needed remove them
-                    hprop2D['bbox_x'].add((_cl._bbox[0], _size))
-                    hprop2D['bbox_y'].add((_cl._bbox[1], _size))
-                    hprop2D['bbox_z'].add((_cl._bbox[2], _size))
+                # if not _cl._infinit:
+                #     if _cl._shape == 's':
+                #         hprop['sqrg_s'].add(_cl.sqrg)
+                #         for _mname in mol_ends:
+                #             hprop['sqee_%s_s' % _mname].add( _cl._msqee[ _mname])
+                #         hprop['qlocal_s'].add(_cl.qlocal)
+                #         hprop['ld_s'].add(_cl._ldensity[0])
+                #     elif _cl._shape == 'ec':
+                #         hprop['sqrg_ec'].add(_cl.sqrg)
+                #         for _mname in mol_ends:
+                #             hprop['sqee_%s_ec' % _mname].add( _cl._msqee[ _mname])
+                #         hprop['qlocal_ec'].add(_cl.qlocal)
+                #         hprop['ld_ec'].add(_cl._ldensity[0])
+                #         hprop['ldn_ec'].add(_cl._ldensity[2])
+                #         hprop['ldl_ec'].add(_cl._ldensity[3])
 
-                    if _cl._shape == 's':
-                        hprop['sqrg_s'].add(_cl._sqrg)
-                        hprop['sqee_mol_s'].add(_cl._msqee)
-                        hprop['qloc_mol_s'].add(_cl._qloc)
-                        hprop['ld_s'].add(_cl._ldensity[0])
-                    elif _cl._shape == 'ec':
-                        hprop['sqrg_ec'].add(_cl._sqrg)
-                        hprop['sqee_mol_ec'].add(_cl._msqee)
-                        hprop['qloc_mol_ec'].add(_cl._qloc)
-                        hprop['ld_ec'].add(_cl._ldensity[0])
-                        hprop['ldn_ec'].add(_cl._ldensity[2])
-                        hprop['ldl_ec'].add(_cl._ldensity[3])
-
-                    hprop2D['sqee_mol'].add((_cl._msqee, _size))
-                    hprop2D['sqrg_mol'].add((_cl._msqrg, _size))
-                    hprop2D['b_mol'].add((_cl._mb, _size))
-                    hprop2D['c_mol'].add((_cl._mc, _size))
-                    hprop2D['sqk_mol'].add((_cl._msqk, _size))
-                    hprop2D['qloc_mol'].add((_cl._qloc, _size))
-
-                hprop['sqee_mol'].add(_cl._msqee)
-                hprop['sqrg_mol'].add(_cl._msqrg)
-                # TODO :use normalized b and c
-                hprop['b_mol'].add(_cl._mb)
-                hprop['c_mol'].add(_cl._mc)
-                hprop['sqk_mol'].add(_cl._msqk)
-                hprop['qloc_mol'].add(_cl._qloc)
-                hprop['qlong'].add(_cl._qlong)
+                for _p in _bin:
+                    hprop[_p].add(vars(_cl)[_p])
+                for _p in phist2d:
+                    hprop2D[ _p].add( ( vars(_cl)[_p], _size))
 
             # analyse
             if doprofiles:
@@ -518,7 +496,7 @@ def clusters(filename,
 
             # if any( [_cl._infinit for _cl in _clusters ]):
             if True:
-                mollog.log(step, _clusters)
+                mollog.log(step, _clusters, mol_ends)
                 orderlog.log(step, _clusters)
                 detailslog.log(step, _clusters)
             log.log(step, _clusters)
@@ -563,7 +541,7 @@ def clusters(filename,
     #         a[ ic] += 1
 
     fndx.close()
-    
+
     if len(steps) == 0:
         print("No frames processed")
         return
@@ -729,7 +707,7 @@ def command():
     provide the two end atoms defining the end to end vectors for the molecular
     types participating in a cluster (see "-molnames" option). '''
     parser.add_argument('-ends', nargs=1, type=chktype, default=[{}], \
-        metavar='list end atoms', help=string)
+        metavar='list of end atoms', help=string)
 
     chktype = IsList("wrong atom names range (check: %s)",itemtype=str,positive=True)
     string='''
@@ -850,9 +828,9 @@ def command():
     micelle or in the spherical caps of an elongated/waged micelle, the distance from
     the center of the sphere is used. If the atoms belong to a cylindrical column or
     in the body of an elongated micelle, the length of its projection on the column
-    axis is taken. The argument is a set of lists of comma-separated atoms name lists 
+    axis is taken. The argument is a set of lists of comma-separated atoms name lists
     separated with "@". For example the argument "HEAD:CTAC:C17,N,C18,C19@WAT:SOL:OW"
-    defines two named lists (groups); HEAD cosist of atoms C17,N,C18, and C19 belong
+    defines two named lists (groups); HEAD cosist of atoms C17,N,C18, and C19 that belong
     to CTAC molecules and WAT consists of OW atoms belong to SOL molecules. Atoms
     specified with the "-excluded" argument will be excluded also here. For each list,
     the density profile will be written in the file profile_{listname}_{shape}.prof in
@@ -865,8 +843,41 @@ def command():
     parser.add_argument('-profiles', nargs=1, type=chktype, default=[[]],
         metavar='list of atom names', help=string)
 
+    chktype = IsListOfNamedList("wrong phist argument (check: %s)", itemtype=float,
+        positive=True, llen=1)
+    string = '''
+    provide the properties for which their histograms will be calculated. The name of the property
+    together with the bin length for the histogram should be given. The following properties are
+    supported:
+      b : asphericity for both clusters and their constituent molecular species
+      c : acylindricity for both clusters and their constituent molecular species
+      sqk : anisotropy for both clusters and their constituent molecular species
+      sqrg : square radius of gyration for both clusters and their constituent molecular species
+      sqee : end-to-end distance for clusters' constituent molecular species
+      bbox : bounding box
+      qlong : global order
+      qlocal : local order
+    The bin length of a poperty of a molecular species is named by apending "_{SPECIES SNAME}"
+    at its name. For example with the "-phist c:0.01,c_CTAC:0.05" option the bin length of the
+    acylindricity distribution of the clusters is set to 0.01 and for the CTAC molecules to 0.05.
+    The special keywords 'all', 'clusters', and 'species' can be given instead of on the
+    aforementioned properties. In this case, all the available properties, the properties
+    of the traced clusters, or the properties of the molecular species will be calculated
+    and the corresponding histograms will be calculated.
+    '''
+    parser.add_argument('-phist', nargs=1, type=chktype, default=[{}], \
+        metavar='list of bin lengths', help=string)
+
+    chktype = IsList("wrong phist2d argument (check: %s)",itemtype=str,positive=True)
+    string = '''
+    provide the properties for which the conditional probability of having
+    a specific value given the size of the cluster, will be calculated.
+    '''
+    parser.add_argument('-phist2d', nargs=1, type=chktype, default=[[]], \
+        metavar='list of properties', help=string)
+
     parser.add_argument('-voropp', nargs=1, type=str, default=[""], metavar='voro++ executable', \
-        help='provide a voro++ executable to be used instead of pyvoro python module.')
+        help='provide the voro++ executable to be used instead of pyvoro python module.')
 
     # parse the arguments
     args = parser.parse_args()
@@ -879,6 +890,8 @@ def command():
              moleculesid=args.molecules[0],
              molnames=args.molnames[0],
              ends=args.ends[0],
+             phist=args.phist[0],
+             phist2d=args.phist2d[0],
              specific=args.specific[0],
              excluded=args.excluded[0],
              voropp=args.voropp[0],
