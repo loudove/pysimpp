@@ -12,25 +12,46 @@ The reader is essentially a wrapper of MDAnalysis.Universe with an API that is r
 Installation
 ------------
 
-Recommended - installation via `pip`:
+[//]: # (Recommended - installation via `pip`: pip3 install pysimpp)
 
-    pip3 install pysimpp
+The installation from source is the same as for any other python module. Clone pysimpp repository:
 
-Installation from source is the same as for any other python module. Issuing 
+    git clone https://github.com/loudove/pysimpp.git
+
+enter the pysimpp directory and use pip:
   
     pip3 install .
 
-or:
+or `setup.py`:
 
     python3 setup.py install
     
-will install pysimpp system-wide, while 
+to install pysimpp system-wide. Otherwise use:  
 
     pip3 install . --user
 
-or
+or:
 
     python setup.py install --user
 
-will install it only for the current user.
+to install it only for the current user.
 
+Requirements
+------------
+
+Some of the functionality of pysimm requir the installation of the [pyvoro](https://github.com/joe-jordan/pyvoro) module. It is recommended to install a modified version of pyvoro where memory requirements for large systems have been significantly reduced . You should clone the feature/python3 branch for a fork of the project found in https://github.com/loudove/pyvoro
+
+    git clone --branch feature/python3 https://github.com/loudove/pyvoro.git
+
+and follow the installation instructions.
+
+Use
+---
+
+After installing pysimm you can list the available pysimpp commands with:
+
+    pysimpp -h
+
+To access detailed help on a specific topic use:
+
+    pysimpp command -h
