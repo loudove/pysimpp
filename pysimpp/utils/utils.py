@@ -154,7 +154,7 @@ class IsListOfNamedList(IsListOfList):
     ''' Implements list of list check functionality with custom setting
         and error handling. Usefull for argparse type check. 
         A list of list has the form:
-            A,B,C:D,E,G:H,J,L,R    
+            N:M:A,B,C@O:P:D,E@G:X:H,J,L,R    
     '''
     def __init__(self, message, itemtype=str, positive=False,
                  klen=-1, llen=-1, sep='@', sep1=':', sep2=','):

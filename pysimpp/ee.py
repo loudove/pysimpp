@@ -1,15 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-__author__ = "Loukas Peristeras"
-__copyright__ = ""
-__credits__ = []
-__license__ = "GPL"
-__version__ = "0.0.2"
-__maintainer__ = "Loukas Peristeras"
-__email__ = "loukas.peristeras@gmail.com"
-__status__ = "Production"
-
 import os
 import sys
 import numpy as np
