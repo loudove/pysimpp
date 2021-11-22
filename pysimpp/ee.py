@@ -6,16 +6,17 @@ import sys
 import numpy as np
 from scipy.signal import correlate
 
-import pysimpp.readers
-
 from pysimpp.utils.statisticsutils import Histogram
 import pysimpp.utils.utils as utils
+import pysimpp.readers
 from pysimpp.fastpost import fastunwrapv, fastrg, pefastunwrap
 
 __debug = False
 
 def _is_command(): return True
+
 def _short_description(): return 'Calculate end-to-end distances and stuff.'
+
 def _command(): command()
 
 def _FFT1D(x, normalize=False):
@@ -74,20 +75,18 @@ def endtoend(filename, end1, end2, start=-1, end=sys.maxsize, molids=(), camc=Fa
     # create the reader. for the moment lammps, gromacs and camc (polybead) are supported.
     islammps = False
     isgmx    = False
+    reader = pysimpp.readers.create(filename)
     if camc:
-        reader = mc.McReader.create(filename)
         attributes = 'id mol x y z'
         _tcnv = 1.e-6  # milions of steps
         _unwrap = True
         islammps = True
     elif filename[-4:] == ".log" or not filename[-4] == ".":
-        reader = lmp.LammpsReader.create(filename)
         attributes = 'id x y z ix iy iz'
         _unwrap = True
         _tcnv = 1.e-6  # fs to ns
         islammps=True
     else:
-        reader = gmp.GroReader.create(filename)
         attributes = 'id x y z type'
         _unwrap = False
         _tcnv = 1.e-3  # ps to ns
@@ -317,8 +316,8 @@ The output files are (located at the simulation directory):
     parser.add_argument('-molecules', nargs=1, type=argmoleculestype, default=[[]],  metavar='range', \
                        help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
 
-    parser.add_argument('--camc', dest='camc', default=False, action='store_true', \
-                       help="process connectivity monte carlo output")
+    # parser.add_argument('--camc', dest='camc', default=False, action='store_true', \
+    #                    help="process connectivity monte carlo output")
 
     # parse the arguments
     args = parser.parse_args()
@@ -328,7 +327,7 @@ The output files are (located at the simulation directory):
     print("start : ", args.start[0])
     print("end : ", args.end[0])
     print("molecules : %d" % len(args.molecules[0]))
-    print("camc : %s \n" % "True" if args.camc else "False")
+    # print("camc : %s \n" % "True" if args.camc else "False")
     if __debug:
         print(args.molecules[0])
 
@@ -338,8 +337,8 @@ The output files are (located at the simulation directory):
         args.end2[0],
         start=args.start[0],
         end=args.end[0],
-        molids=args.molecules[0],
-        camc=args.camc)
+        molids=args.molecules[0])
+        # camc=args.camc)
 
 if __name__ == '__main__':
     command()

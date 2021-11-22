@@ -14,12 +14,9 @@ import os
 import sys
 import numpy as np
 
-import utils
-import lammpsreader as lmp
-import groreader as gmp
-import mcreader as mc
-from statisticsutils import Histogram, Histogram3D
-
+import pysimpp.utils.utils as utils
+from pysimpp.utils.statisticsutils import Histogram, Histogram3D
+import pysimpp.readers
 from pysimpp.fastpost import fastunwrapv, gyration, pefastunwrap
 
 __debug = False
@@ -27,19 +24,17 @@ __debug = False
 def shape(filename, start=-1, end=sys.maxsize, molids=(), camc=False):
 
     # create the reader. for the moment lammps, gromacs and camc (polybead)
+    reader = pysimpp.readers.create(filename)
     if camc:
-        reader = mc.McReader.create(filename)
         attributes = 'id mol x y z'
         _tcnv = 1.0
         _unwrap = True
         islammps = True
     elif filename[-4:] == ".log" or not filename[-4] == ".":
-        reader = lmp.LammpsReader.create( filename)
         attributes='id x y z ix iy iz'
         _unwrap = True
         islammps = True
     else:
-        reader = gmp.GroReader.create( filename)
         attributes='id x y z'
         _unwrap = False
         islammps = False
@@ -246,8 +241,8 @@ The output files are (located at the simulation directory):
     parser.add_argument('-molecules', nargs=1, type=argmoleculestype, default=[[]],  metavar='range', \
                        help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
 
-    parser.add_argument('--camc', dest='camc', default=False, action='store_true', \
-                       help="process connectivity monte carlo output.")
+    # parser.add_argument('--camc', dest='camc', default=False, action='store_true', \
+    #                    help="process connectivity monte carlo output.")
 
     # parse the arguments
     args = parser.parse_args()
@@ -257,8 +252,13 @@ The output files are (located at the simulation directory):
     print("start : ", args.start[0])
     print("end : ", args.end[0])
     print("molecules : %d \n" % len(args.molecules[0]))
-    print("camc : %s \n" % "True" if args.camc else "False")
+    # print("camc : %s \n" % "True" if args.camc else "False")
+
     if __debug:
         print(args.molecules[0])
 
-    shape( args.path, start=args.start[0], end=args.end[0], molids=args.molecules[0], camc=args.camc)
+    shape( args.path, 
+        start=args.start[0], 
+        end=args.end[0], 
+        molids=args.molecules[0],) 
+        # camc=args.camc)
