@@ -1,5 +1,5 @@
-Clusters
-========
+Cluster
+=======
 
 Trace the clusters formed in the simulation cell based on close contact analysis preformed with voronoi tesselation as implemented in [voro++](http://math.lbl.gov/voro++/) and its python bindings [pyvoro](https://github.com/joe-jordan/pyvoro).
 
@@ -24,6 +24,8 @@ stop processing at timestep n [inclusive] (step based for lammps and time based 
 -  `-vis n`:
 visualization frequency (save gro files for the traced clusters every n timesteps iteration based for lammps and time based for gromacs).
 
+[//]: # ( -  `--whole`:reconstruct the molecules making them whole again, before spatial reconstruction of the clusters. Use this option if the coordinates of the input trajectory are wrapped in to the simulation cell and you want to correctly visualize the clusters.)
+
 -  `-molecules molid range`:
 molecules to be used. A comma seperated list with the ranges of molecules ids, e.g., `1,2,3` or `1:10,20,30:100`
 
@@ -39,10 +41,10 @@ the atom types to be exluded system wide from the closecontact analysis. A comma
 -   `-specific atoms for each molname`:
 the names of the atoms to be considered in the close contact analysis. A comma separated list for each molecular type in the `-molnames` argument should be provided. If a wildcard `"*"` is given for a residue then all the atoms of the molecular species will be considered. For example, if A, and B are the clusters' constituent molecular types, the argument could look like `*:C1,C2,C3` specifying  that all the atoms of species A and only the atoms C1,C2,C3 of species B should be considered in the analysis.
 
--   `-radii file with atoms' type/elemet radii`
+-   `-radii file with atoms' type/elemet radii`:
  the file with the radii of the atoms. It can be element or type based. The first line of the file contains the keywords `(element|type) (r|d)`; the first, specifies the atom type identifier and the second if the radius (`r`) or the diameter (`d`) is given for each type. The rest of the lines contain the (`type`, `radius`) pairs. The `type` could be either a number (type id) or a string (type name).
 
--   `-hist list of neighbor group pairs`
+-   `-hist list of neighbor group pairs`:
 the histograms of the number of neighbor pairs to be calculated. Each pair consists of a groups of atoms and a list of species. A list of pairs separated with "@" should be provided. Each pair contains the information for a histogram in the format `GROUPNAME:MOLNAME:ATOMSLIST:RESIDUESLIST`, where:
     - GROUPNAME:  the name of the group
     - MOLNAME:    the name of the molecule where the group belongs (all the atoms

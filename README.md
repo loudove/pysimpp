@@ -50,7 +50,7 @@ Use
 
 After installing pysimm you can list the available pysimpp commands with:
 
-    pysimpp -h
+    pysimpp help
 
 To access detailed help on a specific command use:
 

@@ -102,7 +102,7 @@ def main():
     import sys
     from importlib import import_module
     _command = sys.argv[1] if len(sys.argv) > 1 else None
-    if _command is None or _command.lower() == 'help':
+    if _command is None or _command.lower() in ('help', '-h', '--help'):
         __help(version, commands)
     elif _command not in commands:
         print ('ERROR: commnad "%s" is not available\n' % _command)

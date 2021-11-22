@@ -7,7 +7,7 @@ def _is_command(): return False
 # TODO automaticaly add the readers and update the file check
 def create(filename, topo=None):
     ''' Create and return a reader for accessing the given
-        situation trajectory file. T
+        situation trajectory file.
         Args:
             filename (str): the full path to the trajectory file.
                 For lammps, the full path to the simulation log file can

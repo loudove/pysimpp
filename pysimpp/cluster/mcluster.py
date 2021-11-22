@@ -686,6 +686,14 @@ def command():
     parser.add_argument('-vis', nargs=1, type=int, metavar='n', \
         default=[sys.maxsize], help=string)
 
+    # string = '''
+    # reconstruct the molecules making them whole again, before spatial reconstruction 
+    # of the clusters. Use this option if the coordinates of the input trajectory are 
+    # wrapped in to the simulation cell and you want to correctly visualize the clusters.    '''
+    # parser.add_argument('--whole', dest='whole', default=False, action='store_ture', \
+    #                    help=string)
+
+
     group = parser.add_mutually_exclusive_group()
     chktype = IsList("wrong molecules indexs range (check: %s)",itemtype=int,positive=True)
     string = '''
