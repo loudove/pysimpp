@@ -52,8 +52,9 @@ After installing pysimm you can list the available pysimpp commands with:
 
     pysimpp -h
 
-To access detailed help on a specific topic use:
+To access detailed help on a specific command use:
 
     pysimpp command -h
 
-A more detail description of the [commands](./doc/README.md) for specific commands can be found in [doc](./doc) folder.
+More details on [commands](./doc/README.md) with a more complex set of arguments can be found in the [doc](./doc) folder.
+
