@@ -55,3 +55,5 @@ After installing pysimm you can list the available pysimpp commands with:
 To access detailed help on a specific topic use:
 
     pysimpp command -h
+
+A more detail description of the functionality for specific commands ([cluster](./doc/cluster.md)) can be found in [doc](./doc) folder.

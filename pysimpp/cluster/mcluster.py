@@ -677,13 +677,13 @@ def command():
     string = '''
     processing frequency (every dn timesteps, step based for lammps
     and time based for gromacs). '''
-    parser.add_argument('-every', nargs=1, type=int, metavar='dn', \
+    parser.add_argument('-every', nargs=1, type=int, metavar='n', \
         default=[1], help=string)
 
     string = '''
     visualization frequency (save gro files for the traced clusters every
     dn timesteps iteration based for lammps and time based for gromacs). '''
-    parser.add_argument('-vis', nargs=1, type=int, metavar='dn', \
+    parser.add_argument('-vis', nargs=1, type=int, metavar='n', \
         default=[sys.maxsize], help=string)
 
     group = parser.add_mutually_exclusive_group()
@@ -704,45 +704,47 @@ def command():
     chktype = IsListOfNamedList("wrong ends argument (check: %s)", itemtype=int,
         positive=True, llen=2)
     string = '''
-    provide the two end atoms defining the end to end vectors for the molecular
-    types participating in a cluster (see "-molnames" option). '''
+    the pairs of atoms defining the end-to-end vectors of the molecular species
+    participating in a cluster (see "-molnames"). For example, if the end-to-end
+    vectors of clusters' constituent molecular types TIC and TOC are defined by
+    atoms (1, 16) and (3,25), respectively, the arguments could be "TIC:1,16@TOC:3,25".
+     '''
     parser.add_argument('-ends', nargs=1, type=chktype, default=[{}], \
         metavar='list of end atoms', help=string)
 
     chktype = IsList("wrong atom names range (check: %s)",itemtype=str,positive=True)
     string='''
     the atom types to be exluded system wide from the close contact analysis. A
-    comma seperated list with the type names should be provided e.g. "HA,HW". '''
+    comma seperated list with the atoms' type name should be provided e.g. "HA,HW". '''
     parser.add_argument('-excluded', nargs=1, type=chktype, default=[[]], \
         metavar='types range', help=string)
 
     chktype = IsListOfList("wrong specific format (check: %s)")
     string = '''
     the names of the atoms to be considered in the close contact analysis. A comma
-    separated list for each molecular type in the "-molnames" argument should be
-    provided. If a wildcard "*" is given for a residue then all the atoms of the
-    residue will be considered. For example, if the molecules A,B are given in
-    "-molnames" argument then this argument should look like "C1,C2,C3:O1" meaning
-    that atoms C1,C2,C3 should be considered for residue A and atom O1 for residue B. '''
+    separated list for each molecular type in the `-molnames` argument should be 
+    provided. If a wildcard "*" is given for a residue then all the atoms of the 
+    molecular species will be considered. For example, if A, and B are the clusters' 
+    constituent molecular types, the argument could look like "*:C1,C2,C3" specifying
+    that all the atoms of species A and only the atoms C1,C2,C3 of species B should 
+    be considered in the analysis. '''
     parser.add_argument('-specific', nargs=1, type=chktype, default=[[]], \
                     metavar='atoms for each molname', help=string)
 
     string = '''
-    the file with the radii of the atoms. It can be element or type based.
-    The first line of the file contains the keywords:
-    [element|type] [r|d].
-    The first, is the atom type identifier and the second if the radius (r)
-    or the diameter (d) is given for each type. The rest of the lines contain
-    pairs of values (type, rarious). The type could be either a number (type id)
-    or a string (type name). '''
+    the file with the radii of the atoms. It can be element or type based. 
+    The first line of the file contains the keywords "(element|type) (r|d)"; 
+    the first, specifies the atom type identifier and the second if the 
+    radius (r) or the diameter (d) is given for each type. The rest of the 
+    lines contain the (type, radius) pairs. The type could be either a 
+    number (type id) or a string (type name). '''
     parser.add_argument('-radii', nargs=1, type=argparse.FileType('r'),
         metavar='file with atoms\' type/elemet radii', help=string)
 
     string = '''
     the histograms of the number of neighbor pairs to be calculated. Each pair
-    consists of a groups of atoms and a list of molecules. The distance is the
-    distance between their centers of masses. A list of pairs separated with "@"
-    should be provided. Each pair contains the information for a histogram
+    consists of a groups of atoms and a list of species. A list of pairs separated 
+    with "@" should be provided. Each pair contains the information for a histogram
     in the following format:
         GROUPNAME:MOLNAME:ATOMSLIST:RESIDUESLIST
     with:
@@ -751,19 +753,19 @@ def command():
                     should belong to the same molecule)
         ATOMSLIST:  a comma-separated list of atoms define the group. The
                     atoms should belong to the same residue.
-        MOLECULSLIST: a comma-separated list with molecule types. One histogram
+        SPECIESLIST: a comma-separated list with molecule types. One histogram
                       will be calculated for each molecular type in the list
-    The histogram is written in the file GROUPNAME_RESNAME_neighbors.dat in the
+    The histogram is written in the file GROUPNAME_SPECIES_neighbors.dat in the
     simulation directory.
 
-    For example, the line:
+    For example, the argument:
         C1:CTAC:C1,H31,H32,H33:CTAC,CL,SOL@C2:CTAC:C2,H1,H2:CTAC,CL,SOL
-    defines two groups and the following pairs: (C1,H31,H32,H33)-CTAC,
+    defines two groups and the ollowing pairs (C1,H31,H32,H33)-CTAC,
     (C1 H31 H32 H33)-CL, (C1 H31 H32 H33)-SOL, (C2,H1,H2)-CTAC,
-     (C2,H1,H2)-CL, (C2,H1,H2)-SOL. The following files are wirtten in
-     the simulation directory: C1_CTAC_neighbors.dat, C1_CL_neighbors.dat,
-     C1_SOL_neighbors.dat, C2_CTAC_neighbors.dat, C2_CL_neighbors.dat,
-     C2_SOL_neighbors.dat. '''
+    (C2,H1,H2)-CL, and (C2,H1,H2)-SOL; the files C1_CTAC_neighbors.dat, 
+    C1_CL_neighbors.dat, C1_SOL_neighbors.dat, C2_CTAC_neighbors.dat, 
+    C2_CL_neighbors.dat, and C2_SOL_neighbors.dat will be wirtten in
+    the simulation directory, respectively. '''
     def argshist(string):
         ''' check the -hist option argument. '''
         lines = string.split("@")
@@ -792,18 +794,19 @@ def command():
     string = '''
     for the molecular types participating in a cluster, calculate the histograms of
     their total number of neighbors with the other molecular types in the system. For
-    example, consider the system consisting of molecules with types A, B and C. If the
-    clusters consist of types A and B, the script will calculate the histograms of the
-    total number of neighbors for the pairs A-A, A-B, A-C, B-A, B-B and B-C. For each
-    pair, the histogram is written in file A_B_neighbors.dat in the simulation directory. '''
+    example, consider a system consisting of molecular types A, B, and C. If the 
+    constituent species of the clusters are A and B, the script will calculate the 
+    histograms of the total number of neighbors pairs for A-A, A-B, A-C, B-A, B-B 
+    and B-C pairs. For each pair, the histogram will be written in A_B_neighbors.dat
+    file in the simulation directory. '''
     parser.add_argument('--nbhist', dest='nbhist', default=False, action='store_true', help=string)
 
     chktype = IsListOfList("wrong argument (check: %s)", itemtype=str, llen=2)
     string = '''
-    for a cluster, calculates the conditional probability of having n neighbor
-    residues of type A given that m neighbor residues of type B exist. The
-    argument is a list of pairs separated with ":" e.g. A,B:C,D. For each pair,
-    the conditional probability is written in the file A_B_TOTAL2D_neighbors.dat
+    for a cluster, calculates the conditional probability of having n neighbor 
+    species of type A-A given that m neighbor species of type B-B exist. The 
+    argument is a column separated list of pairs, e.g., A,B:C,D. For each pair, 
+    the conditional probability is written in the file A_B_TOTAL2D_neighbors.dat 
     in the simulation directory.
     '''
     parser.add_argument('-hist2d', nargs=1, type=chktype, default=[[]],
@@ -813,9 +816,9 @@ def command():
     string = '''
     for a cluster, calculate the conditional probability of having n neighbor residues
     of type C given that m neighbor residues of type B exist for all the possible values
-    of the number of neighbor residues of type A. The argument is a list of triplets
-    separated with ":" e.g. A,B,C:D,E,F. For each triplet, the conditional probability
-    is written in the file An_B_C_TOTAL3D_neighbors.dat in the simulation directory.
+    of the number of neighbor residues of type A. The argument is a column separated list
+    of triplet, e.g., A,B,C:D,E,F. For each triplet, the conditional probability is 
+    written in the file An_B_C_TOTAL3D_neighbors.dat in the simulation directory.
     '''
     parser.add_argument('-hist3d', nargs=1, type=chktype, default=[[]],
         metavar='list of triplets of residues', help=string)
@@ -825,20 +828,20 @@ def command():
     calculate the number density profile of the given groups of atoms. The distance
     considered for the profiles depends on the position of the atoms in the micelle
     and eventually from the shape of the cluster. If the atom is located in a spherical
-    micelle or in the spherical caps of an elongated/waged micelle, the distance from
+    micelle or in the spherical caps of an elongated/rod-like micelle, the distance from
     the center of the sphere is used. If the atoms belong to a cylindrical column or
     in the body of an elongated micelle, the length of its projection on the column
     axis is taken. The argument is a set of lists of comma-separated atoms name lists
     separated with "@". For example the argument "HEAD:CTAC:C17,N,C18,C19@WAT:SOL:OW"
-    defines two named lists (groups); HEAD cosist of atoms C17,N,C18, and C19 that belong
+    defines two named lists (groups); HEAD consists of atoms C17,N,C18, and C19 that belong
     to CTAC molecules and WAT consists of OW atoms belong to SOL molecules. Atoms
     specified with the "-excluded" argument will be excluded also here. For each list,
     the density profile will be written in the file profile_{listname}_{shape}.prof in
-    the simulation directory where list name is the name of the group of atom and shape
+    the simulation directory where list name is the name of the group of atoms and shape
     the shape of the cluster. Three types of clusters are considered:  spherical (s),
     cylindrical infinite periodic (c), and wedged/elongated (e). Therefore file HEAD_s.prof
     corresponds to the density profiles of atoms C17,N,C18, and C19 belong to CTAC molecules,
-    with the respect to the center of mass for spherical clusters.
+    with  respect to the center of mass for spherical clusters.
     '''
     parser.add_argument('-profiles', nargs=1, type=chktype, default=[[]],
         metavar='list of atom names', help=string)
@@ -858,12 +861,12 @@ def command():
       qlong : global order
       qlocal : local order
     The bin length of a poperty of a molecular species is named by apending "_{SPECIES SNAME}"
-    at its name. For example with the "-phist c:0.01,c_CTAC:0.05" option the bin length of the
+    at its name. For example, with argument "0.01,c_CTAC:0.05", the bin length of the
     acylindricity distribution of the clusters is set to 0.01 and for the CTAC molecules to 0.05.
-    The special keywords 'all', 'clusters', and 'species' can be given instead of on the
-    aforementioned properties. In this case, all the available properties, the properties
-    of the traced clusters, or the properties of the molecular species will be calculated
-    and the corresponding histograms will be calculated.
+    The special keywords 'all', 'clusters', and 'species' can be given instead of a property's name.
+    In this case, all the available properties, the properties of the traced clusters, or the 
+    properties of the molecular species will be calculated, respectively, and the corresponding 
+    histograms will be calculated.
     '''
     parser.add_argument('-phist', nargs=1, type=chktype, default=[{}], \
         metavar='list of bin lengths', help=string)
