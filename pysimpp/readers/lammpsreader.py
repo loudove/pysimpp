@@ -445,7 +445,7 @@ class LammpsReader(abcReader):
     _var_names = ("atoms", "bonds", "angles", "dihedrals", "impropers",
                   "atom types", "bond types", "angle types", "dihedral types", "improper types")
     # known blocks nameσ in data file
-    _blk_names = ("Masses", "Atoms", "Bonds", "Angles", "Dihedrals",
+    _blk_names = ("Masses", "Atoms", "Velocities", "Bonds", "Angles", "Dihedrals", "Impropers",
                 "Pair Coeffs", "Bond Coeffs", "Angle Coeffs", "Dihedral Coeffs", "Improper Coeffs")
     # "BondBond Coeffs", "BondAngle Coeffs", "MiddleBondTorsion Coeffs", "EndBondTorsion Coeffs" ,
     # "AngleTorsion Coeffs", "AngleAngleTorsion Coeffs", "BondBond13 Coeffs", "AngleAngle Coeffs" 
@@ -714,7 +714,7 @@ class LammpsReader(abcReader):
             raise LammpsReaderException(msg)
         nlines = len( blocks[  'Atoms'])
         if not natoms == nlines:
-            msg = "Check Atoms block in %s file (%d lins found instead of %d)."
+            msg = "Check Atoms block in %s file (%d lines found instead of %d)."
             msg = msg % ( self.datafile, nlines, natoms)
             raise LammpsReaderException(msg)
         _type = {}
@@ -1250,12 +1250,13 @@ class LammpsReader(abcReader):
                         found = True
                         break
                 if not found:
-                    if any(tuple(line.endswith(s) for s in ("xhi", "yhi", "zhi", "yz") )):
+                    _line = line.split("#")[0].strip() # remove comments
+                    if any(tuple(_line.endswith(s) for s in ("xhi", "yhi", "zhi", "yz") )):
                         blocks["box"].append(line)
-                    elif line in LammpsReader._blk_names:
-                        blk = blocks[line]
-                    elif " Coeffs" in line:
-                        blk = blocks[line]
+                    elif _line in LammpsReader._blk_names:
+                        blk = blocks[_line]
+                    elif " Coeffs" in _line:
+                        blk = blocks[_line]
                     else:
                         if not blk == None:
                             blk.append(line)
