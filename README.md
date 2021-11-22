@@ -56,4 +56,4 @@ To access detailed help on a specific topic use:
 
     pysimpp command -h
 
-A more detail description of the functionality for specific commands ([cluster](./doc/cluster.md)) can be found in [doc](./doc) folder.
+A more detail description of the [commands](./doc/README.md) for specific commands can be found in [doc](./doc) folder.
