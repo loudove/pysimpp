@@ -7,7 +7,7 @@ The calculation intensive parts of the scipts are based on python binds of fortr
 
 The infrastructure for accessing the trajectory data is mainly based on the MDAnalysis project. Numpy, networkx and pyvoro are also central modules used heavily in pysimpp scripts.
 
-The reader is essentially a wrapper of MDAnalysis.Universe with an API that is rather handy from classical materials modeling perspective. In the case of LAMMPS molecular dynamics simulator, a more elaborate parser is available. Therefore, in principle, pysimpp's scripts could process trajectories from the simulation engines supported by MDAnalysis either directly or after minor changes.
+The basic trajectory reader is essentially a wrapper of MDAnalysis.Universe with an API that is rather handy from classical materials modeling perspective. In the case of LAMMPS molecular dynamics simulator, a more elaborate parser is available. Therefore, in principle, pysimpp's scripts could process trajectories from the simulation engines supported by MDAnalysis either directly or after minor changes.
 
 Installation
 ------------
