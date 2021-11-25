@@ -801,13 +801,12 @@ class LammpsReader(abcReader):
                 for k, v in {'x':0,'y':1,'z':2}.items():
                     if k in names: np.copyto(r[:, v], data[k])
                 rw = fastwhole(r, molecule, bonds, box.a, box.b, box.c)            
-                data['xw'][:] = rw[:,0]
-                data['yw'][:] = rw[:,1]
-                data['zw'][:] = rw[:,2]
-
-        if self.do_unwrap:
+                data['x'][:] = rw[:,0]
+                data['y'][:] = rw[:,1]
+                data['z'][:] = rw[:,2]
+        elif self.do_unwrap:
             names = data.dtype.names
-            if 'x' in names and 'ix' in names and not 'xu' in names:
+            if 'x' in names and 'ix' in names:
                 r = np.zeros(data['x'].size,dtype=np.float32)
                 ip = np.zeros(data['ip'].size,dtype=np.int32)
                 for k, v in {'x':0,'y':1,'z':2}.items():
@@ -817,9 +816,9 @@ class LammpsReader(abcReader):
                 a, b, c = box.va, box.vb, box.vc
                 for _r, ( i, j, k) in zip( r, ip):
                     _r[:] += a * i + b * j + c * k                
-                data['xu'][:] = r[:,0]
-                data['yu'][:] = r[:,1]
-                data['zu'][:] = r[:,2]
+                data['x'][:] = r[:,0]
+                data['y'][:] = r[:,1]
+                data['z'][:] = r[:,2]
 
         return (step, box, data)
 

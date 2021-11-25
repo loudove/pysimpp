@@ -176,23 +176,23 @@ class MDAnalysisReader(abcReader):
                 data['id'][:] = atoms.ids
                 data['type'][:] = atoms.types
                 # data['el'][:] = map( lambda x: MDAnalysis.topology.core.guess_atom_element(x), atoms.names)
-                data['x'][:] = ts.positions[:,0]
-                data['y'][:] = ts.positions[:,1]
-                data['z'][:] = ts.positions[:,2]
 
                 if self.do_whole:
                     molecule = self.get_atom_molecule() - 1
                     bonds = self.get_bonds()
                     rw = fastwhole(ts.positions, molecule, bonds, box.a, box.b, box.c)            
-                    data['xw'][:] = rw[:,0]
-                    data['yw'][:] = rw[:,1]
-                    data['zw'][:] = rw[:,2]
-    
-                if self.do_unwrap:
+                    data['x'][:] = rw[:,0]
+                    data['y'][:] = rw[:,1]
+                    data['z'][:] = rw[:,2]
+                elif self.do_unwrap:
                     ru = self.u.atoms.unwrap(reference=None)
-                    data['xu'][:] = ru[:,0]
-                    data['yu'][:] = ru[:,1]
-                    data['zu'][:] = ru[:,2]
+                    data['x'][:] = ru[:,0]
+                    data['y'][:] = ru[:,1]
+                    data['z'][:] = ru[:,2]
+                else:
+                    data['x'][:] = ts.positions[:,0]
+                    data['y'][:] = ts.positions[:,1]
+                    data['z'][:] = ts.positions[:,2]
 
                 # the step of the trajectory frame (inline with LammpsReader)
                 _istepoffset = self.istepoffset
@@ -267,7 +267,7 @@ class MDAnalysisReader(abcReader):
     def get_bonds(self):
         ''' Retruns bonds' atoms indexes. '''
         try:
-            bonds = self.u.bonds.indexes
+            bonds = self.u.bonds.indices
         except:
             bonds = np.array((),dtype=np.int32)
         return bonds

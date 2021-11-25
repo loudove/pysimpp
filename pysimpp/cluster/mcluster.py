@@ -27,7 +27,6 @@ from .mclusterutils import MCluster # pylint: disable=import-error
 from .mclusterlog import ClPropertiesLog, ClMolecularLog, ClOrderLog, ClDetailsLog # pylint: disable=import-error
 
 # global flags
-_wholeused = True
 _debug = False
 _extend = True  # use the extended pyvoro version
 _runext = True  # run voro++ cmd
@@ -44,6 +43,7 @@ def clusters(filename,
              moleculesid=[],
              molnames=[],
              ends={},
+             whole=False,
              phist={},
              phist2d=[],
              specific=[],
@@ -196,6 +196,7 @@ def clusters(filename,
     # coordinates and conformation stuff
     rw = np.empty(shape=(natoms, 3),
                   dtype=np.float32)  # wraped coordinates
+    reader.set_whole(whole)
     periodic = [True, True, True]  # system periodicity
     steps = []  # loaded steps
     boxes = []  # loaded boxed
@@ -424,19 +425,18 @@ def clusters(filename,
                 _c.update_molecules(atom_molecule)
             _clusters = MCluster.defrag(_subclusters)
 
-            r = rw if _wholeused else reader.get_unwrapped()
             for i, _cl in enumerate(_clusters):
-                MCluster.udpate_coordinates(_cl, box, rw, r, atom_molecule,
+                MCluster.udpate_coordinates(_cl, box, rw, rw, atom_molecule,
                                            molecule_atoms)
                 if istep == 0:
                     MCluster.writendx( fndx, i, _cl, molecule_atoms)
                 if vis and step % visfreq == 0:
                     # if True:
-                    # MCluster.write(_cl, r, fmt='xyz',
+                    # MCluster.write(_cl, rw, fmt='xyz',
                     #     molecule_atoms=molecule_atoms, atom_element=atom_element,
                     #     fname="cluster%d_step%d.xyz"%(i,step), dirname=dirname)
                     MCluster.write(_cl,
-                                  r,
+                                  rw,
                                   fmt='gro',
                                   molecule_atoms=molecule_atoms,
                                   molecule_name=molecule_name,
@@ -450,10 +450,10 @@ def clusters(filename,
                 # _b: asphericity
                 # _c: acylindricity
                 # _sqk: relative shape anisotropy
-                MCluster.order(_cl, r, atom_mass, molecule_atoms, molecule_name, neighbors, mol_ends)
-                MCluster.shape(_cl, r, atom_mass, molecule_atoms)
+                MCluster.order(_cl, rw, atom_mass, molecule_atoms, molecule_name, neighbors, mol_ends)
+                MCluster.shape(_cl, rw, atom_mass, molecule_atoms)
                 if doprofiles:
-                    MCluster.profile(_cl, r, box, profileid, profilemap, bprofiles, b2dprofiles, hprofiles, h2dprofiles, vprofiles)
+                    MCluster.profile(_cl, rw, box, profileid, profilemap, bprofiles, b2dprofiles, hprofiles, h2dprofiles, vprofiles)
                 _size = len(_cl.molecules)
                 # if not _cl._infinit:
                 #     if _cl._shape == 's':
@@ -641,7 +641,7 @@ def command():
     import argparse
 
     # create an argument parser
-    parser = argparse.ArgumentParser( description=_short_description() )
+    parser = argparse.ArgumentParser( description=_short_description())
 
     # add arguments
     string = '''
@@ -651,13 +651,13 @@ def command():
     parser.add_argument('path', type=isfile, help=string)
 
     string = '''
-    start processing form timestep n [inclusive] (step based for lammps
-    and time based for gromacs). '''
+    start and processing form timestep n (inclusive). n is step based for lammps
+    and time based for gromacs. '''
     parser.add_argument('-start', nargs=1, type=int, metavar='n', \
         default=[-1], help=string)
 
     string = '''
-    stop processing at timestep n [inclusive] (step based for lammps and
+    stop processing at timestep n (inclusive). n is step based for lammps and
     time based for gromacs). '''
     parser.add_argument('-end', nargs=1, type=int, metavar='n', \
         default=[sys.maxsize], help=string)
@@ -674,28 +674,28 @@ def command():
     parser.add_argument('-vis', nargs=1, type=int, metavar='n', \
         default=[sys.maxsize], help=string)
 
-    # string = '''
-    # reconstruct the molecules making them whole again, before spatial reconstruction 
-    # of the clusters. Use this option if the coordinates of the input trajectory are 
-    # wrapped in to the simulation cell and you want to correctly visualize the clusters.    '''
-    # parser.add_argument('--whole', dest='whole', default=False, action='store_ture', \
-    #                    help=string)
+    string = '''
+    reconstruct the molecules making them whole again, before spatial reconstruction 
+    of the clusters. Use this option if the coordinates of the input trajectory are 
+    wrapped in to the simulation cell and you want to correctly visualize the clusters. '''
+    parser.add_argument('--whole', dest='whole', default=False, action='store_true', \
+                       help=string)
 
 
     group = parser.add_mutually_exclusive_group()
     chktype = IsList("wrong molecules indexs range (check: %s)",itemtype=int,positive=True)
     string = '''
-    molecules to be used. A comma seperated list with the ranges of molecules
+    indexes of clusters' constituent molecules. A comma separated list with the ranges of molecules
     ids e.g. "1,2,3" or "1:10,20,30:100" '''
     group.add_argument('-molecules', nargs=1, type=chktype, default=[[]], \
-        metavar='molid range', help=string)
+        metavar='<molecules\' index range>', help=string)
 
     chktype = IsList("wrong residue names range (check: %s)",itemtype=str,positive=True)
     string = '''
-    molecule types/names to be used. A comma seperated list with the names of
+    types/names of clusters' constituent species. A comma seperated list with the names of
     the molecules e.g. "Na,Cl" '''
     group.add_argument('-molnames', nargs=1, type=chktype, default=[[]], \
-        metavar='molnames range', help=string)
+        metavar='<species\' list>', help=string)
 
     chktype = IsListOfNamedList("wrong ends argument (check: %s)", itemtype=int,
         positive=True, llen=2)
@@ -706,26 +706,26 @@ def command():
     atoms (1, 16) and (3,25), respectively, the arguments could be "TIC:1,16@TOC:3,25".
      '''
     parser.add_argument('-ends', nargs=1, type=chktype, default=[{}], \
-        metavar='list of end atoms', help=string)
+        metavar='<list of end atoms per species>', help=string)
 
     chktype = IsList("wrong atom names range (check: %s)",itemtype=str,positive=True)
     string='''
-    the atom types to be exluded system wide from the close contact analysis. A
-    comma seperated list with the atoms' type name should be provided e.g. "HA,HW". '''
+    the atom types to be excluded system wide from the close contact analysis. A
+    comma separated list with the atoms' type name should be provided e.g. "HA,HW". '''
     parser.add_argument('-excluded', nargs=1, type=chktype, default=[[]], \
-        metavar='types range', help=string)
+        metavar='<types\' range>', help=string)
 
     chktype = IsListOfList("wrong specific format (check: %s)")
     string = '''
     the names of the atoms to be considered in the close contact analysis. A comma
-    separated list for each molecular type in the `-molnames` argument should be 
+    separated list for each molecular species in the `-molnames` argument should be 
     provided. If a wildcard "*" is given for a residue then all the atoms of the 
     molecular species will be considered. For example, if A, and B are the clusters' 
     constituent molecular types, the argument could look like "*:C1,C2,C3" specifying
     that all the atoms of species A and only the atoms C1,C2,C3 of species B should 
     be considered in the analysis. '''
     parser.add_argument('-specific', nargs=1, type=chktype, default=[[]], \
-                    metavar='atoms for each molname', help=string)
+                    metavar='<list of atoms per species>', help=string)
 
     string = '''
     the file with the radii of the atoms. It can be element or type based. 
@@ -735,7 +735,7 @@ def command():
     lines contain the (type, radius) pairs. The type could be either a 
     number (type id) or a string (type name). '''
     parser.add_argument('-radii', nargs=1, type=argparse.FileType('r'),
-        metavar='file with atoms\' type/elemet radii', help=string)
+        metavar='<file with atoms\' type/element radii>', help=string)
 
     string = '''
     the histograms of the number of neighbor pairs to be calculated. Each pair
@@ -749,18 +749,18 @@ def command():
                     should belong to the same molecule)
         ATOMSLIST:  a comma-separated list of atoms define the group. The
                     atoms should belong to the same residue.
-        SPECIESLIST: a comma-separated list with molecule types. One histogram
+        SPECIESLIST: a comma-separated list with molecule types. One histogram 
                       will be calculated for each molecular type in the list
     The histogram is written in the file GROUPNAME_SPECIES_neighbors.dat in the
     simulation directory.
 
     For example, the argument:
         C1:CTAC:C1,H31,H32,H33:CTAC,CL,SOL@C2:CTAC:C2,H1,H2:CTAC,CL,SOL
-    defines two groups and the ollowing pairs (C1,H31,H32,H33)-CTAC,
+    defines two groups and the allowing pairs (C1,H31,H32,H33)-CTAC,
     (C1 H31 H32 H33)-CL, (C1 H31 H32 H33)-SOL, (C2,H1,H2)-CTAC,
     (C2,H1,H2)-CL, and (C2,H1,H2)-SOL; the files C1_CTAC_neighbors.dat, 
     C1_CL_neighbors.dat, C1_SOL_neighbors.dat, C2_CTAC_neighbors.dat, 
-    C2_CL_neighbors.dat, and C2_SOL_neighbors.dat will be wirtten in
+    C2_CL_neighbors.dat, and C2_SOL_neighbors.dat will be written in
     the simulation directory, respectively. '''
     def argshist(string):
         ''' check the -hist option argument. '''
@@ -785,7 +785,7 @@ def command():
         return ret
 
     parser.add_argument('-hist', nargs=1, type=argshist, default=[{}],
-        metavar='list of neighbor group pairs', help=string)
+        metavar='<list of neighbor pairs\' groups>', help=string)
 
     string = '''
     for the molecular types participating in a cluster, calculate the histograms of
@@ -806,18 +806,18 @@ def command():
     in the simulation directory.
     '''
     parser.add_argument('-hist2d', nargs=1, type=chktype, default=[[]],
-        metavar='list of pairs of residues', help=string)
+        metavar='<list of species\' pairs>', help=string)
 
     chktype = IsListOfList("wrong argument (check: %s)", itemtype=str, llen=3)
     string = '''
-    for a cluster, calculate the conditional probability of having n neighbor residues
-    of type C given that m neighbor residues of type B exist for all the possible values
-    of the number of neighbor residues of type A. The argument is a column separated list
+    for a cluster, calculate the conditional probability of having n species residues
+    of type C given that m species residues of type B exist for all the possible values
+    of the number of neighbor species of type A. The argument is a column separated list
     of triplet, e.g., A,B,C:D,E,F. For each triplet, the conditional probability is 
     written in the file An_B_C_TOTAL3D_neighbors.dat in the simulation directory.
     '''
     parser.add_argument('-hist3d', nargs=1, type=chktype, default=[[]],
-        metavar='list of triplets of residues', help=string)
+        metavar='<list of species\' triplets>', help=string)
 
     chktype = IsListOfNamedList("wrong profiles argument (check: %s)", klen=3, itemtype=str)
     string = '''
@@ -840,24 +840,23 @@ def command():
     with  respect to the center of mass for spherical clusters.
     '''
     parser.add_argument('-profiles', nargs=1, type=chktype, default=[[]],
-        metavar='list of atom names', help=string)
+        metavar='<list of groups>', help=string)
 
     chktype = IsListOfNamedList("wrong phist argument (check: %s)", itemtype=float,
         positive=True, llen=1)
     string = '''
-    provide the properties for which their histograms will be calculated. The name of the property
-    together with the bin length for the histogram should be given. The following properties are
-    supported:
-      b : asphericity for both clusters and their constituent molecular species
-      c : acylindricity for both clusters and their constituent molecular species
-      sqk : anisotropy for both clusters and their constituent molecular species
-      sqrg : square radius of gyration for both clusters and their constituent molecular species
-      sqee : end-to-end distance for clusters' constituent molecular species
-      bbox : bounding box
-      qlong : global order
-      qlocal : local order
-    The bin length of a poperty of a molecular species is named by apending "_{SPECIES SNAME}"
-    at its name. For example, with argument "0.01,c_CTAC:0.05", the bin length of the
+    provide the properties' histograms to be calculated together with the length of their bin.
+    The following properties are supported:
+      1) b : asphericity for both clusters and their constituent molecular species,
+      2) c : acylindricity for both clusters and their constituent molecular species,
+      3) sqk : anisotropy for both clusters and their constituent molecular species,
+      4) sqrg : square radius of gyration for both clusters and their constituent molecular species,
+      5) sqee : end-to-end distance for clusters' constituent molecular species,
+      6) bbox : bounding box,
+      7) qlong : global order, and
+      8) qlocal : local order.
+    The property of a molecular species is named by appending "_{SPECIES SNAME}" at the property's name.
+    For example, with argument "0.01,c_CTAC:0.05", the bin length of the
     acylindricity distribution of the clusters is set to 0.01 and for the CTAC molecules to 0.05.
     The special keywords 'all', 'clusters', and 'species' can be given instead of a property's name.
     In this case, all the available properties, the properties of the traced clusters, or the 
@@ -865,17 +864,17 @@ def command():
     histograms will be calculated.
     '''
     parser.add_argument('-phist', nargs=1, type=chktype, default=[{}], \
-        metavar='list of bin lengths', help=string)
+        metavar='<list of porperties histograms>', help=string)
 
     chktype = IsList("wrong phist2d argument (check: %s)",itemtype=str,positive=True)
     string = '''
     provide the properties for which the conditional probability of having
-    a specific value given the size of the cluster, will be calculated.
+    a specific value, given the size of the cluster, will be calculated.
     '''
     parser.add_argument('-phist2d', nargs=1, type=chktype, default=[[]], \
-        metavar='list of properties', help=string)
+        metavar='<list of properties>', help=string)
 
-    parser.add_argument('-voropp', nargs=1, type=str, default=[""], metavar='voro++ executable', \
+    parser.add_argument('-voropp', nargs=1, type=str, default=[""], metavar='<voro++ executable>', \
         help='provide the voro++ executable to be used instead of pyvoro python module.')
 
     # parse the arguments
@@ -886,6 +885,7 @@ def command():
              start=args.start[0],
              end=args.end[0],
              every=args.every[0],
+             whole=args.whole,
              moleculesid=args.molecules[0],
              molnames=args.molnames[0],
              ends=args.ends[0],
