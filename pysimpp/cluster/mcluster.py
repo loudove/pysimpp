@@ -97,11 +97,6 @@ def clusters(filename,
 
     # set what to read
     attributes = 'id x y z type'
-    dmap = {0: ('x', 'ix'), 1: ('y', 'iy'), 2: ('z', 'iz')}
-    dmapinv = {'x': 0, 'y': 1, 'z': 2}
-    ndims = 3
-
-    print('>> count configurations in dump file(s) ...')
     reader.set_attributes(attributes)
 
     # set the molecule selection flag
@@ -199,13 +194,8 @@ def clusters(filename,
                 mol_ends[_res] = tuple(np.array(_ends)-1)
 
     # coordinates and conformation stuff
-    rw = np.empty(shape=(natoms, ndims),
+    rw = np.empty(shape=(natoms, 3),
                   dtype=np.float32)  # wraped coordinates
-    # if _wholeused:
-    #     pass
-    # else:
-    #     r = np.empty( shape=(natoms,ndims), dtype=np.float32)  # unwraped coordinates
-    #ip = np.empty( shape=(natoms,ndims), dtype=np.int32)   # periodic indexes
     periodic = [True, True, True]  # system periodicity
     steps = []  # loaded steps
     boxes = []  # loaded boxed
@@ -331,10 +321,8 @@ def clusters(filename,
 
             steps.append(step)
             boxes.append(box)
-            for k, v in dmap.items():
-                np.copyto(rw[:, k], data[v[0]])
-            #    np.copyto(ip[:, k] ,  data[v[1]])
-            #r[:,:] = fastunwrapv( rw, ip, box.va, box.vb, box.vc)
+            for k, v in {'x':0,'y':1,'z':2}.items():
+                np.copyto(rw[:, v], data[k])
 
             # get voronoi cells for each atom
             fields = run_voropp(rw,
