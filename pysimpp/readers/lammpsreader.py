@@ -15,6 +15,8 @@ import yaml
 
 from pysimpp.utils.simulationbox import SimulationBox
 import pysimpp.utils.statisticsutils as statutils
+from pysimpp.fastpost import fastwhole # pylint: disable=no-name-in-module
+
 from .reader import abcReader # pylint: disable=import-error
 
 _inform = True
@@ -788,7 +790,38 @@ class LammpsReader(abcReader):
                 int, Simulationbox, {}: the step, the simulation box and the
                     {attribute:data} dictionaly for the next frame.
         '''
-        return self.dumpshandler.read_next(skip)
+        step, box, data = self.dumpshandler.read_next(skip)
+
+        if self.do_whole:
+            names = data.dtype.names
+            if 'x' in names and not 'xw' in names:
+                molecule = self.get_atom_molecule() - 1
+                bonds = self.get_bonds()
+                r = np.zeros(data['x'].size,dtype=np.float32)
+                for k, v in {'x':0,'y':1,'z':2}.items():
+                    if k in names: np.copyto(r[:, v], data[k])
+                rw = fastwhole(r, molecule, bonds, box.a, box.b, box.c)            
+                data['xw'][:] = rw[:,0]
+                data['yw'][:] = rw[:,1]
+                data['zw'][:] = rw[:,2]
+
+        if self.do_unwrap:
+            names = data.dtype.names
+            if 'x' in names and 'ix' in names and not 'xu' in names:
+                r = np.zeros(data['x'].size,dtype=np.float32)
+                ip = np.zeros(data['ip'].size,dtype=np.int32)
+                for k, v in {'x':0,'y':1,'z':2}.items():
+                    if k in names: np.copyto(r[:, v], data[k])
+                for k, v in {'ix':0,'iy':1,'iz':2}.items():
+                    if k in names: np.copyto(ip[:, v], data[k])
+                a, b, c = box.va, box.vb, box.vc
+                for _r, ( i, j, k) in zip( r, ip):
+                    _r[:] += a * i + b * j + c * k                
+                data['xu'][:] = r[:,0]
+                data['yu'][:] = r[:,1]
+                data['zu'][:] = r[:,2]
+
+        return (step, box, data)
 
     def get_type_mass(self):
         ''' Retrun the {type:mass} dictionary retrieved from data file.
@@ -855,6 +888,14 @@ class LammpsReader(abcReader):
             msg = LammpsReader._yaml_required % (self.__class__.__name__,inspect.currentframe().f_code.co_name)
             raise LammpsReaderException( msg)
         return names
+
+    def get_bonds(self):
+        ''' Retruns bonds' atoms indexes. '''
+        try:
+            bonds = np.array( [ (v[2],v[3]) for k, v in sorted(self.data['Bonds'].items(), key=lambda item:item[0])])
+        except:
+            bonds = np.array((),dtype=np.int32)
+        return bonds
 
     def get_topology(self):
         ''' Return the system topology (see McReader) '''
@@ -1309,9 +1350,8 @@ class LammpsReader(abcReader):
             for line in lines:
                 f.write(line+"\n")
 
-
-    def _unwrap_frame(self, coords, images, box):
-        ''' Unwrap the give frame.
+    def unwrap_frame(self, coords, images, box):
+        ''' Unwrap the given frame.
             Args:
                 coords (np.array((natoms,3), dtype=float)): atom coordinates array.
                 images (np.array((natoms,3), dtype=int)): atom images array.

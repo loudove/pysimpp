@@ -43,6 +43,8 @@ class abcReader(metaclass=abc.ABCMeta):
         self.natoms = 0
         self.timestep = 0.0
         self.yaml = None
+        self.do_unwrap = False
+        self.do_whole = False
         self.error = ""
 
     @abc.abstractmethod
@@ -111,49 +113,57 @@ class abcReader(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def get_atom_molecule(self):
-        ''' Retruns atom molecules array retrieved from the topology file.
+        ''' Retruns atoms' molecules array retrieved from the topology file.
             Returns:
-                np.array(..., dtype=int): atom molecules array.
+                np.array(..., dtype=int): atoms' molecules array.
         '''
         pass
 
     @abc.abstractmethod
     def get_atom_mass(self):
-        ''' Retruns atom masses retrieved from the topology  file.
+        ''' Retruns atoms' masses retrieved from the topology  file.
             Returns:
-                np.array(..., dtype=float): atom masses array.
+                np.array(..., dtype=float): atoms' masses array.
         '''
         pass
 
     @abc.abstractmethod
     def get_atom_type(self):
-        ''' Retruns atom types retrieved from the topology  file.
+        ''' Retruns atoms' types retrieved from the topology  file.
             Returns:
-                np.array(..., dtype=str): atom types array.
+                np.array(..., dtype=str): atoms' types array.
         '''
         return self._get_yaml_atom_property('atomtype')
 
     @abc.abstractmethod
     def get_atom_name(self):
-        ''' Retruns atom names retrieved from the topology  file.
+        ''' Retruns atoms' names retrieved from the topology  file.
             Returns:
-                np.array(..., dtype=str): atom names array.
+                np.array(..., dtype=str): atoms' names array.
         '''
         return self._get_yaml_atom_property('atomname')
 
     @abc.abstractmethod
     def get_atom_element(self):
-        ''' Retruns atom elements retrieved from the topology  file.
+        ''' Retruns atoms' elements retrieved from the topology  file.
             Returns:
-                np.array(..., dtype=str): atom elements array.
+                np.array(..., dtype=str): atoms' elements array.
         '''
         return self._get_yaml_atom_property('atomelement')
 
     @abc.abstractmethod
     def get_atom_charge(self):
-        ''' Retruns atom charges retrieved from the topology  file.
+        ''' Retruns atoms' charges retrieved from the topology  file.
             Returns:
-                np.array(..., dtype=float): atom charges array.
+                np.array(..., dtype=float): atoms' charges array.
+        '''
+        pass
+
+    @abc.abstractmethod
+    def get_bonds(self):
+        ''' Retruns bonds' atoms indexes.
+            Returns:
+                np.array(..., dtype=int): bonds' atoms indexes (pair) array.
         '''
         pass
 
@@ -172,6 +182,24 @@ class abcReader(metaclass=abc.ABCMeta):
     # @abc.abstractmethod
     # def get_forcefield(self):
     #     pass
+
+    def set_unwrap(self, flag):
+        ''' Set reader's unwrap flag.
+            Args:
+                flag(bool): if true the data dict returned form the read_next_frame
+                    method reader will include the unwrapped coordinates of the frame
+                    in the keys 'xu', 'yu', and 'zu'.
+        '''
+        self.do_unwrap = flag
+
+    def set_whole(self, flag):
+        ''' Set reader's whole flag.
+            Args:
+                flag(bool): if true the data dict returned form the read_next_frame
+                    method reader will include the whole coordinates of the frame 
+                    in the keys 'xw', 'yw', and 'zw'.
+        '''
+        self.do_whole = flag
 
     @abc.abstractmethod
     def count_frames(self):

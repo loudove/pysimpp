@@ -11,6 +11,7 @@ import MDAnalysis
 
 from .reader import abcReader # pylint: disable=import-error
 from pysimpp.utils.simulationbox import SimulationBox
+from pysimpp.fastpost import fastwhole # pylint: disable=no-name-in-module
 
 _inform = True
 
@@ -179,6 +180,20 @@ class MDAnalysisReader(abcReader):
                 data['y'][:] = ts.positions[:,1]
                 data['z'][:] = ts.positions[:,2]
 
+                if self.do_whole:
+                    molecule = self.get_atom_molecule() - 1
+                    bonds = self.get_bonds()
+                    rw = fastwhole(ts.positions, molecule, bonds, box.a, box.b, box.c)            
+                    data['xw'][:] = rw[:,0]
+                    data['yw'][:] = rw[:,1]
+                    data['zw'][:] = rw[:,2]
+    
+                if self.do_unwrap:
+                    ru = self.u.atoms.unwrap(reference=None)
+                    data['xu'][:] = ru[:,0]
+                    data['yu'][:] = ru[:,1]
+                    data['zu'][:] = ru[:,2]
+
                 # the step of the trajectory frame (inline with LammpsReader)
                 _istepoffset = self.istepoffset
                 istep = ts.data['step'] + _istepoffset
@@ -248,6 +263,14 @@ class MDAnalysisReader(abcReader):
             names = self.u.atoms.moltypes[_where[1]]
         return names
         # return self.u.residues.resnames
+
+    def get_bonds(self):
+        ''' Retruns bonds' atoms indexes. '''
+        try:
+            bonds = self.u.bonds.indexes
+        except:
+            bonds = np.array((),dtype=np.int32)
+        return bonds
 
     def get_topology(self):
         ''' Return the system topology (see McReader) '''
