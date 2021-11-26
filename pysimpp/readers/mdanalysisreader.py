@@ -321,8 +321,8 @@ class MDAnalysisReader(abcReader):
         print("-"*20)
 
     def _next_frame(self):
-        ''' Return the next timestep of the trajectories handled form the reader. '''
-        ts = next(self._next_timestep)         # try to get the next timestep
+        ''' Return the next frame of the trajectorie(s) handled form the reader. '''
+        ts = next(self._next_timestep)         # try to get the next frame
         if ts == None:                         # on fail
             filename = next(self._next_file)   # chek if there is a next trj file
             if not filename == None:           # if yes the
@@ -345,7 +345,7 @@ class MDAnalysisReader(abcReader):
         return ts
 
     def __next_timestep(self):
-        ''' Return the next trajectory timestep from the current MDAnalysis univerce. '''
+        ''' Return the next trajectory timestep/frame from the current MDAnalysis univerce. '''
         for ts in self.u.trajectory:
             yield ts
         yield None
@@ -375,7 +375,10 @@ class MDAnalysisReader(abcReader):
                 MDAnalysisReaderException: if self.u fails to initialize. '''
         try:
             self.u = MDAnalysis.Universe( self.topofile, self.trajfile)
-            self.timestep = float( self.u.trajectory.dt) # time between successive dumps
+            delta = self.u.trajectory.dt # time between successive dumps
+            # time of the first and secod dump
+            t0, t1 = self.u.trajectory[0].data['step'], self.u.trajectory[1].data['step']
+            self.timestep = delta/(t1-t0)*1000.0 # timestep in ps
         except:
             self.u = None
             raise MDAnalysisReaderException('Problem initializing MDAnalysis universe.')

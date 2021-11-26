@@ -15,7 +15,7 @@ import yaml
 
 from pysimpp.utils.simulationbox import SimulationBox
 import pysimpp.utils.statisticsutils as statutils
-from pysimpp.fastpost import fastwhole # pylint: disable=no-name-in-module
+from pysimpp.fastpost import fastunwrapv, fastwhole # pylint: disable=no-name-in-module
 
 from .reader import abcReader # pylint: disable=import-error
 
@@ -54,12 +54,20 @@ class LammpsDumpsHandler():
         '''
         requested = set(
             attributes.split() if type(attributes) is str else attributes)
+        # try to inject periodic indexes as extra attributes  
+        extra = False
+        _poff = set(('ix','iy','iz'))
+        if not _poff.issubset(requested):
+            requested = requested.union(_poff)
+            extra = True
         for v in self.dumps.values():
             supported = requested.intersection(set(v.attributes))
             if len(supported) > 0:
                 self.toread[v] = supported
                 requested = requested.difference(supported)
-        self.canread = len(self.toread) > 0
+        if extra: # do not check for the extra attributes
+            requested = requested.difference(_poff)
+        self.canread = len(self.requested) > 0
         return self.canread
 
     def get_natoms(self):
@@ -813,12 +821,13 @@ class LammpsReader(abcReader):
                     if k in names: np.copyto(r[:, v], data[k])
                 for k, v in {'ix':0,'iy':1,'iz':2}.items():
                     if k in names: np.copyto(ip[:, v], data[k])
-                a, b, c = box.va, box.vb, box.vc
-                for _r, ( i, j, k) in zip( r, ip):
-                    _r[:] += a * i + b * j + c * k                
-                data['x'][:] = r[:,0]
-                data['y'][:] = r[:,1]
-                data['z'][:] = r[:,2]
+                ru = fastunwrapv(r, ip, box.va, box.vb, box.vc)
+                # a, b, c = box.va, box.vb, box.vc
+                # for _r, ( i, j, k) in zip( r, ip):
+                #     _r[:] += a * i + b * j + c * k                
+                data['x'][:] = ru[:,0]
+                data['y'][:] = ru[:,1]
+                data['z'][:] = ru[:,2]
 
         return (step, box, data)
 
@@ -1115,7 +1124,7 @@ class LammpsReader(abcReader):
             elif line.startswith( "run "): self.options['run'] = int( line.split()[1])
             elif line.startswith( "thermo "): self.options['thermo'] = int( line.split()[1])
 
-        self.timestep = self.options['timestep']
+        self.timestep = self.options['timestep'] / 1000.0 # in ps (MDAnalysis compatiblity)
 
         # check atom style
         if not self.options['atom_style'] in LammpsReader._supportedAtomStyles:

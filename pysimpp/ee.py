@@ -62,7 +62,7 @@ def __acf(t, data, fname):
         f.write( "%.3f %.6f\n" % (x1, x2))
     f.close()
 
-def endtoend(filename, end1, end2, start=-1, end=sys.maxsize, molids=(), camc=False):
+def endtoend(filename, end1, end2, start=-1, end=sys.maxsize, molids=(), unwrap=True, camc=False):
 
     # check the ends
     if not camc:
@@ -73,28 +73,16 @@ def endtoend(filename, end1, end2, start=-1, end=sys.maxsize, molids=(), camc=Fa
             return
 
     # create the reader. for the moment lammps, gromacs and camc (polybead) are supported.
-    islammps = False
-    isgmx    = False
     reader = pysimpp.readers.create(filename)
-    if camc:
-        attributes = 'id mol x y z'
-        _tcnv = 1.e-6  # milions of steps
-        _unwrap = True
-        islammps = True
-    elif filename[-4:] == ".log" or not filename[-4] == ".":
-        attributes = 'id x y z ix iy iz'
-        _unwrap = True
-        _tcnv = 1.e-6  # fs to ns
-        islammps=True
-    else:
-        attributes = 'id x y z type'
-        _unwrap = False
-        _tcnv = 1.e-3  # ps to ns
-        isgmx = True
 
     if not reader: 
         print("ERROR: it was not possible to parse the given file.")
         return
+
+    reader.set_unwrap( unwrap)
+    attributes = 'id x y z'
+    reader.set_attributes(attributes)
+
 
     print('>> reading data file ...')
     if not reader.read_topology():
@@ -116,13 +104,7 @@ def endtoend(filename, end1, end2, start=-1, end=sys.maxsize, molids=(), camc=Fa
     nselected = selected.size  # number of selected molecules
     hasselected = nselected > 0  # selected flag
 
-    print('>> count configurations in dump file(s) ...')
-    reader.set_attributes(attributes)
-
     r = np.zeros((natoms, 3), dtype=np.float64)  # wrapped
-    rw = np.zeros((natoms, 3), dtype=np.float64)  # unwrapped
-    rp = np.zeros((natoms, 3), dtype=np.float64)  # principle frame coordinates
-    ip = np.zeros((natoms, 3), dtype=np.int32)  # periodic indexes
     exclude = np.zeros((nmolecules), dtype=np.bool)  # all false
     cm = np.zeros((nmolecules, 3), dtype=np.float64)  # center of mass
     sqrg_ = np.zeros((nmolecules), dtype=np.float64)  # gyration tensors
@@ -159,23 +141,9 @@ def endtoend(filename, end1, end2, start=-1, end=sys.maxsize, molids=(), camc=Fa
                 e2 = np.array(e2_)[selected]
                 molecules = reader.get_atom_molecule() - 1
                 masses = reader.get_atom_mass()
-            if _unwrap:
-                rw[:, 0] = data['x']
-                rw[:, 1] = data['y']
-                rw[:, 2] = data['z']
-                if camc:
-                    r[:, :] = pefastunwrap(rw, natch, chat, box.va, box.vb, box.vc)
-                elif islammps:
-                    ip[:, 0] = data['ix']
-                    ip[:, 1] = data['iy']
-                    ip[:, 2] = data['iz']
-                    r[:, :] = fastunwrapv(rw, ip, box.va, box.vb, box.vc)
-                else:
-                    print("ERROR: wrong combination of input.")
-            else:
-                r[:, 0] = data['x']
-                r[:, 1] = data['y']
-                r[:, 2] = data['z']
+            r[:, 0] = data['x']
+            r[:, 1] = data['y']
+            r[:, 2] = data['z']
         else:
             break
 
@@ -188,13 +156,7 @@ def endtoend(filename, end1, end2, start=-1, end=sys.maxsize, molids=(), camc=Fa
     nconfs = len(steps)
 
     # create time array
-    if islammps:
-        dt = reader.timestep * _tcnv
-    else:
-        if len(steps) > 1:
-            dt = reader.timestep/(steps[1]-steps[0]) * _tcnv
-        else:
-            dt = 1
+    dt = reader.timeste / 1000.0 # form ps to ns
     time = np.array(steps, dtype=float) * dt
 
     # calculate the mean square end-to-end vector
@@ -316,6 +278,9 @@ The output files are (located at the simulation directory):
     parser.add_argument('-molecules', nargs=1, type=argmoleculestype, default=[[]],  metavar='range', \
                        help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
 
+    parser.add_argument('--unwrap', dest='unwrap', default=False, action='store_true', \
+                       help="unwrap the molecules.")
+
     # parser.add_argument('--camc', dest='camc', default=False, action='store_true', \
     #                    help="process connectivity monte carlo output")
 
@@ -327,6 +292,7 @@ The output files are (located at the simulation directory):
     print("start : ", args.start[0])
     print("end : ", args.end[0])
     print("molecules : %d" % len(args.molecules[0]))
+    # print("unwrap : %s \n" % "True" if args.camc else "False")
     # print("camc : %s \n" % "True" if args.camc else "False")
     if __debug:
         print(args.molecules[0])
@@ -337,7 +303,8 @@ The output files are (located at the simulation directory):
         args.end2[0],
         start=args.start[0],
         end=args.end[0],
-        molids=args.molecules[0])
+        molids=args.molecules[0],
+        unwrap=args.unwrap)
         # camc=args.camc)
 
 if __name__ == '__main__':
