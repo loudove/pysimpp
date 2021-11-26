@@ -1,15 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-__author__      = "Loukas Peristeras"
-__copyright__   = ""
-__credits__     = []
-__license__     = "GPL"
-__version__     = "0.0.2"
-__maintainer__  = "Loukas Peristeras"
-__email__       = "loukas.peristeras@gmail.com"
-__status__      = "Production"
-
 import os
 import sys
 import numpy as np
@@ -21,35 +12,34 @@ from pysimpp.fastpost import fastunwrapv, gyration, pefastunwrap
 
 __debug = False
 
-def shape(filename, start=-1, end=sys.maxsize, molids=(), camc=False):
+def _is_command(): return True
+
+def _short_description(): return 'Calculate gyration tensor and stuff.'
+
+def _command(): command()
+
+def shape(filename, 
+    start=-1, 
+    end=sys.maxsize, 
+    molids=(), 
+    unwrap=True,
+    camc=False):
 
     # create the reader. for the moment lammps, gromacs and camc (polybead)
     reader = pysimpp.readers.create(filename)
-    if camc:
-        attributes = 'id mol x y z'
-        _tcnv = 1.0
-        _unwrap = True
-        islammps = True
-    elif filename[-4:] == ".log" or not filename[-4] == ".":
-        attributes='id x y z ix iy iz'
-        _unwrap = True
-        islammps = True
-    else:
-        attributes='id x y z'
-        _unwrap = False
-        islammps = False
+    if not reader: 
+        print("ERROR: it was not possible to parse the given file.")
+        return
 
-    if not reader: sys.exit(0)
+    reader.set_unwrap( unwrap)
+    attributes = 'id mol x y z'
+    reader.set_attributes( attributes)
 
     print('>> reading data file ...')
     reader.read_topology()
 
     # get system  data
     natoms = reader.natoms
-    types = reader.get_atom_type()              # atom type array (number or string based)
-    # typemass = reader.get_type_mass()  # type mass
-    # masses = np.array(
-    #     [typemass[types[iat]] for iat in range(natoms)])  # atom mass array
     masses = reader.get_atom_mass()
     molecules = reader.get_atom_molecule() - 1  # atom molecule array (index @zero)
     nmolecules = molecules.max() + 1            # number of molecules
@@ -59,13 +49,8 @@ def shape(filename, start=-1, end=sys.maxsize, molids=(), camc=False):
     nselected = selected.size                   # number of selected molecules
     hasselected = nselected > 0                 # selected flag
 
-    print('>> count configurations in dump file(s) ...')
-    reader.set_attributes( attributes)
-
     r = np.zeros( (natoms, 3), dtype=np.float64)    # wrapped
-    rw = np.zeros( (natoms, 3), dtype=np.float64)   # unwrapped
     rp = np.zeros( (natoms, 3), dtype=np.float64)   # principle frame coordinates
-    ip = np.zeros( (natoms, 3), dtype=np.int32)     # periodic indexes
     exclude = np.zeros( (nmolecules), dtype=np.bool) # all false
     rg = np.zeros( (nmolecules,6), dtype=np.float64)        # gyration tensors
     eigval = np.zeros( (nmolecules,3), dtype=np.float64)    # gyration tensors eigenvalues
@@ -125,23 +110,9 @@ def shape(filename, start=-1, end=sys.maxsize, molids=(), camc=False):
                 selected = ()
                 atomselected = ()
 
-            if _unwrap:
-                rw[:,0] = data['x']
-                rw[:,1] = data['y']
-                rw[:,2] = data['z']
-                if camc:
-                    r[:, :] = pefastunwrap(rw, natch, chat, box.va, box.vb, box.vc)
-                elif islammps:
-                    ip[:, 0] = data['ix']
-                    ip[:, 1] = data['iy']
-                    ip[:, 2] = data['iz']
-                    r[:, :] = fastunwrapv(rw, ip, box.va, box.vb, box.vc)
-                else:
-                    print("ERROR: wrong combination of input.")
-            else:
-                r[:,0] = data['x']
-                r[:,1] = data['y']
-                r[:,2] = data['z']
+            r[:,0] = data['x']
+            r[:,1] = data['y']
+            r[:,2] = data['z']
         else:
             break
 
@@ -199,7 +170,7 @@ def shape(filename, start=-1, end=sys.maxsize, molids=(), camc=False):
     hist.normalize()
     hist.write(reader.dir+os.sep+"dprof.cube",format='cube')
 
-if __name__ == '__main__':
+def command():
 
     import argparse
 
@@ -241,6 +212,9 @@ The output files are (located at the simulation directory):
     parser.add_argument('-molecules', nargs=1, type=argmoleculestype, default=[[]],  metavar='range', \
                        help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
 
+    parser.add_argument('--unwrap', dest='unwrap', default=False, action='store_true', \
+                       help="unwrap the molecules.")
+
     # parser.add_argument('--camc', dest='camc', default=False, action='store_true', \
     #                    help="process connectivity monte carlo output.")
 
@@ -252,6 +226,7 @@ The output files are (located at the simulation directory):
     print("start : ", args.start[0])
     print("end : ", args.end[0])
     print("molecules : %d \n" % len(args.molecules[0]))
+    # print("unwrap : %s \n" % "True" if args.camc else "False")
     # print("camc : %s \n" % "True" if args.camc else "False")
 
     if __debug:
@@ -260,5 +235,9 @@ The output files are (located at the simulation directory):
     shape( args.path, 
         start=args.start[0], 
         end=args.end[0], 
-        molids=args.molecules[0],) 
+        molids=args.molecules[0],
+        unwrap=args.unwrap)
         # camc=args.camc)
+
+if __name__ == '__main__':
+    command()
