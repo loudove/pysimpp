@@ -67,7 +67,7 @@ class LammpsDumpsHandler():
                 requested = requested.difference(supported)
         if extra: # do not check for the extra attributes
             requested = requested.difference(_poff)
-        self.canread = len(self.requested) > 0
+        self.canread = len(requested) > 0
         return self.canread
 
     def get_natoms(self):
@@ -801,26 +801,31 @@ class LammpsReader(abcReader):
         step, box, data = self.dumpshandler.read_next(skip)
 
         if self.do_whole:
-            names = data.dtype.names
-            if 'x' in names and not 'xw' in names:
+            if 'x' in data and not 'xw' in data:
                 molecule = self.get_atom_molecule() - 1
                 bonds = self.get_bonds()
-                r = np.zeros(data['x'].size,dtype=np.float32)
+                r = np.zeros((data['x'].size,3),dtype=np.float32)
                 for k, v in {'x':0,'y':1,'z':2}.items():
-                    if k in names: np.copyto(r[:, v], data[k])
+                    if k in data: np.copyto(r[:, v], data[k])
                 rw = fastwhole(r, molecule, bonds, box.a, box.b, box.c)            
                 data['x'][:] = rw[:,0]
                 data['y'][:] = rw[:,1]
                 data['z'][:] = rw[:,2]
         elif self.do_unwrap:
-            names = data.dtype.names
-            if 'x' in names and 'ix' in names:
-                r = np.zeros(data['x'].size,dtype=np.float32)
-                ip = np.zeros(data['ip'].size,dtype=np.int32)
+            if 'xu' in data: # check if unwrapped coordinates exist already
+                ru = np.zeros((data['xu'].size,3),dtype=np.float32)
+                for k, v in {'xu':0,'yu':1,'zu':2}.items():
+                    if k in data: np.copyto(ru[:, v], data[k])
+                    data['x'][:] = ru[:,0]
+                    data['y'][:] = ru[:,1]
+                    data['z'][:] = ru[:,2]
+            elif 'x' in data and 'ix' in data:
+                r = np.zeros((data['x'].size,3),dtype=np.float32)
+                ip = np.zeros((data['ix'].size,3),dtype=np.int32)
                 for k, v in {'x':0,'y':1,'z':2}.items():
-                    if k in names: np.copyto(r[:, v], data[k])
+                    if k in data: np.copyto(r[:, v], data[k])
                 for k, v in {'ix':0,'iy':1,'iz':2}.items():
-                    if k in names: np.copyto(ip[:, v], data[k])
+                    if k in data: np.copyto(ip[:, v], data[k])
                 ru = fastunwrapv(r, ip, box.va, box.vb, box.vc)
                 # a, b, c = box.va, box.vb, box.vc
                 # for _r, ( i, j, k) in zip( r, ip):

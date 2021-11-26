@@ -62,7 +62,14 @@ def __acf(t, data, fname):
         f.write( "%.3f %.6f\n" % (x1, x2))
     f.close()
 
-def endtoend(filename, end1, end2, start=-1, end=sys.maxsize, molids=(), unwrap=True, camc=False):
+def endtoend(filename, 
+    end1, 
+    end2, 
+    start=-1, 
+    end=sys.maxsize, 
+    molids=(), 
+    unwrap=True, 
+    camc=False):
 
     # check the ends
     if not camc:
@@ -156,7 +163,7 @@ def endtoend(filename, end1, end2, start=-1, end=sys.maxsize, molids=(), unwrap=
     nconfs = len(steps)
 
     # create time array
-    dt = reader.timeste / 1000.0 # form ps to ns
+    dt = reader.timestep / 1000.0 # form ps to ns
     time = np.array(steps, dtype=float) * dt
 
     # calculate the mean square end-to-end vector
@@ -164,7 +171,7 @@ def endtoend(filename, end1, end2, start=-1, end=sys.maxsize, molids=(), unwrap=
     hree = Histogram.free(2.0, 0.0, addref=False)
     hmsqree = Histogram.free(100.0, 0.0, addref=False)
     hmree = Histogram.free(2.0, 0.0, addref=False)
-    # and the mean square radious of gyration
+    # and the mean square radius of gyration
     msqrg = []
     hsqrg = Histogram.free(20.0, 0.0, addref=False)
     hrg = Histogram.free(1.0, 0.0, addref=False)
@@ -278,8 +285,8 @@ The output files are (located at the simulation directory):
     parser.add_argument('-molecules', nargs=1, type=argmoleculestype, default=[[]],  metavar='range', \
                        help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
 
-    parser.add_argument('--unwrap', dest='unwrap', default=False, action='store_true', \
-                       help="unwrap the molecules.")
+    parser.add_argument('--no-unwrap', dest='unwrap', default=True, action='store_false', \
+                       help="do not unwrap molecules sine the provided trajectories provide unwrapped coordinates.")
 
     # parser.add_argument('--camc', dest='camc', default=False, action='store_true', \
     #                    help="process connectivity monte carlo output")
@@ -292,8 +299,8 @@ The output files are (located at the simulation directory):
     print("start : ", args.start[0])
     print("end : ", args.end[0])
     print("molecules : %d" % len(args.molecules[0]))
-    # print("unwrap : %s \n" % "True" if args.camc else "False")
-    # print("camc : %s \n" % "True" if args.camc else "False")
+    print("unwrap : %s \n" % ("True" if args.unwrap else "False"))
+    # print("camc : %s \n" % ("True" if args.camc else "False"))
     if __debug:
         print(args.molecules[0])
 

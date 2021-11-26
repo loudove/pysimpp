@@ -212,8 +212,8 @@ The output files are (located at the simulation directory):
     parser.add_argument('-molecules', nargs=1, type=argmoleculestype, default=[[]],  metavar='range', \
                        help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
 
-    parser.add_argument('--unwrap', dest='unwrap', default=False, action='store_true', \
-                       help="unwrap the molecules.")
+    parser.add_argument('--no-unwrap', dest='unwrap', default=True, action='store_false', \
+                       help="do not unwrap molecules sine the provided trajectories provide unwrapped coordinates.")
 
     # parser.add_argument('--camc', dest='camc', default=False, action='store_true', \
     #                    help="process connectivity monte carlo output.")
@@ -226,8 +226,8 @@ The output files are (located at the simulation directory):
     print("start : ", args.start[0])
     print("end : ", args.end[0])
     print("molecules : %d \n" % len(args.molecules[0]))
-    # print("unwrap : %s \n" % "True" if args.camc else "False")
-    # print("camc : %s \n" % "True" if args.camc else "False")
+    print("unwrap : %s \n" % ("True" if args.camc else "False"))
+    # print("camc : %s \n" % ("True" if args.camc else "False"))
 
     if __debug:
         print(args.molecules[0])
