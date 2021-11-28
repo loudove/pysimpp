@@ -37,9 +37,6 @@ def dihedrals(filename, ndxfile, start, end, every):
 
     # set what to read
     attributes = 'id x y z type'
-    dmap = {0: ('x', 'ix'), 1: ('y', 'iy'), 2: ('z', 'iz')}
-    dmapinv = {'x': 0, 'y': 1, 'z': 2}
-    ndims = 3
     reader.set_attributes(attributes)
 
     # read index file
@@ -70,7 +67,7 @@ def dihedrals(filename, ndxfile, start, end, every):
     dot = np.dot
     sqrt = np.sqrt
     nframes = 0
-    r = np.empty(shape=(natoms, ndims),
+    r = np.empty(shape=(natoms, 3),
                   dtype=np.float32)  # coordinates
     print('>> reading dump file(s) ...')
     while (True):
@@ -123,9 +120,9 @@ def command():
     parser.add_argument('path', default="."+os.sep,  \
                        help=string)
     parser.add_argument('-start', nargs=1, type=int, metavar='n', default=[-1], \
-                       help='start processing form configuration START [inclusive]')
+                       help='start processing form configuration n [inclusive]')
     parser.add_argument('-end', nargs=1, type=int, metavar='n', default=[sys.maxsize], \
-                       help='stop processing at configuration END [inclusive]')
+                       help='stop processing at configuration n [inclusive]')
     parser.add_argument('-every', nargs=1, type=int, metavar='n', default=[1], \
                        help='processing frequency (every n configurations)')
 
