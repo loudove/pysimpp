@@ -20,7 +20,7 @@ The cluster command can be used to trace and analyse the micelles formed in the 
 
 ### Elementary
 
-To perform the clusters analysis, two arguments required: a) the molecular species forming the clusters are provided in a comma separated list with the `-molname` argument, and b) the radii of the atoms in the system are provided in a file given in the `-radii` argument (see [here](#RadiiFormat) ).
+To perform the clusters analysis, two arguments required: a) the molecular species forming the clusters are provided in a comma separated list with the `-molname` argument, and b) the radii of the atoms in the system are provided in a file given in the `-radii` argument (see [here](#radii-file-format) ).
 
 Therefore, the simplest command to trace the clusters (micelles) formed by CTAC in the simulation cell, is:
 
@@ -38,7 +38,7 @@ The following files will be written in the simulation directory:
 
 - `properties.dat` : time evolution of the mean clusters' properties and their standard deviations. The properties' list includes, the aggregate number (*N*<sub>agg</sub>), the radius of gyration (*R*<sub>g</sub><sup>2</sup>), the asphericity (*b*), the acylindricity (*c*), and the relative shape anisotropy (&lt;*κ*<sup>2</sup>&gt;) of the cluster; the corresponding keys in the header of the files are `nagg`,  `sqrg`,  `b`,  `c` , and `sqk`, respectively.
 
-- `details.dat` : time evolution of the clusters' properties and their standard deviations per frame. For each frame, the properties of a cluster are listed in a separate line. The cluster's properties include, infinit periodic flag, number of molecules (*N*<sub>agg</sub>), linear density (*ρ*<sub>L</sub>), bounding box's edges, gyration tensor **S** and its eigenvalues, ordering tensor **Q** and its eigenvalues; the corresponding keys in the header of the files are `isinf`, `nagg`, `ldens`, `bboxl`, `srvec`/`srval`, and `qvec`/`qval`, respectively. The latter will be reported only if the `-ends` option is provided ( [see below](#EndsOpt) )
+- `details.dat` : time evolution of the clusters' properties and their standard deviations per frame. For each frame, the properties of a cluster are listed in a separate line. The cluster's properties include, infinit periodic flag, number of molecules (*N*<sub>agg</sub>), linear density (*ρ*<sub>L</sub>), bounding box's edges, gyration tensor **S** and its eigenvalues, ordering tensor **Q** and its eigenvalues; the corresponding keys in the header of the files are `isinf`, `nagg`, `ldens`, `bboxl`, `srvec`/`srval`, and `qvec`/`qval`, respectively. The latter will be reported only if the `-ends` option is provided ( [see below](#order) )
 
 ### Accelerate
 
@@ -60,7 +60,7 @@ Be aware that if none of the atoms in the system are excluded, in the `-specific
 
 otherwise the CTAC molecules will be considered to be isolated since the hydrogen atoms will be considered in the Voronoi tesselation and no close contacts will be traced between the carbon atoms considered.
 
-### Order {#EndsOpt}
+### Order
 
 If the end atoms of the molecular species defining the clusters' constituent moleculce are provided in the `-ends` option:
 
@@ -82,7 +82,7 @@ In this case the snapshots of the clusters will be save in gro file under the `c
 
 ## Etc
 
-### Radii file format {#RadiiFormat}
+### Radii file format
 
 The radii's file should look like:
 
