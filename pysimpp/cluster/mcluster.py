@@ -28,11 +28,7 @@ from .mclusterlog import ClPropertiesLog, ClMolecularLog, ClOrderLog, ClDetailsL
 
 # global flags
 _debug = False
-_extend = True  # use the extended pyvoro version
-_runext = True  # run voro++ cmd
-_typeattribute = 'type'
 _typebased = "types"
-_probecritical = 0.0
 _profilebin = 0.25
 
 def clusters(filename,
@@ -186,9 +182,10 @@ def clusters(filename,
         tracer = EvolutionTracker()
 
     # check ends (add missing residues)
-    # TODO finish "-ends" implementation (remove or generalize)
     mol_ends = {}
+    hasends = False
     if len(ends) > 0:
+        hasends = True
         for _res, _ends in ends.items():
             if _res in molnames:
                 mol_ends[_res] = tuple(np.array(_ends)-1)
@@ -249,9 +246,9 @@ def clusters(filename,
     # prepare on the fly log
     log = ClPropertiesLog(dirname)
     if True:
-        mollog = ClMolecularLog(dirname, mol_ends.keys())
-        orderlog = ClOrderLog(dirname)
-        detailslog = ClDetailsLog(dirname)
+        if hasends: mollog = ClMolecularLog(dirname, mol_ends.keys())
+        if hasends: orderlog = ClOrderLog(dirname)
+        detailslog = ClDetailsLog(dirname, hasends)
 
     # number of close contact neighbors histogram. one histogram is
     # calculated per residues pair encountered during the clusters
@@ -300,10 +297,14 @@ def clusters(filename,
     hasHistograms = not len(histograms) == 0
     ##################################
 
-    vis = not visfreq == sys.maxsize
+    vis = not visfreq == sys.maxsize and not visfreq < 1
+    if vis:
+        _dir = dirname + os.sep + "clusters"
+        if not os.path.exists(_dir): os.mkdir(_dir)    
 
     print('>> reading dump file(s) ...')
-    fndx = open(dirname + os.sep + "assemblies.ndx",'w')
+    if _debug:
+        fndx = open(dirname + os.sep + "assemblies.ndx",'w')
     istep=-1
     while (True):
         step, box, data = reader.read_next_frame()
@@ -335,10 +336,8 @@ def clusters(filename,
 
             # get the volume and the neighbors of the voronoi cells
             # and create connections list of connected molecule pairs (im,jm)
-            neighbors = [set() for i in range(nmolecules)
-                         ]  # molecular neighbors per molecule
-            atom_neighbors = [None for i in range(natoms)
-                              ]  # molecular neighbors per atom
+            neighbors = [set() for i in range(nmolecules) ]  # molecular neighbors per molecule
+            atom_neighbors = [None for i in range(natoms) ]  # molecular neighbors per atom
             _nodes = {}
             _connections = {}
             for i, field in enumerate(fields):
@@ -365,7 +364,6 @@ def clusters(filename,
                     Connection(n, _nodes[j], pbc=jp)
                     for j, jp in _connections[i]
                 ]
-
             # free some memory
             del _connections
             del fields
@@ -428,8 +426,11 @@ def clusters(filename,
             for i, _cl in enumerate(_clusters):
                 MCluster.udpate_coordinates(_cl, box, rw, rw, atom_molecule,
                                            molecule_atoms)
-                if istep == 0:
-                    MCluster.writendx( fndx, i, _cl, molecule_atoms)
+
+                if _debug:
+                    if istep == 0:
+                        MCluster.writendx( fndx, i, _cl, molecule_atoms)
+    
                 if vis and step % visfreq == 0:
                     # if True:
                     # MCluster.write(_cl, rw, fmt='xyz',
@@ -443,15 +444,15 @@ def clusters(filename,
                                   atom_name=atom_name,
                                   box=box,
                                   fname="cluster%d_step%d.gro" % (i, step),
-                                  dirname=dirname)
+                                  dirname=dirname+os.sep+"clusters")
                 # add calculated properties as cluster's attributes
                 _cl._infinit = _cl.is_infinit()
                 # _sqrg: square radious of gyration
                 # _b: asphericity
                 # _c: acylindricity
                 # _sqk: relative shape anisotropy
-                MCluster.order(_cl, rw, atom_mass, molecule_atoms, molecule_name, neighbors, mol_ends)
-                MCluster.shape(_cl, rw, atom_mass, molecule_atoms)
+                if hasends: MCluster.order( _cl, rw, atom_mass, molecule_atoms, molecule_name, neighbors, mol_ends)
+                MCluster.shape( _cl, rw, atom_mass, molecule_atoms)
                 if doprofiles:
                     MCluster.profile(_cl, rw, box, profileid, profilemap, bprofiles, b2dprofiles, hprofiles, h2dprofiles, vprofiles)
                 _size = len(_cl.molecules)
@@ -472,7 +473,7 @@ def clusters(filename,
                 #         hprop['ldl_ec'].add(_cl._ldensity[3])
 
                 for _p in _bin:
-                    hprop[_p].add(vars(_cl)[_p])
+                    hprop[_p].add( vars(_cl)[_p])
                 for _p in phist2d:
                     hprop2D[ _p].add( ( vars(_cl)[_p], _size))
 
@@ -484,8 +485,8 @@ def clusters(filename,
 
             # if any( [_cl._infinit for _cl in _clusters ]):
             if True:
-                mollog.log(step, _clusters, mol_ends)
-                orderlog.log(step, _clusters)
+                if hasends: mollog.log(step, _clusters, mol_ends)
+                if hasends: orderlog.log(step, _clusters)
                 detailslog.log(step, _clusters)
             log.log(step, _clusters)
 
@@ -528,7 +529,8 @@ def clusters(filename,
     #     for ic in clusterlen:
     #         a[ ic] += 1
 
-    fndx.close()
+    if _debug:
+        fndx.close()
 
     if len(steps) == 0:
         print("No frames processed")
@@ -565,7 +567,7 @@ def clusters(filename,
     #     f.write(" %8d  %s  %s\n" % ( j, " ".join( map(str, cnumbers[i,1:])), str(_total) ))
     # f.close()
     f = open(dirname + os.sep + 'cmolecules.dat', 'w')
-    f.write("# number of molecules in clusters (column) per frame (row)\n")
+    f.write("# number of molecules in the clusters, per frame (row) and per species (column) \n")
     f.write("# step    %s\n" % "   ".join(molnames))
     for _i, _res in zip(steps, clresnum):
         _s = "    ".join(map(str, [_res[_n] for _n in molnames]))
@@ -628,8 +630,8 @@ def clusters(filename,
         tracer.write(_dir)
 
     if True:
-        mollog.close()
-        orderlog.close()
+        if hasends: mollog.close()
+        if hasends: orderlog.close()
         detailslog.close()
     log.close()
 
@@ -681,8 +683,7 @@ def command():
     parser.add_argument('--whole', dest='whole', default=False, action='store_true', \
                        help=string)
 
-
-    group = parser.add_mutually_exclusive_group()
+    group = parser.add_mutually_exclusive_group(required=True)
     chktype = IsList("wrong molecules indexs range (check: %s)",itemtype=int,positive=True)
     string = '''
     indexes of clusters' constituent molecules. A comma separated list with the ranges of molecules
@@ -729,12 +730,12 @@ def command():
 
     string = '''
     the file with the radii of the atoms. It can be element or type based. 
-    The first line of the file contains the keywords "(element|type) (r|d)"; 
+    The first line of the file contains the keywords "(elements|types) (r|d)"; 
     the first, specifies the atom type identifier and the second if the 
     radius (r) or the diameter (d) is given for each type. The rest of the 
     lines contain the (type, radius) pairs. The type could be either a 
     number (type id) or a string (type name). '''
-    parser.add_argument('-radii', nargs=1, type=argparse.FileType('r'),
+    parser.add_argument('-radii', nargs=1, type=argparse.FileType('r'), required=True,
         metavar='<file with atoms\' type/element radii>', help=string)
 
     string = '''

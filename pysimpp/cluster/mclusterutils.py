@@ -492,7 +492,6 @@ class MCluster(Cluster):
         _exclude[:] = True
 
         ### LDP specific for CTAC and the connectivity used
-        # TODO finish "-ends" implementation (remove or generalize)
         if len(ends) >0 :
             cluster._msqee = {}
             cluster._msqrg = {}
@@ -648,13 +647,16 @@ class MCluster(Cluster):
 
         # retrieve the q matrix for the cluster and check if any
         # of the primary axes coinsides with a director
-        dirs = cluster.qvec.reshape(3,3)
-        _crit = 10.0*np.pi/180.0
-        # take the eigenvector corresponding to the larger eigenvalues
-        # (longest molecular axis)
-        _v = _eigvec[0][0:3]
-        _dir = np.where(np.arccos( dirs.dot( _v)) < _crit)[0]
-        cluster.qlong = cluster.qval[_dir[0]] if not _dir.size == 0 else 0.0
+        if 'qvec' in vars(cluster):
+            dirs = cluster.qvec.reshape(3,3)
+            _crit = 10.0*np.pi/180.0
+            # take the eigenvector corresponding to the larger eigenvalues
+            # (longest clusters extension axis)
+            _v = _eigvec[0][0:3]
+            _dir = np.where(np.arccos( dirs.dot( _v)) < _crit)[0]
+            cluster.qlong = cluster.qval[_dir[0]] if not _dir.size == 0 else 0.0
+        else:
+            cluster.qlong = _eigvec[0][0:3]
 
     @staticmethod
     def chkaxis(cluster, box, atol=0.11):

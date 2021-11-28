@@ -28,11 +28,14 @@ class ClPropertiesLog(ClusterLog):
         super(ClPropertiesLog, self).__init__(dirname, filename)
 
         header = "# " + " ".join(
-            ("step", "nclusters", "nmolecules", "std", "sqrg", "std", "b",
+            ("step", "nclusters", "nagg", "std", "sqrg", "std", "b",
              "std", "c", "std", "sqk", "std"))
         self.f.write("%s\n" % header)
 
     def log(self, step, clusters):
+        if len(clusters) == 0:
+            self.f.write("%d  0  %s" % (step, " 0.0"*10))
+            return
         # number of clusters
         nclusters = len(clusters)
         # number of molecules per cluster
@@ -73,7 +76,7 @@ class ClMolecularLog(ClusterLog):
             msqee =  np.array([cl._msqee[ _mtype] * cl.nspecies[ _mtype]
                             for cl in clusters]).sum() / nmol if "_msqee" in vars(clusters[0]) else 0.0
             # mean molecular square radious of gyration of the molecules in the clusters
-            msqrg = np.array([cl._msqrg[ _mtype] * cl.nspecies[ _mtype] 
+            msqrg = np.array([cl._msqrg[ _mtype] * cl.nspecies[ _mtype]
                             for cl in clusters]).sum() / nmol if "_msqrg" in vars(clusters[0]) else 0.0
             # mean molecular asphericity of the molecules in the clusters
             mb = np.array([cl._mb[ _mtype] * cl.nspecies[ _mtype]
@@ -93,13 +96,16 @@ class ClOrderLog(ClusterLog):
     def __init__(self, dirname, filename="order.dat"):
         super(ClOrderLog, self).__init__(dirname, filename)
         header = "# " + " ".join(
-            ("step", "qlocal", "std", "qlong", "std", "order[1]",
-             "director[1][1]", "director[1][2]", "director[1][3]", "order[2]",
-             "director[2][1]", "director[2][2]", "director[2][3]", "order[3]",
-             "director[3][1]", "director[3][2]", "director[3][3]"))
+            ("step", "qlocal", "std", "qlong", "std", "dirval[0]",
+             "dirvec[0][0]", "dirvec[0][1]", "dirvec[0][2]", "dirval[1]",
+             "dirvec[1][0]", "dirvec[1][1]", "dirvec[1][2]", "dirval[2]",
+             "dirvec[2][0]", "dirvec[2][1]", "dirvec[2][2]"))
         self.f.write("%s\n" % header)
 
     def log(self, step, clusters):
+        if len(clusters) == 0:
+            self.f.write("%d %s" % (step, " 0.0"*16))
+            return
         # molecular local order paramters
         qlocal = np.array([cl.qlocal for cl in clusters])
         # order parameters
@@ -117,14 +123,18 @@ class ClOrderLog(ClusterLog):
 
 
 class ClDetailsLog(ClusterLog):
-    def __init__(self, dirname, filename="details.dat"):
+
+    def __init__(self, dirname, hasends, filename="details.dat"):
         super(ClDetailsLog, self).__init__(dirname, filename)
         header = "# " + " ".join(
-            ("step", "id", "isinf", "nmols", "ldens", "ldens_std", "ldens_n", "ldens_L", "grval[1]",
-             "grval[2]", "grval[3]", "bboxl[1]", "bbox[2]", "bbox[3]",
-             "order[1]", "order[2]", "order[3]", "grvec[0][0]", "grvec[0][1]",
-             "grvec[0][2]", "grvec[1][0]", "grvec[1][1]", "grvec[1][2]",
-             "grvec[2][0]", "grvec[2][1]", "grvec[2][2]", "qvec[0][0]",
+            ("step", "id", "isinf", "nagg", "ldens", "ldens_std", "ldens_n",
+             "ldens_L", "bboxl[0]", "bbox[1]", "bbox[2]", "sval[0]", "sval[1]",
+             "sval[2]", "svec[0][0]", "svec[0][1]", "svec[0][2]", "svec[1][0]",
+             "svec[1][1]", "svec[1][2]", "svec[2][0]", "svec[2][1]",
+             "svec[2][2]"))
+        self.printq = hasends
+        if hasends:
+            header += " ".join(("qval[0]", "qval[1]", "qval[2]", "qvec[0][0]",
              "qvec[0][1]", "qvec[0][2]", "qvec[1][0]", "qvec[1][1]",
              "qvec[1][2]", "qvec[2][0]", "qvec[2][1]", "qvec[2][2]"))
         self.f.write("%s\n" % header)
@@ -136,14 +146,17 @@ class ClDetailsLog(ClusterLog):
             bbox = cl.bbox
             grval = cl.rgval
             grvec = cl.rgvec
-            qval = cl.qval
-            qvec = cl.qvec
             inf = 1 if cl._infinit else 0
-            self.f.write(
-                "%d %d %d %d %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n"
+            line = "%d %d %d %d %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f" \
                 % (step, icl, inf, nmols, cl._ldensity[0], cl._ldensity[1], cl._ldensity[2], cl._ldensity[3],
-                   grval[0], grval[1], grval[2], bbox[0], bbox[1], bbox[2],
-                   qval[0], qval[1], qval[2], grvec[0], grvec[1], grvec[2],
-                   grvec[3], grvec[4], grvec[5], grvec[6], grvec[7], grvec[8],
-                   qvec[0], qvec[1], qvec[2], qvec[3], qvec[4], qvec[5],
-                   qvec[6], qvec[7], qvec[8]))
+                   bbox[0], bbox[1], bbox[2],
+                   grval[0], grval[1], grval[2], grvec[0], grvec[1], grvec[2],
+                   grvec[3], grvec[4], grvec[5], grvec[6], grvec[7], grvec[8])
+
+            if self.printq:
+                qval = cl.qval
+                qvec = cl.qvec
+                line += " %f %f %f %f %f %f %f %f %f %f %f %f" \
+                % (qval[0], qval[1], qval[2], qvec[0], qvec[1], qvec[2],
+                   qvec[3], qvec[4], qvec[5], qvec[6], qvec[7], qvec[8])
+            self.f.write(line+"\n")
