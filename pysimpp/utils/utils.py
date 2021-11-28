@@ -359,7 +359,7 @@ def chk_filename( filename):
 
 def parse_radii( finfo):
     ''' Read the radii file (finfo). Returns a dict:
-            { ["element"|"type"] : [{[element|type]:[d/r]} }
+            { ["elements"|"types"] : [{[element|type]:[d/r]} }
         where the key specifies if the radii are element
         or type based and the value is a dictionary where
         the element or type (depending on the key) maps to
@@ -382,7 +382,7 @@ def parse_radii( finfo):
     c = int(tokens[2])
     # now parse the data
     for line in lines[1:]:
-        # skip comment and empy lines
+        # skip comment and empty lines
         if line.startswith("!") or len(line) == 0: continue
         tokens = line.split()
         if len(tokens) > 1:
@@ -391,7 +391,7 @@ def parse_radii( finfo):
 
 def read_ndx(f):
     ''' Read gromacs index file and return a dict where the keys are the group names and the
-        values are the group indexe shaped as 1d np.array. '''
+        values are the group index shaped as 1d np.array. '''
     lines = f.readlines()
     _d=defaultdict(str)
     for line in lines:
