@@ -16,13 +16,13 @@ Assume that you want to post process a molecular dynamics (MD) trajectory of sur
 |:----------------------------|
 | **[Fig. 1](./figures/ctac.jpg)**: The molecular model for CTAC. The atomic units of carbon, nitrogen, and hydrogens are colored cyan, blue, and white, respectively. |
 
-The cluster command can be used to trace and analyse the micelles formed in the simulation cell. There is no need to run the pysimpp form the simulation directory. You just have to use the path (absolute or relative) for the files provided in the arguments. For simplicity, in the following is assumed that the script runs from the simulation directory where all the required files reside. The output files are always written in the directory where the trajectory file resides.
+The cluster command can be used to trace and analyse the micelles formed in the simulation cell. There is no need to run the pysimpp form the simulation directory. You just have to use the path (absolute or relative) for the files provided in the arguments. For simplicity, in the following is assumed that the script runs from the simulation directory where all the required files reside. The output files/folder are always written in the simulation directory where the trajectory and topology files resides.
 
 ### Elementary
 
-To perform the clusters analysis, two arguments required: a) the molecular species forming the clusters are provided in a comma separated list with the `-molname` argument, and b) the radii of the atoms in the system are provided in a file given in the `-radii` argument (see [here](#radii-file-format) ).
+To perform the analysis, two arguments are required, namely the molecular species forming the clusters and the radii of the atomic units in the system.  The constituent species' names are provided as a comma separated list to the `-molname` argument, and the radii of the atoms are given in a file through the `-radii` argument (see [here](#radii-file-format) ).
 
-Therefore, the simplest command to trace the clusters (micelles) formed by CTAC in the simulation cell, is:
+Therefore, the simplest command to trace the micelles formed by CTAC in the simulation cell, is:
 
     pysimpp cluster -molname CTAC -radii radii.txt ./npt.xtc
 
@@ -36,53 +36,53 @@ The following files will be written in the simulation directory:
 
 - `hclsize.dat` : histogram of the size of clusters, measured as the number of constituent molecules.
 
-- `properties.dat` : time evolution of the mean clusters' properties and their standard deviations. The properties' list includes, the aggregate number (*N*<sub>agg</sub>), the radius of gyration (*R*<sub>g</sub><sup>2</sup>), the asphericity (*b*), the acylindricity (*c*), and the relative shape anisotropy (&lt;*κ*<sup>2</sup>&gt;) of the cluster; the corresponding keys in the header of the files are `nagg`,  `sqrg`,  `b`,  `c` , and `sqk`, respectively.
+- `properties.dat` : time evolution of the mean clusters' properties and their standard deviations. The properties' list includes, the aggregate number (*N*<sub>agg</sub>), the radius of gyration (*R*<sub>g</sub><sup>2</sup>), the asphericity (*b*), the acylindricity (*c*), and the relative shape anisotropy (&lt;*κ*<sup>2</sup>&gt;) of the clusters; the corresponding keys in the header of the file, indicative of the coloumn content, are `nagg`,  `sqrg`,  `b`,  `c` , and `sqk`, respectively.
 
-- `details.dat` : time evolution of the clusters' properties and their standard deviations per frame. For each frame, the properties of a cluster are listed in a separate line. The cluster's properties include, infinit periodic flag, number of molecules (*N*<sub>agg</sub>), linear density (*ρ*<sub>L</sub>), bounding box's edges, gyration tensor **S** and its eigenvalues, ordering tensor **Q** and its eigenvalues; the corresponding keys in the header of the files are `isinf`, `nagg`, `ldens`, `bboxl`, `srvec`/`srval`, and `qvec`/`qval`, respectively. The latter will be reported only if the `-ends` option is provided ( [see below](#order) )
+- `details.dat` : time evolution of the clusters' properties and their standard deviations per frame. For each frame, the properties of a cluster are listed in a separate line. The cluster's properties include, infinit periodic flag, number of molecules (*N*<sub>agg</sub>), linear density (*ρ*<sub>L</sub>), bounding box's edges, gyration tensor **S** and its eigenvalues, ordering tensor **Q** and its eigenvalues; the corresponding keys in the header of the file, indicative of the coloumn content, are `isinf`, `nagg`, `ldens`, `bboxl`, `srvec`/`srval`, and `qvec`/`qval`, respectively. The latter will be reported only if the `-ends` option is provided ( [see below](#order) )
 
 ### Accelerate
 
-If specific atoms are not important for tracing the close contacts between clusters' molecules, they can be excluded from the Voronoi tesselation reducing the computational load significantly. In our example, the hydrogen atoms can be safely excluded passing to the `-excluded` argument a comma separated list with their types:
+Atoms that are not necessary for tracing the close contacts between clusters' forming molecules, can be excluded from the Voronoi tesselation reducing the computational load significantly. In our example, the hydrogen atoms can be safely excluded by passing a comma separated list with their types to the `-excluded` argument:
 
     pysimpp cluster -molname CTAC -radii radii.txt -excluded HGA2,HGP5,HGA3,HT ./npt.xtc
 
 ### Refine
 
-In several occasions, it make sense to use only a part of the constituent molecules to trace their assemblies. In our example, we can a part of the aliphatic chain near its free end, by providing to the `-specific` a comma separated lists of their name:
+On several occasions, it is convenient to use only a part of the constituent species' molecules to trace their assemblies. In our example, we can use the atoms of the aliphatic chain near its free end by providing a comma separated list of their names to the `-specific` option:
 
     pysimpp cluster -molname CTAC -radii radii.txt -specific C1,C2,C3,C4,C5 -excluded HGA2,HGP5,HGA3,HT ./npt.xtc
 
-This fragments are usually traced in the skeleton of the micelles. In this way, difficulties related to isolated molecules that are largely exposed in water are avoided. These unimers are “floating” between two different assemblies and drive the algorithm to identify them as one.
+These fragments usually form the core part of the micelles' skeleton. In this way, difficulties related to isolated molecules that are largely exposed in water are avoided. These unimers are “floating” between two different assemblies and drive the algorithm to identify them as one.
 
-Be aware that if none of the atoms in the system are excluded, in the `-specific` argument, the hydrogens connected to the given carbon atoms should also be provided:
+Note that, if none of the atoms in the system are excluded, then the hydrogens connected to the given carbon atoms should also be present in the `-specific` argument:
 
     pysimpp cluster -molname CTAC -radii radii.txt -specific C1,C2,C3,H1,H2,H3,H4,H31,H32,H33 ./npt.xtc
 
-otherwise the CTAC molecules will be considered to be isolated since the hydrogen atoms will be considered in the Voronoi tesselation and no close contacts will be traced between the carbon atoms considered.
+Otherwise, the CTAC molecules will be considered to be isolated since the hydrogen atoms will be considered in the Voronoi tesselation and no close contacts will be traced between the carbon atoms considered.
 
 ### Order
 
-If the end atoms of the molecular species defining the clusters' constituent moleculce are provided in the `-ends` option:
+The order parameters of the system (global/local), the configuration properties of the clusters' constituent species and their shape factors will be calculated by providing the end atoms of the species to the `-ends` argument:
 
     pysimpp cluster -molname CTAC -radii radii.txt -specific C1,C2,C3,H1,H2,H3,H4,H31,H32,H33 -ends CTAC:1,16 ./npt.xtc
 
-then the configuration properties of these species and their shape factors will be calculated together with properties indicative of the orientation order in the system. The following files will be written in the simulation directory:
+The following files will be written in the simulation directory:
 
-- `molecular.dat` : time evolution of the mean properties of the molecules participate in the clusters, per molecular species and frame. The properties include, the number of constituent molecules, the square end-to-end distance (&lt;*R*<sup>2</sup>&gt;), the radius of gyration, the asphericity, the acylindricity, and the relative shape anisotropy of the molecules; the corresponding keys in the header of the files are `n`, `sqee`, `sqrg`, `b`, `c`, and `sqk`, respectively.
+- `molecular.dat` : time evolution of the mean values for the properties of the molecules forming the clusters, per molecular species. The properties include, the number of constituent molecules, the square end-to-end distance (&lt;*R*<sup>2</sup>&gt;), the radius of gyration, the asphericity, the acylindricity, and the relative shape anisotropy of the molecules; the corresponding keys in the header of the file, indicative of the coloumn content, are `n`, `sqee`, `sqrg`, `b`, `c`, and `sqk`, respectively.
 
-- `order.dat` : the time evolution of the mean values and their standard deviations of several properties used as measures for estimating the orientational order in the system. The properties include the local order (*q*), order parameter (*S*), and the order tensor and its eigenvalues, calculated based on the eigenvectors of clusters' gyration tensor **S** corresponding its larger eigenvalue; the corresponding keys in the header of the files are `qlocal`, `qlong`, and `dirval`/`dirvec`, respectively.
+- `order.dat` : the time evolution of the mean values of several properties used as measures for the estimation of the orientational order in the system. The properties include the local order (*q*), order parameter (*S*), and the order tensor and its eigenvalues, calculated based on the eigenvector of clusters' gyration tensor **S** corresponding to its larger eigenvalue; the corresponding keys in the header of the file, indicative of the coloumn content, are `qlocal`, `qlong`, and `dirval`/`dirvec`, respectively.
 
 ### Visualize
 
-The clusters traced in the simulation cell, can be visualized if a visualization frequency is provided with the `-vis` option:
+The clusters traced in the simulation cell, can be visualized if a visualization frequency is provided with the `-vis` argument:
 
     pysimpp cluster -molname CTAC -radii radii.txt -specific C1,C2,C3,C4,C5 -excluded HGA2,HGP5,HGA3,HT -vis 100000 ./npt.xtc
 
-In this case the snapshots of the clusters will be save in gro file under the `clusters` directory located in the simulation folder. The frequency value is timestep based for lammps and time based otherwise. The files are named as `clusterXXX_stepYYY.gro` where `XXX` is the number of the cluster and `YYY` is the timestep/time of the snapshot. The numbering of the clusters corresponds to their sort in acceding order based on their aggregation number. Therefore, it is possible that the same number correspond to different clusters in different frames.
+In this case the snapshots of the clusters for the corresponding frames, will be saved as gro files in the `clusters` directory located at the simulation folder. The frequency value is timestep based for lammps and time based otherwise. The files are named as `clusterXXX_stepYYY.gro` where `XXX` is the number of the cluster and `YYY` is the timestep/time of the snapshot. The numbering of the clusters corresponds to their sorting in acceding order based on their aggregation number. Therefore, it is possible that the same number correspond to different clusters in different frames.
 
 ### Properties
 
-A number of properties' histograms for the molecular species and the clusters can be calculated by using `-phist` option. The argument is a comma separated list of property:<histogram bin> pairs and the output files are written in the simulation folder using the name `hXXX.dat` where XXX is the property name. The command:
+A number of properties' histograms for the molecular species and the clusters can be calculated by using `-phist` argument. The argument is a comma separated list of property: <histogram bin> pairs and the output files are written in the simulation folder using the name `hXXX.dat` where XXX is the property name. The command:
 
     pysimpp cluster -molname CTAC -radii radii.txt -specific C1,C2,C3,H1,H2,H3,H4,H31,H32,H33 -ends CTAC:1,16 -phist b:0.05,sqrg:1.0 ./npt.xtc
 
@@ -104,29 +104,33 @@ will produce the file hb.dat and hsqrg.dat with teh histograms of asphericity an
 
 - qlocal : local order.
 
-The property of a molecular species is named by appending "_{SPECIES SNAME}" at the property's name. For example, with rhe argument `c:0.01,c_CTAC:0.05`, the bin length of the acylindricity distribution of the clusters is set to 0.01 and for the CTAC molecules to 0.05. The special keywords `all`, `clusters`, and `species` can be given instead of a property's name. In this case, `all` the available properties, the properties of the traced `clusters`, or the properties of the molecular `species` will be calculated, respectively, and the corresponding histograms will be calculated.
+The property of a molecular species is named by appending `_<SPECIES NAME>` at the property's name. For example, with rhe argument `c:0.01,c_CTAC:0.05`, the bin length for the acylindricity distribution of the clusters is set to 0.01 and for the CTAC molecules to 0.05. The special keywords `all`, `clusters`, and `species` can be given instead of a property's name. In this case, all the available properties, the properties of the traced clusters, or the properties of the molecular species will be calculated, respectively, and the corresponding histograms will be calculated.
 
-### Molecular neighborhood 
+### Molecular neighborhood
 
-For each of the clusters' forming molecular species, the histogram of the number of neighbors molecules per species, can be calculated by providing the `--nbhist` option. In our example, the histograms of the total number of `CTAC-CTAC`, `CTAC-CL`, and `CTAC-SOL` pairs will be calculated, and the corresponding output files will be written in the simulation directory (namely, `CTAC_CTAC_neighbors.dat`, `CTAC_CTAC_neighbors.dat`, and `CTAC_CTAC_neighbors.dat`, respectively).
+For each of the molecular species forming the clusters, the histogram of the number of neighbors molecules per species, can be calculated by using the `--nbhist` option. In our example, the histograms of the number of `CTAC-CTAC`, `CTAC-CL`, and `CTAC-SOL` pairs will be calculated, and the corresponding output files will be written in the simulation directory (namely, `CTAC_CTAC_neighbors.dat`, `CTAC_CTAC_neighbors.dat`, and `CTAC_CTAC_neighbors.dat`, respectively).
 
-### Moiety neighborhood 
+### Moiety neighborhood
 
-The constitution of the local environment around molecular moieties can be explored using `-hist` option to calculate the histograms of the number of moieties' neighbor pairs. For example, the command to explore the number of CTAC, CL, and SOL molecules around the methyl group of the alkyl tail is:
+The local environment around molecular moieties can be explored using `-hist` option to calculate the histograms of the number of moieties - species neighbor pairs. For example, the command to explore the number of CTAC, CL, and SOL molecules around the methyl group of the alkyl tail is:
 
     pysimpp cluster -molname CTAC -radii radii.txt -specific C1,C2,C3,C4,C5 -excluded HGA2,HGP5,HGA3,HT -vis 100000 -hist C1:CTAC:C1,H31,H32,H33:CTAC,CL,SOL ./npt.xtc
 
 The argument defines the methyl group using the format `GROUPNAME:MOLNAME:ATOMSLIST:RESIDUESLIST`, where:
-  - GROUPNAME:  the name of the group
-  - MOLNAME:    the name of the species where the group belongs
-  - ATOMSLIST:  a comma-separated list of atoms defining the group, and
-  - SPECIESLIST: a comma-separated list with neighbor molecular species
 
-The histograms will be written in file names GROUPNAME_SPECIES_neighbors.dat in the simulation directory, i.e., `C1_CTAC_neighbors.dat`, `C1_CL_neighbors.dat`, and `C1_SOL_neighbors.dat`. A "@" separated groups can be provided in the argument. For example, if you was to calculate also the number of CL anions around the head group, the argument becomes `C1:CTAC:C1:CTAC,CL,SOL@HEAD:CTAC:N,C17,C18,C19:CL`.
+- GROUPNAME:  the name of the group,
+
+- MOLNAME:    the name of the species where the group belongs,
+
+- ATOMSLIST:  a comma-separated list of atoms defining the group, and
+
+- SPECIESLIST: a comma-separated list with neighbor molecular species.
+
+The histograms will be written in files named as `GROUPNAME_SPECIES_neighbors.dat` in the simulation directory (i.e., `C1_CTAC_neighbors.dat`, `C1_CL_neighbors.dat`, and `C1_SOL_neighbors.dat`). A "@" separated groups can be provided in the argument. For example, if you wish to calculate also the number of CL anions around the head group, the argument becomes `C1:CTAC:C1:CTAC,CL,SOL@HEAD:CTAC:N,C17,C18,C19:CL`.
 
 ### Cluster structure
 
-In the case where the clusters formed in the simulation cell are of spherical, rod-like, and/or cylindrical shape, the structure around their core can be explored by means of the radial number density profiles of certain moieties. These profiles are calculated with respect to distance from the center of mass for spherical shaped clusters, and with respect to the distance from the elongated axis of the cluster for the rest of the cases. The molecular moieties are provided as `@` separated list in the argument of `-profiles` option. Each group of atoms is given as `<group name>:<species name>:<atoms list>`. In our example, the argument `HEAD:CTAC:C17,N,C18,C19@WAT:SOL:OW` defines the groups `HEAD` that belongs to CTAC molecule and consists of `C17`, `N`, `C18`, and `C19` atoms, and `WAT` defined from the `OW` atom (oxygen) of `SOL` (water) molecules. For each group, the density profile will be written in the file `profile_<group name>_<shape>.prof` in the folder `profiles` located in the simulation directory. Three types of clusters' shape are considered:  spherical (`s`), cylindrical infinite periodic (`c`), and rod-like/elongated (`e`). Therefore file `HEAD_s.prof` and `WAT_s.prof` corresponds to the radial density profile of CTAC's head group and water, with respect to the center of sass for spherical clusters, respectively.
+In the case where the clusters formed in the simulation cell are of spherical, rod-like, and/or cylindrical shape, the structure around their core can be explored by means of the radial number density profiles of certain molecular moieties. These profiles are calculated with respect to distance from the center of mass for spherically shaped clusters, and with respect to the distance from the elongated axis of the cluster for the rest of the cases. The molecular moieties are provided as `@` separated list in the argument of `-profiles` option. Each group of atoms is given as `<group name>:<species name>:<atoms list>`. In our example, the argument `HEAD:CTAC:C17,N,C18,C19@WAT:SOL:OW` defines the groups `HEAD` that belongs to CTAC molecule and consists of `C17`, `N`, `C18`, and `C19` atoms, and `WAT` defined from the `OW` atom (oxygen) of `SOL` (water) molecules. For each group, the density profile will be written in the file `profile_<group name>_<shape>.prof` in the folder `profiles` located in the simulation directory. Three types of clusters' shape are considered:  spherical (`s`), cylindrical infinite periodic (`c`), and rod-like/elongated (`e`). Therefore file `HEAD_s.prof` and `WAT_s.prof` corresponds to the radial density profile of CTAC's head group and water, with respect to the center of sass for spherical clusters, respectively.
 
 ## Etc
 
