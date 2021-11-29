@@ -172,13 +172,12 @@ metadata = dict(
             py_modules = [
             ],
             install_requires=[
-                #"numpy",
-                'numpy==1.19.5',
+                'numpy',
                 'setuptools',
                 'wheel',
                 'pyyaml',
                 'networkx',
-                'MDAnalysis==1.0.0',
+                'MDAnalysis',
             ],
             # setup_requires=[ 'pytest-runner' ],
             # tests_require=[ 'pytest' ],
