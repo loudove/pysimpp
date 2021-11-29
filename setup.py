@@ -176,7 +176,6 @@ metadata = dict(
                 'numpy==1.19.5',
                 'setuptools',
                 'wheel',
-                'importlib',
                 'pyyaml',
                 'networkx',
                 'MDAnalysis==1.0.0',

@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+import os
+
+# resolve fastpost module dependency on windows
+import platform
+if platform.system() == "Windows":
+    __dll_dir = os.path.join(os.path.dirname(__file__), ".libs")
+    if os.path.isdir(__dll_dir):
+        os.add_dll_directory( __dll_dir)
+
 from . import utils
 from . import readers
 from . import primitives
@@ -6,7 +15,6 @@ from . import primitives
 __debug = False
 
 def __find_commands():
-    import os
     _dir = os.path.dirname(__file__)
     _items = [_dir + os.sep + _f for _f in os.listdir(_dir)]
     _pkg_name = os.path.basename(_dir)
@@ -68,7 +76,6 @@ def __find_commands():
 
 
 def __version(file):
-    import os
     _dir = os.path.dirname(__file__)
     try:
         with open(_dir + os.sep + file, 'r') as (f):
