@@ -183,18 +183,18 @@ class UnitHexagolal2D():
         where = condv & condu & condw
         remain = np.array(where)
         _x = _r[where]
-        d[where] = np.sqrt( np.sum( _x*_x,axis=1))
+        d[where] = np.sqrt( np.sum( _x*_x, axis=1))
         where = (~ condv) & (pu <= 0.0)
         remain |= where
         _x = _r[where]-self.v
-        d[where] = np.sqrt( np.sum(_x*_x ,axis=1))
+        d[where] = np.sqrt( np.sum( _x*_x, axis=1))
         where = (~ condu) & (pv <= 0.0)
         remain |= where
         _x = _r[where]-self.u
-        d[where] = np.sqrt( np.sum(_x*_x ,axis=1))
-        where = ~ where
-        _x = _r[where]-self.v-self.u
-        d[where] = np.sqrt( np.sum(_x*_x,axis=1))
+        d[where] = np.sqrt( np.sum( _x*_x, axis=1))
+        remain = ~ remain
+        _x = _r[remain]-self.v-self.u
+        d[remain] = np.sqrt( np.sum( _x*_x, axis=1))
         return d
 
     def _pbc_face(self, r):
