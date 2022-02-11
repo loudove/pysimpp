@@ -385,27 +385,28 @@ class MCluster(Cluster):
                 fndx.write("%d%s"%(iat,s))
         if not iatom % _every == 0: fndx.write("\n")
         fndx.write("\n")
-        _head=[16,17,18,19,53,54,55,56,57,58,59,60,61]
-        # _head=[15,16,17,18,19,47,48,53,54,55,56,57,58,59,60,61]
-        _tail=list(set(range(62))-set(_head))
-        fndx.write("[ ASSMBL%d_HEAD ]\n"%icluster)
-        iatom = 0
-        for im in cluster.molecules:
-            for iat in np.array(molecule_atoms[im])[_head]:
-                iatom+=1
-                s = "\n" if iatom % _every == 0 else " "
-                fndx.write("%d%s"%(iat,s))
-        if not iatom % _every == 0: fndx.write("\n")
-        fndx.write("\n")
-        fndx.write("[ ASSMBL%d_TAIL ]\n"%icluster)
-        iatom = 0
-        for im in cluster.molecules:
-            for iat in np.array(molecule_atoms[im])[_tail]:
-                iatom+=1
-                s = "\n" if iatom % _every == 0 else " "
-                fndx.write("%d%s"%(iat,s))
-        if not iatom % _every == 0: fndx.write("\n")
-        fndx.write("\n")
+        if _debug:
+            _head=[16,17,18,19,53,54,55,56,57,58,59,60,61]
+            # _head=[15,16,17,18,19,47,48,53,54,55,56,57,58,59,60,61]
+            _tail=list(set(range(62))-set(_head))
+            fndx.write("[ ASSMBL%d_HEAD ]\n"%icluster)
+            iatom = 0
+            for im in cluster.molecules:
+                for iat in np.array(molecule_atoms[im])[_head]:
+                    iatom+=1
+                    s = "\n" if iatom % _every == 0 else " "
+                    fndx.write("%d%s"%(iat,s))
+            if not iatom % _every == 0: fndx.write("\n")
+            fndx.write("\n")
+            fndx.write("[ ASSMBL%d_TAIL ]\n"%icluster)
+            iatom = 0
+            for im in cluster.molecules:
+                for iat in np.array(molecule_atoms[im])[_tail]:
+                    iatom+=1
+                    s = "\n" if iatom % _every == 0 else " "
+                    fndx.write("%d%s"%(iat,s))
+            if not iatom % _every == 0: fndx.write("\n")
+            fndx.write("\n")
 
     @staticmethod
     def write( cluster, r, **kwargs):
@@ -426,10 +427,10 @@ class MCluster(Cluster):
             molecule_atoms = kwargs["molecule_atoms"]
             atom_element = kwargs["atom_element"]
             with open(dirname+os.sep+fname,'w') as f:
-                _natoms = len(cluster.molecules)*20
+                _natoms = sum( [len(molecule_atoms[im]) for im in cluster.molecules])
                 f.write("%d\n\n" % _natoms)
                 for im in cluster.molecules:
-                    for iat in molecule_atoms[im][:20]:
+                    for iat in molecule_atoms[im]:
                         _r = r[iat]
                         f.write("%s %f %f %f\n" % (atom_element[iat],_r[0],_r[1],_r[2]))
         if fmt == "gro":
@@ -445,7 +446,7 @@ class MCluster(Cluster):
             box = kwargs["box"]
             atomformat = "%5d%-5s%5s%5d%8.3f%8.3f%8.3f%8.3f%8.3f%8.3f\n"
             with open(dirname+os.sep+fname,'w') as f:
-                _natoms = len(cluster.molecules)*62
+                _natoms = sum( [len(molecule_atoms[im]) for im in cluster.molecules])
                 f.write("cluster %d\n" % cluster.i)
                 f.write("%d\n" % _natoms)
                 iatom = 0
