@@ -462,7 +462,7 @@ class LammpsReader(abcReader):
 
     # known dump attributes
     _keyDump = [' '+x+' ' for x in [
-           'id', 'type', 'q', 'x', 'y', 'z', 'xs', 'ys', 'zs',
+           'id', 'type', 'q', 'x', 'y', 'z', 'xs', 'ys', 'zs', 'xu', 'yu', 'zu', 
            'ix', 'iy', 'iz', 'vx', 'vy', 'vz', 'fx', 'fy', 'fz', 'mol' ]]
     _ATTRIBUTES = [ x.strip() for x in _keyDump]
     # dump attribute types (default of float32 and then correct)
@@ -742,7 +742,7 @@ class LammpsReader(abcReader):
         localid_ = 1
         for i, line in enumerate( _lines):
             tk = line.split()
-            _id = tk[0]-1 if it == 0 else i
+            _id = int( tk[0])-1 # if it == 0 else i
             _type[_id] =  tk[it]
             molecule_ = int( tk[im]) if read_molecule else 0
             _molecule[ _id] = molecule_
