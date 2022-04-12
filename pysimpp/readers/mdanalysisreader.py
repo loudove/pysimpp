@@ -2,7 +2,6 @@
 
 import os
 import sys
-import re
 import inspect
 import numpy as np
 from itertools import islice
@@ -184,12 +183,14 @@ class MDAnalysisReader(abcReader):
                     data['x'][:] = rw[:,0]
                     data['y'][:] = rw[:,1]
                     data['z'][:] = rw[:,2]
-                elif self.do_unwrap:
-                    ru = self.u.atoms.unwrap(reference=None)
-                    data['x'][:] = ru[:,0]
-                    data['y'][:] = ru[:,1]
-                    data['z'][:] = ru[:,2]
+                # elif self.do_unwrap: # this is more like the "make whole"
+                #     ru = self.u.atoms.unwrap(reference=None)
+                #     data['x'][:] = ru[:,0]
+                #     data['y'][:] = ru[:,1]
+                #     data['z'][:] = ru[:,2]
                 else:
+                    if self.do_unwrap:
+                        print("WARNING: unwrapped trajectory is assumed.")
                     data['x'][:] = ts.positions[:,0]
                     data['y'][:] = ts.positions[:,1]
                     data['z'][:] = ts.positions[:,2]
@@ -378,7 +379,7 @@ class MDAnalysisReader(abcReader):
             delta = self.u.trajectory.dt # time between successive dumps
             # time of the first and secod dump
             t0, t1 = self.u.trajectory[0].data['step'], self.u.trajectory[1].data['step']
-            self.timestep = delta/(t1-t0)*1000.0 # timestep in ps
+            self.timestep = delta/(t1-t0) # timestep in ps
         except:
             self.u = None
             raise MDAnalysisReaderException('Problem initializing MDAnalysis universe.')

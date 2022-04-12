@@ -179,6 +179,7 @@ def clusters(filename,
         if excluded:
             profileid[ atom_excluded ] = 0
 
+    if True:
         tracer = EvolutionTracker()
 
     # check ends (add missing residues)
@@ -431,20 +432,20 @@ def clusters(filename,
                     if istep == 0:
                         MCluster.writendx( fndx, i, _cl, molecule_atoms)
     
-                if vis and step % visfreq == 0:
-                    # if True:
-                    # MCluster.write(_cl, rw, fmt='xyz',
-                    #     molecule_atoms=molecule_atoms, atom_element=atom_element,
-                    #     fname="cluster%d_step%d.xyz"%(i,step), dirname=dirname)
-                    MCluster.write(_cl,
-                                  rw,
-                                  fmt='gro',
-                                  molecule_atoms=molecule_atoms,
-                                  molecule_name=molecule_name,
-                                  atom_name=atom_name,
-                                  box=box,
-                                  fname="cluster%d_step%d.gro" % (i, step),
-                                  dirname=dirname+os.sep+"clusters")
+                # if vis and step % visfreq == 0:
+                #     # if True:
+                #     # MCluster.write(_cl, rw, fmt='xyz',
+                #     #     molecule_atoms=molecule_atoms, atom_element=atom_element,
+                #     #     fname="cluster%d_step%d.xyz"%(i,step), dirname=dirname)
+                #     MCluster.write(_cl,
+                #                   rw,
+                #                   fmt='gro',
+                #                   molecule_atoms=molecule_atoms,
+                #                   molecule_name=molecule_name,
+                #                   atom_name=atom_name,
+                #                   box=box,
+                #                   fname="cluster%d_step%d.gro" % (i, step),
+                #                   dirname=dirname+os.sep+"clusters")
                 # add calculated properties as cluster's attributes
                 _cl._infinit = _cl.is_infinit()
                 # _sqrg: square radious of gyration
@@ -478,10 +479,26 @@ def clusters(filename,
                     hprop2D[ _p].add( ( vars(_cl)[_p], _size))
 
             # analyse
-            if doprofiles:
+            if True:
                 _assemplies = [ _c.assembly_from_molecules(molecule_name, step) for _c in _clusters]
                 tracer.update_current(_assemplies, step)
             #########
+                for i, (_as, _cl) in enumerate(zip(_assemplies,_clusters)):
+                    if vis and step % visfreq == 0:
+                        # if True:
+                        # MCluster.write(_cl, rw, fmt='xyz',
+                        #     molecule_atoms=molecule_atoms, atom_element=atom_element,
+                        #     fname="cluster%d_step%d.xyz"%(i,step), dirname=dirname)
+                        _i = _as.uid if hasattr(_as,'uid') else -i
+                        MCluster.write(_cl,
+                                    rw,
+                                    fmt='gro',
+                                    molecule_atoms=molecule_atoms,
+                                    molecule_name=molecule_name,
+                                    atom_name=atom_name,
+                                    box=box,
+                                    fname="cluster%d_step%d.gro" % (_i, step),
+                                    dirname=dirname+os.sep+"clusters")
 
             # if any( [_cl._infinit for _cl in _clusters ]):
             if True:
@@ -625,6 +642,7 @@ def clusters(filename,
                 _header = "# Number density profile of %s for clusters of molecular size %d(%d)" %(k,_var.mean(),_var.std())
                 _v.write( _name, header=_header )
 
+    if True:
         _dir = dirname + os.sep + "evolution"
         if not os.path.exists(_dir): os.mkdir(_dir)
         tracer.write(_dir)

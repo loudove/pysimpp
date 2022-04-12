@@ -457,13 +457,17 @@ class EvolutionTracker():
             _assemblies = (self.previous, self.current)
             _node_assembly = (self.previous_node_assembly, self.current_node_assembly)
             _used = tuple( map( lambda x: [False]*len(x), _assemblies))
+            # loop over assemblies in the previous step
             for _ip, _p in enumerate(_assemblies[0]):
-                # has alreaedy been processed
+                # check if has alreaedy been processed
                 if _used[0][ _ip]:
                     continue
+                # trace the reaction (i.e. find the reactants and the products) where
+                # _p participates in as reactant, using a flip-flop approach
                 _candidates = [ _p]
                 _sides = ( [ _p], [])
                 _used[0][ _ip] = True
+                # (i,j): (0,1) reactants->products, (1,0) product->reactants
                 i, j = 0, 1
                 while not len( _candidates) == 0:
                     _candidates = self._track(_candidates, _node_assembly[i], _assemblies[j], _node_assembly[j], _used[j], _sides[j])
@@ -473,7 +477,7 @@ class EvolutionTracker():
                     # no reaction took place; no need to check further
                     self.__update(_sides[0][0], _sides[1][0])
                 elif _nreactants > 1 == _nproducts:
-                    # fusion R0 + R1 + R2 + ... -> P0
+                    # pure fusion R0 + R1 + R2 + ... -> P0
                     # check if any of the reactants is the main contributor in
                     # the formation of the product. If yes use its uid.
                     _r0 = max( _sides[0], key=len)
