@@ -358,7 +358,7 @@ def chk_filename( filename):
     return kind, DIR, BASENAME, EXT, TRJFILE, TOPFILE
 
 def parse_radii( finfo):
-    ''' Read the radii file (finfo). Returns a dict:
+    ''' Read and close the radii file (finfo). Returns a dict:
             { ["elements"|"types"] : [{[element|type]:[d/r]} }
         where the key specifies if the radii are element
         or type based and the value is a dictionary where
@@ -394,6 +394,7 @@ def read_ndx(f):
         values are the group index shaped as 1d np.array. '''
     lines = f.readlines()
     _d=defaultdict(str)
+    _type = "default"
     for line in lines:
         line=line.strip()
         if len(line) == 0:

@@ -156,6 +156,8 @@ class MDAnalysisReader(abcReader):
         #istep = sys.maxsize
         istep = None
         self.nsteps += 1
+        if self.nsteps == 1 and not self.do_whole and self.do_unwrap:
+            print("WARNING: unwrapped trajectory is assumed.")
 
         if not self.u is None:
             ts = self._next_frame()
@@ -189,8 +191,6 @@ class MDAnalysisReader(abcReader):
                 #     data['y'][:] = ru[:,1]
                 #     data['z'][:] = ru[:,2]
                 else:
-                    if self.do_unwrap:
-                        print("WARNING: unwrapped trajectory is assumed.")
                     data['x'][:] = ts.positions[:,0]
                     data['y'][:] = ts.positions[:,1]
                     data['z'][:] = ts.positions[:,2]

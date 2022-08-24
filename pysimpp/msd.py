@@ -10,7 +10,7 @@ import numpy as np
 from scipy import stats
 
 import pysimpp.readers
-from pysimpp.utils.utils import isrange, islist
+from pysimpp.utils.utils import isrange, islist, read_ndx
 from pysimpp.utils.statisticsutils import Histogram
 
 from pysimpp.fastpost import fasts1, fasts1x, fastwrap, fastunwrapv, fastunwrap, fastcom, fastcom_total
@@ -206,7 +206,7 @@ def _dimsbookkeep( dimensions, unwrap=True):
     return attributes, dmap, dmapinv
 
 # @profile
-def msd( filename, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'], region=(), molids=(), maxconfs=-1):
+def msd( filename, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'], region=(), molids=(), maxconfs=-1, ndxfile=None):
 
     # check the input file
     reader = pysimpp.readers.create(filename)
@@ -237,7 +237,13 @@ def msd( filename, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'], regio
         mol_atoms[ im].append(i)
 
     # selected molecules
-    selected = np.sort( molids) - 1             # selected molecules (index @zero)
+    if not ndxfile is None:
+        _grps = read_ndx( ndxfile)
+        _molids = set().union( molids, *(_grps.values()))
+    else:
+        _molids = molids
+    
+    selected = np.sort( _molids) - 1             # selected molecules (index @zero)
     if not usecom:                              # if needed convert to atoms
         satoms = []
         for im in selected:
@@ -922,11 +928,15 @@ def command():
         return values
 
     string = 'slabs to be used. The dimension perpedicular to the slabs and their positions should be ' + \
-    'provided i.e. [x|y|z]:r0,r1,r2,... , where ri is the starting position of the ith slab.'
+        'provided i.e. [x|y|z]:r0,r1,r2,... , where ri is the starting position of the ith slab.'
     parser.add_argument('-slab', nargs=1, type=argslabtype, default=[[]], metavar='slab', \
                        help=string)
 
     parser.add_argument('-gmxfit', dest='gmxfit', action='store_true',help="use gromacs approach for fitting msd(t) curve.")
+
+    string = 'the file with the molecular indexes (starting from 1) to consideted in the calculation of the msd. ' + \
+        'The file should conform with gromacs format. All the groups found in the file will be considered.'
+    parser.add_argument('-ndx', nargs=1, type=argparse.FileType('r'))             
 
     # parse the arguments
     args = parser.parse_args()
@@ -939,10 +949,12 @@ def command():
     print("dim : ", args.dim[0])
     print("slab : ", args.slab[0])
     print("molecules : %d \n" % len(args.molecules[0]))
+    print("ndx : ", args.ndx[0].name)
+
     if __debug:
         print(args.molecules[0])
     msd( args.path, start=args.start[0], end=args.end[0], every=args.every[0], dimensions=args.dim[0], \
-         region=args.slab[0], molids=args.molecules[0], maxconfs=args.maxconfs[0])
+         region=args.slab[0], molids=args.molecules[0], maxconfs=args.maxconfs[0], ndxfile=args.ndx[0])
 
 if __name__ == '__main__':
     command()

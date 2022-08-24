@@ -813,8 +813,6 @@ subroutine fastwrapo(n, r, v0, a, b, c, rw)
     integer :: i, j, k
     real*8, dimension( 0:2) :: v, d
 
-    rw = 0.d0
-
     d = (/ a, b, c /)
 !$omp parallel do private(i,j,k,v)
     do i = 0, n-1
@@ -850,7 +848,7 @@ subroutine fastwrap(n, r, v0, va, vb, vc, rw)
     call box%initialize( v0, va, vb, vc, .true.)
     call box%toFractional( n, rw)
     call fastwrapo(n, rw, v0, 1.D0, 1.D0, 1.D0, rw)
-    call box%toCartesian(n, rw)
+    call box%toCartesian( n, rw)
 
 end subroutine fastwrap
 

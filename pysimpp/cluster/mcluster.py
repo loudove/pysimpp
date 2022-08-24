@@ -32,7 +32,7 @@ _typebased = "types"
 _profilebin = 0.25
 
 def clusters(filename,
-             finfo,
+             fradii,
              start=-1,
              end=sys.maxsize,
              every=1,
@@ -60,11 +60,11 @@ def clusters(filename,
 
     natoms = reader.natoms
 
-    ## parse and keep info data
+    ## parse and keep radii data
     print('>> reading info file ...')
-    info = parse_radii(finfo)
-    if not "types" in info.keys():
-        print("type based radii where expected")
+    radii = parse_radii(fradii)
+    if not "types" in radii.keys():
+        print("Problem parsiong the raddii file %s. A type based radii where expected" % fradii.name)
         sys.exit(0)
 
     # set voro++ stuff
@@ -112,7 +112,7 @@ def clusters(filename,
     atom_element = reader.get_atom_element()
     atom_radius = np.array(
         tuple(
-            map(lambda x: info[_typebased][str(x).upper()],
+            map(lambda x: radii[_typebased][str(x).upper()],
                 atom_type)))  # this will not work for non arithmetic atom_type
 
     # LDP check
@@ -749,7 +749,7 @@ def command():
     string = '''
     the file with the radii of the atoms. It can be element or type based. 
     The first line of the file contains the keywords "(elements|types) (r|d)"; 
-    the first, specifies the atom type identifier and the second if the 
+    the former, specifies the atom type identifier and the latter if the 
     radius (r) or the diameter (d) is given for each type. The rest of the 
     lines contain the (type, radius) pairs. The type could be either a 
     number (type id) or a string (type name). '''
