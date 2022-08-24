@@ -115,9 +115,10 @@ def _max_consecutive( data, stepsize=1):
     if _a2.size > 0:
         _a3 = np.insert( _a2, 0, 0)     # prepend zero and find ( facilitate length calculation)
         _a4 = np.diff( _a3)             # the squences lengths
-        if _skip:
-            _a4[imaxsq] = 1             # force to spot the second sequence 
         imaxsq = _a4.argmax()           # spot the sequence with the maximum length
+        if _skip:
+           _a4[imaxsq] = 1
+           imaxsq = _a4.argmax()         # spot the second sequence 
         imax=_a3[ imaxsq+1]             # spot the end-index of the sequence in the data (_a3 contains sequences indxes)
         imin=_a3[ imaxsq]               # spot the start-index of the sequence in the data
         return (imin,imax)              # return the indexes
