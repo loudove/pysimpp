@@ -116,7 +116,7 @@ def command():
     # add arguments (self explaned)
     string = 'the path to the simulation trajectory file.A topology file' + \
              'should be present in the same directory (preferably a tpr file).'
-    parser.add_argument('-ndx', nargs=1, type=argparse.FileType('r'))             
+    parser.add_argument('-ndx', nargs=1, type=argparse.FileType('r'), metavar='file', required=True, help=string)             
     parser.add_argument('path', default="."+os.sep,  \
                        help=string)
     parser.add_argument('-start', nargs=1, type=int, metavar='n', default=[-1], \
@@ -135,7 +135,7 @@ def command():
     print("path : ", args.path)
     print("start : ", args.start[0])
     print("every : ", args.every[0])
-    print("end : ", args.end[0])
+    print("end : ", "max" if args.end[0] == sys.maxsize else args.end[0])
 
     dihedrals( args.path, args.ndx[0], args.start[0], args.end[0], args.every[0])
 

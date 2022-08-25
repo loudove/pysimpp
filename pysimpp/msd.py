@@ -72,7 +72,7 @@ class MSDDataUtility():
         '''
         ret = []
         if self.ndim > 1:
-            ret = [ self.__fit( msds[i]) for i in range( self.ndim)]
+            ret = [ self.__fit( self.msds[i]) for i in range( self.ndim)]
         ret.insert(0, self.__fit( msd))
 
     def __fit(self, msd, var=0.1):
@@ -936,7 +936,7 @@ def command():
 
     string = 'the file with the molecular indexes (starting from 1) to consideted in the calculation of the msd. ' + \
         'The file should conform with gromacs format. All the groups found in the file will be considered.'
-    parser.add_argument('-ndx', nargs=1, type=argparse.FileType('r'))             
+    parser.add_argument('-ndx', nargs=1, type=argparse.FileType('r'), metavar='file', required=False, help=string)             
 
     # parse the arguments
     args = parser.parse_args()
@@ -944,11 +944,12 @@ def command():
     print("INPUT")
     print("path : ", args.path)
     print("start : ", args.start[0])
-    print("end : ", args.end[0])
+    print("end : ", "max" if args.end[0] == sys.maxsize else args.end[0])
     print("every : ", args.every[0])
     print("dim : ", args.dim[0])
     print("slab : ", args.slab[0])
-    print("molecules : %d \n" % len(args.molecules[0]))
+    string = " ".join( map(str, args.molecules[0]))
+    print("molecules : %s" % ('-' if len(string)==0 else string ) )
     print("ndx : ", args.ndx[0].name)
 
     if __debug:

@@ -113,7 +113,7 @@ def command():
     a file with the gromacs style indexes for the bonded items to be considered.
     The calculated probability distribution is written in the trajectory file 
     direcory in a file {trjbasename}_{group}.dat. '''
-    parser.add_argument('-ndx', nargs=1, type=argparse.FileType('r'), required=True,
+    parser.add_argument('-ndx', nargs=1, type=argparse.FileType('r'), metavar='file', required=True,
                         help=message)   
     message='''
     a comma separated list with the name of the groups in the index file to be considered.'''          
@@ -136,8 +136,8 @@ def command():
     print("acf :", 'yes' if args.doacf else 'no')
     print("path : ", args.path)
     print("start : ", args.start[0])
+    print("end : ", "max" if args.end[0] == sys.maxsize else args.end[0])
     print("every : ", args.every[0])
-    print("end : ", args.end[0])
 
     measure(args.path, args.type[0], args.ndx[0], args.start[0], args.end[0],
               args.every[0], groups=args.group[0], doacf=args.doacf)
