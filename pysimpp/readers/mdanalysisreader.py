@@ -34,9 +34,9 @@ class MDAnalysisReader(abcReader):
     # set various dump keywords
     _TYPESKEYS = { k:'f4' for k in _KEYS }
     _TYPESKEYS[ 'id'] = 'i4'
-    _TYPESKEYS[ 'name'] = 'a5' # set variable length for name
-    _TYPESKEYS[ 'el'] = 'a2'
-    _TYPESKEYS[ 'type'] = 'a5'
+    _TYPESKEYS[ 'name'] = 'U5' # set variable length for name
+    _TYPESKEYS[ 'el'] = 'U2'
+    _TYPESKEYS[ 'type'] = 'U5'
 
     def __init__(self):
         ''' Initialize a MDAnalysisReader reader object. '''
