@@ -936,7 +936,7 @@ def command():
 
     string = 'the file with the molecular indexes (starting from 1) to consideted in the calculation of the msd. ' + \
         'The file should conform with gromacs format. All the groups found in the file will be considered.'
-    parser.add_argument('-ndx', nargs=1, type=argparse.FileType('r'), metavar='file', required=False, help=string)             
+    parser.add_argument('-ndx', nargs=1, type=argparse.FileType('r'), metavar='file', default=[None], required=False, help=string)             
 
     # parse the arguments
     args = parser.parse_args()
@@ -950,7 +950,7 @@ def command():
     print("slab : ", args.slab[0])
     string = " ".join( map(str, args.molecules[0]))
     print("molecules : %s" % ('-' if len(string)==0 else string ) )
-    print("ndx : ", args.ndx[0].name)
+    print("ndx : ", "-" if args.ndx[0] is None else args.ndx[0].name)
 
     if __debug:
         print(args.molecules[0])

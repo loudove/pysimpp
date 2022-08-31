@@ -403,4 +403,4 @@ def read_ndx(f):
             _type=line[1:-1].strip()
         else:
             _d[_type]+=" "+line
-    return { np.array(list(map( int, _d[k].split()))) for k in list(_d.keys()) }
+    return { k:np.array(list(map( int, _d[k].split()))) for k in list(_d.keys()) }
