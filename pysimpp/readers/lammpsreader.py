@@ -41,7 +41,7 @@ class LammpsDumpsHandler():
         self.dumps = dumps
         # a dictioanary to connect the dump files with the attributes
         # to be retrieved {dump_file:attributes_list}
-        self.toread = {}
+        self.toread = defaultdict(lambda: set())
 
     def set_attributes(self, attributes):
         ''' Set the attributes to read from the simulation dump files.
@@ -54,21 +54,52 @@ class LammpsDumpsHandler():
         '''
         requested = set(
             attributes.split() if type(attributes) is str else attributes)
-        # try to inject periodic indexes as extra attributes  
+        # try to inject periodic indexes as extra attributes
         extra = False
         _poff = set(('ix','iy','iz'))
         if not _poff.issubset(requested):
             requested = requested.union(_poff)
             extra = True
-        for v in self.dumps.values():
-            supported = requested.intersection(set(v.attributes))
-            if len(supported) > 0:
-                self.toread[v] = supported
-                requested = requested.difference(supported)
+        supported = self._update_canread( requested)
+        # for v in self.dumps.values():
+        #     supported = requested.intersection(set(v.attributes))
+        #     if len(supported) > 0:
+        #         self.toread[v].update(supported)
+        #         requested = requested.difference(supported)
         if extra: # do not check for the extra attributes
             requested = requested.difference(_poff)
-        self.canread = len(requested) > 0
+        # if coordinates are not pressent in the supported attributes
+        # the try to see if unwrapped can be added
+        self._make_link = {}
+        if len( supported.intersection(set(('x','xu')))) == 0 :
+            _tmp=(('x','y','z'),('xu','yu','zu'))
+            _rm, _add = _tmp if ('x' in requested) else reversed(_tmp)
+            requested.difference_update(_rm)
+            requested.update(_add)
+            supported.update( self._update_canread(requested))
+            # for v in self.dumps.values():
+            #     supported = requested.intersection(set(v.attributes))
+            #     if len(supported) > 0:
+            #         self.toread[v].update(supported)
+            #         requested = requested.difference(supported)
+            self._make_link = { _from:_to for _to, _from in zip(_rm, _add)}
+            print("INFO: the requested attribute(s) %s are not present in the dump" % str(_rm))
+            print("      file(s); instead they will be mapped into %s ttributes." % str(_add))
+
+        self.canread = len(requested) == 0
         return self.canread
+
+    def _update_canread(self, requested):
+        ''' update self.toread based on the requested set of attributes
+            and reture a set with the attribute that are supported by
+            the registed dump objects. '''
+        supported = set()
+        for v in self.dumps.values():
+            supported.update( requested.intersection(set(v.attributes)))
+            if len(supported) > 0:
+                self.toread[v].update(supported)
+                requested.difference_update(supported)
+        return supported
 
     def get_natoms(self):
         ''' Retrieve the number of atoms and check that all dumps in the
@@ -137,6 +168,10 @@ class LammpsDumpsHandler():
                     if _excludeid and name == 'id': continue
                     data[name] = _data[name]
                 del _data
+                # rename attributes, i.e., create the links
+                # decided in self.set_attributes
+                for _from, _to in self._make_link.items():
+                    data[_to] = data[_from]
 
         return (istep, box, data)
 
@@ -458,15 +493,15 @@ class LammpsReader(abcReader):
     _blk_names = ("Masses", "Atoms", "Velocities", "Bonds", "Angles", "Dihedrals", "Impropers",
                 "Pair Coeffs", "Bond Coeffs", "Angle Coeffs", "Dihedral Coeffs", "Improper Coeffs")
     # "BondBond Coeffs", "BondAngle Coeffs", "MiddleBondTorsion Coeffs", "EndBondTorsion Coeffs" ,
-    # "AngleTorsion Coeffs", "AngleAngleTorsion Coeffs", "BondBond13 Coeffs", "AngleAngle Coeffs" 
+    # "AngleTorsion Coeffs", "AngleAngleTorsion Coeffs", "BondBond13 Coeffs", "AngleAngle Coeffs"
 
     # known dump attributes
     _keyDump = [' '+x+' ' for x in [
-           'id', 'type', 'q', 'x', 'y', 'z', 'xs', 'ys', 'zs', 'xu', 'yu', 'zu', 
+           'id', 'type', 'q', 'x', 'y', 'z', 'xs', 'ys', 'zs', 'xu', 'yu', 'zu',
            'ix', 'iy', 'iz', 'vx', 'vy', 'vz', 'fx', 'fy', 'fz', 'mol' ]]
     _ATTRIBUTES = [ x.strip() for x in _keyDump]
     # dump attribute types (default of float32 and then correct)
-    _typesDump = { k:'f4' for k in _ATTRIBUTES }
+    _typesDump = defaultdict( lambda:'f4', { k:'f4' for k in _ATTRIBUTES })
     for k in ('id', 'type', 'ix', 'iy', 'iz', 'mol'):
         _typesDump[k] = 'i4'
 
@@ -590,11 +625,11 @@ class LammpsReader(abcReader):
     def set_files(self, filename, topo=None):
         ''' Set the simulation files.
             Args:
-                filename (str): the path to the simulation log, dump or data 
-                    file. If the log file is provided, it will be scaned and 
-                    the parameters together with the rest of the simulation 
-                    files will be traced. If the dump file is provided then, 
-                    either a data file with the same name should be located 
+                filename (str): the path to the simulation log, dump or data
+                    file. If the log file is provided, it will be scaned and
+                    the parameters together with the rest of the simulation
+                    files will be traced. If the dump file is provided then,
+                    either a data file with the same name should be located
                     in the same directory or it should be provided using the
                     topo argument.
                 topo (str): the path to the simulation data file.
@@ -673,6 +708,7 @@ class LammpsReader(abcReader):
         # currently only styles in _supportedAtomStyles are supported
         if atomstyle is None:
             atomstyle = self.options['atom_style']
+        if len(atomstyle) == 0: atomstyle='full'
         it = 2 if atomstyle in ('angle', 'bond', 'full', 'line', 'molecular', 'tri') else 0 if atomstyle == 'charge' else 1
         im = 2 if atomstyle == 'template' else 1
         iq = 2 if atomstyle in ('dipole', 'electron') else 1 if atomstyle == 'charge' else 3
@@ -807,18 +843,22 @@ class LammpsReader(abcReader):
                 r = np.zeros((data['x'].size,3),dtype=np.float32)
                 for k, v in {'x':0,'y':1,'z':2}.items():
                     if k in data: np.copyto(r[:, v], data[k])
-                rw = fastwhole(r, molecule, bonds, box.a, box.b, box.c)            
+                rw = fastwhole(r, molecule, bonds, box.a, box.b, box.c)
                 data['x'][:] = rw[:,0]
                 data['y'][:] = rw[:,1]
                 data['z'][:] = rw[:,2]
         elif self.do_unwrap:
-            if 'xu' in data: # check if unwrapped coordinates exist already
-                ru = np.zeros((data['xu'].size,3),dtype=np.float32)
-                for k, v in {'xu':0,'yu':1,'zu':2}.items():
-                    if k in data: np.copyto(ru[:, v], data[k])
-                    data['x'][:] = ru[:,0]
-                    data['y'][:] = ru[:,1]
-                    data['z'][:] = ru[:,2]
+            # check if unwrapped coordinates exist already and,  
+            # if needed, create links to the normal coordinates
+            if 'xu' in data and not 'x' in data:
+                # just create a link
+                data['x'] = data['xu']
+                data['y'] = data['yu']
+                data['z'] = data['zu']
+                # or allocate memory and copy data
+                # for k, v in {'x':'xu','y':'yu','z':'zu'}:
+                #     data[v] = np.zeros(data[k].size, dtype=np.float32)
+                #     np.copyto(data[v], data[k])
             elif 'x' in data and 'ix' in data:
                 r = np.zeros((data['x'].size,3),dtype=np.float32)
                 ip = np.zeros((data['ix'].size,3),dtype=np.int32)
@@ -829,7 +869,7 @@ class LammpsReader(abcReader):
                 ru = fastunwrapv(r, ip, box.va, box.vb, box.vc)
                 # a, b, c = box.va, box.vb, box.vc
                 # for _r, ( i, j, k) in zip( r, ip):
-                #     _r[:] += a * i + b * j + c * k                
+                #     _r[:] += a * i + b * j + c * k
                 data['x'][:] = ru[:,0]
                 data['y'][:] = ru[:,1]
                 data['z'][:] = ru[:,2]
@@ -1240,6 +1280,10 @@ class LammpsReader(abcReader):
                     files, '.data' for the data files.
             Returns:
                 LammpsReader
+            Raises:
+                LammpsReaderException: If the topology is not specified (i.e.,  neither a YAML
+                    nor a data file was located).
+                
         '''
         # check
         if filename is None or len(filename) == 0:
@@ -1272,11 +1316,14 @@ class LammpsReader(abcReader):
         try:
             reader = cls()
             reader.set_files(_filename, topo=_topo)
+            if not reader.read_topology():
+                if reader.yaml is None:
+                    raise LammpsReaderException("fail to read the topology file")
         except LammpsReaderException as err:
             reader = None
             print(err)
 
-        reader.read_topology()
+        
 
         return reader
 
@@ -1333,10 +1380,10 @@ class LammpsReader(abcReader):
             lines.append( line)
 
             # integer value keywords (atoms, bonded terms and types)
-            for key in ['', 
-                    'atoms', 'bonds', 'angles', 'dihedrals', 'impropers', 
+            for key in ['',
+                    'atoms', 'bonds', 'angles', 'dihedrals', 'impropers',
                     '',
-                    'atom types', 'bond types', 'angle types', 'dihedral types', 'improper types', 
+                    'atom types', 'bond types', 'angle types', 'dihedral types', 'improper types',
                     '' ]:
                 value = blocks[key] if key in blocks else 0
                 lines.append( '' if key == '' else str(value) + ' '+ key)
