@@ -25,6 +25,7 @@ def _command(): command()
 # import matplotlib.pyplot as plt
 
 __rad2deg = 180./np.pi
+__deg2rad = np.pi/180.
 
 def measure(filename, measurement, ndxfile, start, end, every, groups=[], doacf=False):
 
@@ -41,11 +42,13 @@ def measure(filename, measurement, ndxfile, start, end, every, groups=[], doacf=
     # setup measurement type stuff 
     _multi={'distanse':2, 'angle':3, 'dihedral':4}[measurement]
     _func={'distanse':fastbonds, 'angle':fastangles, 'dihedral':fastdihedrals}[measurement]
+    _bin={'distanse':2.0, 'angle':2.0*__deg2rad, 'dihedral':2.0*__deg2rad}[measurement]
 
     # read the index file
     ndxs = read_ndx(ndxfile)
     ndxfile.close()
-    # basic checks, create fastpost methods arguments and the histograms
+    # basic checks, convert serial to index, create fastpost methods 
+    # arguments and the histograms
     d = {}
     h = {}    
     for k, v in ndxs.items():
@@ -53,8 +56,8 @@ def measure(filename, measurement, ndxfile, start, end, every, groups=[], doacf=
             print("ERROR: dihedral indexes should be given in quartets! Check %s type" % k)
             return
         if len(groups) == 0 or k in groups:
-            d[k] = v.reshape((int(v.size/_multi),_multi),order='C')
-            h[k] = Histogram.free( 2.0, 0.0, addref=False) 
+            d[k] = v.reshape((int(v.size/_multi),_multi),order='C')-1
+            h[k] = Histogram.free( _bin, 0.0, addref=False) 
            
     # buffer function
     nframes = 0
