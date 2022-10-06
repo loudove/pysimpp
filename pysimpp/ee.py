@@ -5,6 +5,7 @@ import os
 import sys
 import numpy as np
 from scipy.signal import correlate
+from collections import defaultdict
 
 from pysimpp.utils.statisticsutils import Histogram
 import pysimpp.utils.utils as utils
@@ -65,19 +66,27 @@ def __acf(t, data, fname):
 def endtoend(filename, 
     end1, 
     end2, 
+    dt=0.0,
     start=-1, 
     end=sys.maxsize, 
     molids=(), 
     unwrap=True, 
-    camc=False):
+    camc=False,
+    bins={}):
 
     # check the ends
     if not camc:
-        e1 = list(range(end1[0]-1, end1[1], end1[2]))
-        e2 = list(range(end2[0]-1, end2[1], end2[2]))
+        e1 = list(range(end1[0]-1, end1[1]+1, end1[2]))
+        e2 = list(range(end2[0]-1, end2[1]+1, end2[2]))
         if not len(e1) == len(e2):
             print("ERROR: incompatible first/last atoms range.")
             return
+
+    # update defaualt bins
+    _bins = defaultdict( lambda: 1.0, 
+        { "sqree":100.0, "msqree":100.0, "ree":2.0, "mree":2.0, 
+        "sqrg":20.0, "msqrg":20.0, "rg":1.0, "mrg":1.0})
+    for k, v in bins.items(): _bins[k] = v[0]
 
     # create the reader. for the moment lammps, gromacs and camc (polybead) are supported.
     reader = pysimpp.readers.create(filename)
@@ -90,11 +99,10 @@ def endtoend(filename,
     attributes = 'id x y z'
     reader.set_attributes(attributes)
 
-
-    print('>> reading data file ...')
-    if not reader.read_topology():
-        print("ERROR: there was no data file found.")
-        return
+    # print('>> reading data file ...')
+    # if not reader.read_topology():
+    #     print("ERROR: there was no data file found.")
+    #     return
 
     # get system  data
     natoms = reader.natoms
@@ -163,24 +171,35 @@ def endtoend(filename,
     nconfs = len(steps)
 
     # create time array
-    dt = reader.timestep / 1000.0 # form ps to ns
+    _dt = reader.timestep 
+    if _dt == 0.0:
+        if dt == 0.0:
+            dt = 1.0
+            print("INFO: the timestep is set to %.2f fs. You shoud use '-dt' option to provide it." % dt)
+    else:
+        if dt > 0.0:
+            print("INFO: the timestep is set to %.2f fs (provided with -dt option)." % dt)
+            print("      Nevertheless, a timestep of %.2f fs is found in the trajectory files." % _dt)
+        else:
+            dt = _dt    
+    dt /= 1000.0 # form ps to ns
     time = np.array(steps, dtype=float) * dt
 
     # calculate the mean square end-to-end vector
-    hsqree = Histogram.free(100.0, 0.0, addref=False)
-    hree = Histogram.free(2.0, 0.0, addref=False)
-    hmsqree = Histogram.free(100.0, 0.0, addref=False)
-    hmree = Histogram.free(2.0, 0.0, addref=False)
+    hsqree = Histogram.free(_bins["sqree"], 0.0, addref=False)
+    hree = Histogram.free(_bins["ree"], 0.0, addref=False)
+    hmsqree = Histogram.free(_bins["msqree"], 0.0, addref=False)
+    hmree = Histogram.free(_bins["mree"], 0.0, addref=False)
     # and the mean square radius of gyration
     msqrg = []
-    hsqrg = Histogram.free(20.0, 0.0, addref=False)
-    hrg = Histogram.free(1.0, 0.0, addref=False)
-    hmsqrg = Histogram.free(20.0, 0.0, addref=False)
-    hmrg = Histogram.free(1.0, 0.0, addref=False)
+    hsqrg = Histogram.free(_bins["sqrg"], 0.0, addref=False)
+    hrg = Histogram.free(_bins["rg"], 0.0, addref=False)
+    hmsqrg = Histogram.free(_bins["msqrg"], 0.0, addref=False)
+    hmrg = Histogram.free(_bins["mrg"], 0.0, addref=False)
     f1 = open(reader.dir+os.sep+"ree.data","w")
-    f1.write("# time  msqree sqrt(msqree)\n")
+    f1.write("# time[ns]  msqree[Å²] sqrt(msqree[Å]\n")
     f2 = open(reader.dir+os.sep+"rg.data","w")
-    f2.write("# time  msqree sqrt(msqrg)\n")
+    f2.write("# time[ns]  msqree[Å²] sqrt(msqrg)[Å]\n")
     for t, eev, sqrg_ in zip(time, eevectors, sqrg):
         # collect end-to-end vector
         eev_ = np.array(eev)
@@ -209,12 +228,12 @@ def endtoend(filename,
     f1.close()
     f2.close()
     # output end-to-end data
-    hsqree.write(reader.dir+os.sep+"sqree_hist.data")
+    hsqree.write(reader.dir+os.sep+"sqree_hist.data", fmt="%f %g")
     hree.write(reader.dir+os.sep+"ree_hist.data")
     hmsqree.write(reader.dir+os.sep+"msqree_hist.data")
     hmree.write(reader.dir+os.sep+"mree_hist.data")
     # output radious of gyration data
-    hsqrg.write(reader.dir+os.sep+"sqrg_hist.data")
+    hsqrg.write(reader.dir+os.sep+"sqrg_hist.data", fmt="%f %g")
     hrg.write(reader.dir+os.sep+"rg_hist.data")
     hmsqrg.write(reader.dir+os.sep+"msqrg_hist.data")
     hmrg.write(reader.dir+os.sep+"mrg_hist.data")
@@ -261,6 +280,16 @@ The output files are (located at the simulation directory):
     parser.add_argument('-end', nargs=1, type=int, metavar='n', default=[sys.maxsize], \
                        help='stop processing at configuration END [inclusive]')
 
+    def argdttype( string):
+        val = utils.ispositive( string, numbertype=float)
+        if val is None:
+            msg = "wrong integration timestep (check: %s)" % string
+            raise argparse.ArgumentTypeError(msg)
+        return val
+
+    parser.add_argument('-dt', nargs=1, type=argdttype, default=[0.0], metavar='timestep', \
+                       help='integration timeste in ps')
+
     def argends(string):
         ''' check the "-end1" and "-end2" option arguments. '''
         numbers = utils.isrange(string, sep=":", positive=True)
@@ -288,6 +317,27 @@ The output files are (located at the simulation directory):
     parser.add_argument('--no-unwrap', dest='unwrap', default=True, action='store_false', \
                        help="do not unwrap molecules sine the provided trajectories provide unwrapped coordinates.")
 
+    chktype = utils.IsListOfNamedList("wrong -bins argument (check: %s)", itemtype=float,
+        positive=True, llen=1, choices=("sqree","msqree","ree","mree","sqrg","msqrg","rg","mrg"))
+    string = '''
+    provide the bins length for the histograms to be calculated. The following 
+    histograms are supported:
+      - sqree : square end-to-end vector (default 100.0 Å²)
+      - msqree : mean square end-to-end (default 100.0 Å²)
+      - ree : end-to-end length (default 2.0 Å)
+      - mree : mean end-to-end length (default 2.0 Å)
+      - sqrg : square radius of gyration (default 20.0 Å)
+      - msqrg : mean square radius of gyration (default 20.0 Å)
+      - rg : radius of gyration (default 1.0 Å)
+      - mrg : mean radius of gyration (default 1.0 Å)
+    For example, with argument "ree:2.5@sqree:50", the bin length of the
+    histogram for the end-to-end distance is set to 2.0 Å and for the square
+    end-to-end distance to 50 Å².
+    '''
+    parser.add_argument('-bins', nargs=1, type=chktype, default=[{}], \
+        metavar='<list of porperties histograms>', help=string)
+
+
     # parser.add_argument('--camc', dest='camc', default=False, action='store_true', \
     #                    help="process connectivity monte carlo output")
 
@@ -296,6 +346,7 @@ The output files are (located at the simulation directory):
 
     print("INPUT")
     print("path : ", args.path)
+    print("dt (ps) : ", args.dt[0])
     print("start : ", args.start[0])
     print("end : ", "max" if args.end[0] == sys.maxsize else args.end[0])
     string = " ".join( map(str, args.molecules[0]))
@@ -309,10 +360,12 @@ The output files are (located at the simulation directory):
         args.path,
         args.end1[0],
         args.end2[0],
+        dt=args.dt[0],
         start=args.start[0],
         end=args.end[0],
         molids=args.molecules[0],
-        unwrap=args.unwrap)
+        unwrap=args.unwrap,
+        bins=args.bins[0])
         # camc=args.camc)
 
 if __name__ == '__main__':
