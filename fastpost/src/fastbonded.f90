@@ -73,7 +73,7 @@ subroutine fastangles(n, r, va, vb, vc, nang, ang, angles)
     real*8, dimension(0:2,0:n-1), intent(in) :: r       !< atoms unwrapped coordinates
     real*8, dimension(0:2), intent(in) :: va, vb, vc    !< simulation box spanning vectors
     integer, intent(in) :: nang                         !< number of angles
-    integer, dimension(0:3,0:nang-1), intent(in) :: ang !< angle info b(i,:) = (type, atom1, atom2, atom3) for ith angle
+    integer, dimension(0:2,0:nang-1), intent(in) :: ang !< angle info b(i,:) = (type, atom1, atom2, atom3) for ith angle
     real*8, dimension(0:nang-1), intent(out) :: angles  !< angle value
 
     integer :: i
