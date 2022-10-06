@@ -10,7 +10,7 @@ import numpy as np
 from scipy import stats
 
 import pysimpp.readers
-from pysimpp.utils.utils import isrange, islist, read_ndx
+from pysimpp.utils.utils import isrange, islist, read_ndx, ispositive
 from pysimpp.utils.statisticsutils import Histogram
 
 from pysimpp.fastpost import fasts1, fasts1x, fastwrap, fastunwrapv, fastunwrap, fastcom, fastcom_total
@@ -206,7 +206,7 @@ def _dimsbookkeep( dimensions, unwrap=True):
     return attributes, dmap, dmapinv
 
 # @profile
-def msd( filename, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'], region=(), molids=(), maxconfs=-1, ndxfile=None):
+def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'], region=(), molids=(), maxconfs=-1, ndxfile=None):
 
     # check the input file
     reader = pysimpp.readers.create(filename)
@@ -338,8 +338,19 @@ def msd( filename, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'], regio
         cm = np.resize( cm, (nconfs, _s[1], _s[2]))
         cmw = np.resize( cmw, (nconfs, _s[1], _s[2]))
 
-    # get the timestep in fs
-    dt = reader.timestep * 1000.0 # TODO check for gromacs
+    # get the timestep in ps and handle some cases
+    _dt = reader.timestep 
+    if _dt == 0.0:
+        if dt == 0.0:
+            dt = 1.0
+            print("INFO: the timestep is set to %.2f fs. You shoud use '-dt' option to provide it." % dt)
+    else:
+        if dt > 0.0:
+            print("INFO: the timestep is set to %.2f fs (provided with -dt option)." % dt)
+            print("      Nevertheless, a timestep of %.2f fs is found in the trajectory files." % _dt)
+        else:
+            dt = _dt
+    dt *= 1000.0 # TODO check for gromacs
     dt *= every
 
     print('\n>> calculate msds(s) ...')
@@ -891,6 +902,15 @@ def command():
                        help='stop processing at configuration END [inclusive]')
     parser.add_argument('-every', nargs=1, type=int, metavar='n', default=[1], \
                        help='process every EVERY configuration')
+    def argdttype( string):
+        val = ispositive( string, numbertype=float)
+        if val is None:
+            msg = "wrong integration timestep (check: %s)" % string
+            raise argparse.ArgumentTypeError(msg)
+        return val
+
+    parser.add_argument('-dt', nargs=1, type=argdttype, default=[0.0], metavar='timestep', \
+                       help='integration timeste in ps')
 
     def argmoleculestype( string):
         ''' check the "-molecules" option arguments. '''
@@ -901,6 +921,7 @@ def command():
             msg = "wrong molecules indexs range (check: %s)" % string
             raise argparse.ArgumentTypeError(msg)
         return numbers
+
     parser.add_argument('-molecules', nargs=1, type=argmoleculestype, default=[[]],  metavar='range', \
                        help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
 
@@ -943,6 +964,7 @@ def command():
 
     print("INPUT")
     print("path : ", args.path)
+    print("dt (ps): ", args.dt[0])
     print("start : ", args.start[0])
     print("end : ", "max" if args.end[0] == sys.maxsize else args.end[0])
     print("every : ", args.every[0])
@@ -954,7 +976,7 @@ def command():
 
     if __debug:
         print(args.molecules[0])
-    msd( args.path, start=args.start[0], end=args.end[0], every=args.every[0], dimensions=args.dim[0], \
+    msd( args.path, dt=args.dt[0], start=args.start[0], end=args.end[0], every=args.every[0], dimensions=args.dim[0], \
          region=args.slab[0], molids=args.molecules[0], maxconfs=args.maxconfs[0], ndxfile=args.ndx[0])
 
 if __name__ == '__main__':
