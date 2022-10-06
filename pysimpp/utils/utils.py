@@ -69,6 +69,18 @@ def checkstart(line, name, sep="="):
             return tk
     return [None, None]
 
+class wildstr(str):
+    ''' implements a wild string i.e. what ever is compared to it is equal. '''
+    wildchar = ['*', 'X']
+    def __init__(self,value):
+        #str.__init__(self)
+        self.iswild = value in wildstr.wildchar
+
+    def __eq__(self, other):
+        if self.iswild or other.iswild:
+            return True
+        return super(wildstr,self).__eq__(other)
+
 class IsList(object):
     ''' Implements list check functionality with custom setting
         and error handling. Usefull for argparse type check. '''
@@ -81,7 +93,7 @@ class IsList(object):
                     Currently int, float and str types are supported.
                 positive (bool) : check if the numbers in the list are
                     positive.
-                ser (str) : the separator.
+                sep (str) : the separator.
         '''
         self.message = message
         self.itemtype = itemtype
@@ -103,7 +115,7 @@ class IsList(object):
         return items
 
 class IsListOfList(object):
-    ''' Implements list of list check functionality with custom setting
+    ''' Implements list of lists check functionality with custom setting
         and error handling. Usefull for argparse type check. 
         A list of list has the form:
             A,B,C:D,E,G:H,J,L,R    
@@ -120,8 +132,8 @@ class IsListOfList(object):
                 llen (int) : the length of the lists. If a possitive integer is
                     provided all the lists shoud have the same length and equal to
                     llen
-                ser1 (str) : the separator for the list.
-                ser2 (str) : the separator for the lists.
+                sep1 (str) : the separator for the list.
+                sep2 (str) : the separator for the lists.
         '''
         self.message = message
         self.itemtype = itemtype
@@ -157,7 +169,8 @@ class IsListOfNamedList(IsListOfList):
             N:M:A,B,C@O:P:D,E@G:X:H,J,L,R    
     '''
     def __init__(self, message, itemtype=str, positive=False,
-                 klen=-1, llen=-1, sep='@', sep1=':', sep2=','):
+                 klen=-1, llen=-1, sep='@', sep1=':', sep2=',',
+                 choices=(wildstr('*'),)):
         ''' Initialize the object and store settings.
             Args:
                 message (str) : the error message if one of the lists fails the
@@ -169,13 +182,14 @@ class IsListOfNamedList(IsListOfList):
                 llen (int) : the length of the named lists. If a possitive integer is
                     provided all the lists shoud have the same length and equal to
                     llen
-                ser (str) : the separator for the list.
-                ser1 (str) : the separator for the name-list.
-                ser2 (str) : the separator for the named lists.
+                sep (str) : the separator for the list.
+                sep1 (str) : the separator for the name-list.
+                sep2 (str) : the separator for the named lists.
         '''
         super(IsListOfNamedList, self).__init__(message, itemtype, positive, llen, sep1, sep2)
         self.sep = sep
         self.klen = klen
+        self.choices = choices
 
     def __call__(self, string):
         ''' Check if the string conforms with the specifications. '''
@@ -187,6 +201,9 @@ class IsListOfNamedList(IsListOfList):
             tk = tuple( map(lambda x: x.strip(), line.split(self.sep1)))
             if self.klen > 0 and not len(tk) == self.klen:
                 message = self.message % str(line) if "%s" in self.message else self.message
+                raise ArgumentTypeError(message)
+            if not tk[0] in self.choices:
+                message = self.message % ("%s - %s not supported" % (str(line), tk[0])) if "%s" in self.message else self.message
                 raise ArgumentTypeError(message)
             items = [
                 list(map(lambda x: x.strip(), _tk.split(self.sep2)))
@@ -238,18 +255,6 @@ def isrange(string, positive=True, sep=',', rangesep=':'):
             numbers = []
             break
     return numbers
-
-class wildstr(str):
-    ''' implements a wild string i.e. what ever is compared to it is equal. '''
-    wildchar = ['*', 'X']
-    def __init__(self,value):
-        #str.__init__(self)
-        self.iswild = value in wildstr.wildchar
-
-    def __eq__(self, other):
-        if self.iswild or other.iswild:
-            return True
-        return super(wildstr,self).__eq__(other)
 
 def enum(*sequential, **named):
     ''' Implements an enum in python (2). '''
