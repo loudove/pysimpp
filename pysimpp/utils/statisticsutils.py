@@ -398,7 +398,7 @@ class Histogram():
                 f = 1.0 / s / self.d
                 for k in list(self.h.keys()):  self.h[k] *= f
 
-    def write( self, filename, header="", normalize=True):
+    def write( self, filename, header="", normalize=True, fmt="%f  %f"):
         ''' Write histogram data to the file filename. If normalize is
             true the data will be normalized first. '''
         if self.type == Histogram.FREE and len( self.h) == 0:
@@ -409,8 +409,9 @@ class Histogram():
         _x, _y = self.data()
         if len(header) > 0:
             f.write("%s\n" % header)
+        _fmt=fmt+"\n"
         for _xv, _yv in zip( _x, _y):
-            f.write(   "%f  %f\n"%(_xv, _yv))
+            f.write( _fmt % (_xv, _yv))
         f.close()
 
     def getf(self):
