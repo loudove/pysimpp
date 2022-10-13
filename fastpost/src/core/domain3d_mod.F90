@@ -4,7 +4,7 @@ module domain3d
 
     private
 
-    real*8, parameter :: EPS = 1.D-12    ! precision used
+    real*8, parameter :: EPS = 1.d-14    ! precision used
 
     type CellAtomsData
         integer :: n = 0
@@ -74,7 +74,7 @@ module domain3d
         !> cell that atom belongs
         integer, private, allocatable, dimension (:)   :: siteCell
 
-        !> when the box grid is filled the points are placed in each cell in
+        !> when the box grid is filled, the points are placed in each cell in
         !> ordered fashion {xmin->xmax, ymin->ymax, zmin->zmax} i.e. at each
         !> cell the first site will be closer to X0, Y0, and Z0 planes. This is
         !> convenient if you want to calculate periodic indexes conforming to
@@ -380,31 +380,39 @@ module domain3d
         integer*4 :: j, ix, iy, iz
 
         r(:,1) = xin(:)
-        call m_toFractional(this%pbox, n, r)	
-
-        do j=1, 3
-            r(j,1) = r(j,1) - int(r(j,1))
-            if ( r(j,1) > 1.d0 ) then
-                if ( r(j,1) - 1.d0 < EPS ) then
-                r(j,1) = 1.d0
-                else
-                r(j,1) = r(j,1) - 1.d0
-                end if
-            else if ( r(j,1) < 0.d0 ) then
-                if ( r(j,1) > -EPS ) then
-                r(j,1) = 0.d0
-                else
-                r(j,1) = r(j,1) + 1.d0
-                end if
-            end if
-            end do
-            ix = int(r(1,1)*this%rdx)
-            if ( ix == this%nxCells ) ix = ix - 1
-            iy = int(r(2,1)*this%rdy)
-            if ( iy == this%nyCells ) iy = iy - 1
-            iz = int(r(3,1)*this%rdz)
-            if ( iz == this%nzCells ) iz = iz - 1
-            icell = 1 + ix + iy*this%nxCells + iz*this%nxyCells
+        call m_toFractional(this%pbox, n, r)
+        where( r > 1.d0+EPS)
+            r = r - 1.d0
+        elsewhere( r > 1.d0)
+            r = 1.d0
+        elsewhere( r < -EPS)
+            r = r + 1.d0
+        elsewhere( r < 0.d0)
+            r = r + 0.d0
+        endwhere
+        ! do j=1, 3
+        !     r(j,1) = r(j,1) - int(r(j,1))
+        !     if ( r(j,1) > 1.d0 ) then
+        !         if ( r(j,1) - 1.d0 < EPS ) then
+        !            r(j,1) = 1.d0
+        !         else
+        !            r(j,1) = r(j,1) - 1.d0
+        !         end if
+        !     else if ( r(j,1) < 0.d0 ) then
+        !         if ( r(j,1) > -EPS ) then
+        !            r(j,1) = 0.d0
+        !         else
+        !            r(j,1) = r(j,1) + 1.d0
+        !         end if
+        !     end if
+        ! end do
+        ix = int(r(1,1)*this%rdx)
+        if ( ix == this%nxCells ) ix = ix - 1
+        iy = int(r(2,1)*this%rdy)
+        if ( iy == this%nyCells ) iy = iy - 1
+        iz = int(r(3,1)*this%rdz)
+        if ( iz == this%nzCells ) iz = iz - 1
+        icell = 1 + ix + iy*this%nxCells + iz*this%nxyCells
 
     end function m_findCell
 
@@ -465,23 +473,33 @@ module domain3d
 
         do i = 1, n
             r(1:3) = x(1:3,i)
+            where( r > 1.d0+EPS)
+               r = r - 1.d0
+            elsewhere( r > 1.d0)
+               r = 1.d0
+            elsewhere( r < -EPS)
+               r = r + 1.d0
+            elsewhere( r < 0.d0)
+               r = r + 0.d0
+            endwhere
+
             ! wrap in the cell
-            do j=1, 3
-            r(j) = r(j) - int(r(j))
-            if ( r(j) > 1.d0 ) then
-                if ( r(j) - 1.d0 < EPS ) then
-                r(j) = 1.d0
-                else
-                r(j) = r(j) - 1.d0
-                end if
-            else if ( r(j) < 0.d0 ) then
-                if ( r(j) > -EPS ) then
-                r(j) = 0.d0
-                else
-                r(j) = r(j) + 1.d0
-                end if
-            end if
-            end do
+            ! do j=1, 3
+            !     r(j) = r(j) - int(r(j))
+            !     if ( r(j) > 1.d0 ) then
+            !         if ( r(j) - 1.d0 < EPS ) then
+            !             r(j) = 1.d0
+            !         else
+            !             r(j) = r(j) - 1.d0
+            !         end if
+            !     else if ( r(j) < 0.d0 ) then
+            !         if ( r(j) > -EPS ) then
+            !             r(j) = 0.d0
+            !         else
+            !             r(j) = r(j) + 1.d0
+            !         end if
+            !     end if
+            ! end do
             ix = int(r(1)*this%rdx)
             if ( ix == this%nxCells ) ix = ix - 1
             iy = int(r(2)*this%rdy)
@@ -574,12 +592,10 @@ module domain3d
         integer tmp
         logical exclude
 
+        n = 0
+        c = -1
         ! basic arguments check
-        if ( indx == -1 .OR. indx > this%nCells ) then
-            n = 0
-            forall(i=1:27) c(i)=-1
-            return
-        end if
+        if ( indx == -1 .OR. indx > this%nCells ) return
 
         ! find cell indexes i, j, k from index
         tmp = indx-1
@@ -594,46 +610,69 @@ module domain3d
         ! loop over 27 near neighours
         n=0
         do iz = -1, 1
+            kcell = k + iz
+            if ( kcell == this%nzCells+1 ) then
+                if ( .NOT. this%pbox%periodic ) cycle
+                kcell=1
+            else if ( kcell == 0 ) then
+                if ( .NOT. this%pbox%periodic ) cycle
+                kcell=this%nzCells
+            endif
+            tmp = (kcell-1) * this%nxyCells
             do iy = -1, 1
+                jcell = j + iy
+                if ( jcell == this%nyCells+1 ) then
+                    if ( .NOT. this%pbox%periodic ) cycle
+                    jcell=1
+                else if ( jcell == 0 ) then
+                    if ( .NOT. this%pbox%periodic ) cycle
+                    jcell=this%nyCells
+                endif
+                tmp  = tmp + (jcell-1) * this%nxCells 
                 do ix = -1, 1
                     icell = i + ix
-                    jcell = j + iy
-                    kcell = k + iz
                     exclude=.false.
                     if ( icell == this%nxCells+1 ) then
+                        if ( .NOT. this%pbox%periodic ) cycle
                         icell=1
-                        if ( .NOT. this%pbox%periodic ) exclude=.true.
                     else if ( icell == 0 ) then
+                        if ( .NOT. this%pbox%periodic ) cycle
                         icell=this%nxCells
-                        if ( .NOT. this%pbox%periodic ) exclude=.true.
                     endif
-                    if ( jcell == this%nyCells+1 ) then
-                        jcell=1
-                        if ( .NOT. this%pbox%periodic ) exclude=.true.
-                    else if ( jcell == 0 ) then
-                        jcell=this%nyCells
-                        if ( .NOT. this%pbox%periodic ) exclude=.true.
-                    endif
-                    if ( kcell == this%nzCells+1 ) then
-                        kcell=1
-                        if ( .NOT. this%pbox%periodic ) exclude=.true.
-                    else if ( kcell == 0 ) then
-                        kcell=this%nzCells
-                        if ( .NOT. this%pbox%periodic ) exclude=.true.
-                    endif
-                    if ( exclude ) then
-                        tmp = -1
-                    else
-                        tmp=icell + (jcell-1) * this%nxCells + (kcell-1) * this%nxyCells
-                    end if
                     n=n+1
-                    c(n) = tmp
+                    c(n) = icell + tmp
                 end do
             end do
         end do
 
       return
     end subroutine m_getNeighbourCells
+
+    !> finds the grid indexes (i,j,k) given the global index
+    pure subroutine m_get_indexes(this, indx, i, j, k)
+        class(cells3d), target, intent(in) :: this
+        integer(4), intent(in) :: indx
+        integer(4), intent(out) :: i, j, k
+        integer(4) :: tmp
+
+        tmp = indx-1
+        k = tmp/(this%nxy_cells)
+        tmp = tmp - k * this%nxy_cells
+        k = k + 1
+        j = tmp / this%nx_cells
+        tmp = tmp - j * this%nx_cells
+        j = j + 1
+        i = tmp + 1
+    end subroutine m_get_indexes
+
+    !> returns the global index given the grid indexes (i,j,k)
+    pure function m_get_index(this, i, j, k) result(indx)
+        class(cells3d), target, intent(in) :: this
+        integer(4), intent(in) :: i, j, k
+        integer(4) :: indx
+
+        indx = i + (j-1) * this%nx_cells + (k-1) * this%nxy_cells
+    end function m_get_index
 
     subroutine m_destroy(this)
         class(BoxCells), intent(inout) :: this
