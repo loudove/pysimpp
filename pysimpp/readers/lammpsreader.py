@@ -84,7 +84,7 @@ class LammpsDumpsHandler():
             #         requested = requested.difference(supported)
             self._make_link = { _from:_to for _to, _from in zip(_rm, _add)}
             print("INFO: the requested attribute(s) %s are not present in the dump" % str(_rm))
-            print("      file(s); instead they will be mapped into %s ttributes." % str(_add))
+            print("      file(s); instead they will be mapped into %s attributes." % str(_add))
 
         self.canread = len(requested) == 0
         return self.canread
