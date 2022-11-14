@@ -24,7 +24,7 @@ module domain3d
         real(8), dimension (3) :: vx, vy, vz
         !> cell normal vectors (unit)
         real(8), dimension (3) :: nXY, nYZ, nZX
-        !> cell normal vector "projection" lengths
+        !> cell normal vector "projection" inverse lengths
         real(8) :: px, py, pz
         !> cell surfaces
         real(8) :: sXY, sYZ, sZX
@@ -589,7 +589,7 @@ module domain3d
         integer i, j, k
         integer icell, jcell, kcell
         integer ix, iy, iz
-        integer tmp
+        integer tmp, tmpz
         logical exclude
 
         n = 0
@@ -618,7 +618,7 @@ module domain3d
                 if ( .NOT. this%pbox%periodic ) cycle
                 kcell=this%nzCells
             endif
-            tmp = (kcell-1) * this%nxyCells
+            tmpz = (kcell-1) * this%nxyCells
             do iy = -1, 1
                 jcell = j + iy
                 if ( jcell == this%nyCells+1 ) then
@@ -628,7 +628,7 @@ module domain3d
                     if ( .NOT. this%pbox%periodic ) cycle
                     jcell=this%nyCells
                 endif
-                tmp  = tmp + (jcell-1) * this%nxCells 
+                tmp  = tmpz + (jcell-1) * this%nxCells 
                 do ix = -1, 1
                     icell = i + ix
                     exclude=.false.
@@ -650,28 +650,28 @@ module domain3d
 
     !> finds the grid indexes (i,j,k) given the global index
     pure subroutine m_get_indexes(this, indx, i, j, k)
-        class(cells3d), target, intent(in) :: this
+        class(BoxCells), target, intent(in) :: this
         integer(4), intent(in) :: indx
         integer(4), intent(out) :: i, j, k
         integer(4) :: tmp
 
         tmp = indx-1
-        k = tmp/(this%nxy_cells)
-        tmp = tmp - k * this%nxy_cells
+        k = tmp/(this%nxycells)
+        tmp = tmp - k * this%nxycells
         k = k + 1
-        j = tmp / this%nx_cells
-        tmp = tmp - j * this%nx_cells
+        j = tmp / this%nxcells
+        tmp = tmp - j * this%nxcells
         j = j + 1
         i = tmp + 1
     end subroutine m_get_indexes
 
     !> returns the global index given the grid indexes (i,j,k)
     pure function m_get_index(this, i, j, k) result(indx)
-        class(cells3d), target, intent(in) :: this
+        class(BoxCells), target, intent(in) :: this
         integer(4), intent(in) :: i, j, k
         integer(4) :: indx
 
-        indx = i + (j-1) * this%nx_cells + (k-1) * this%nxy_cells
+        indx = i + (j-1) * this%nxcells + (k-1) * this%nxycells
     end function m_get_index
 
     subroutine m_destroy(this)
