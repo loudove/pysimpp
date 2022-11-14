@@ -29,6 +29,7 @@ file ( GLOB LAPACKSOURCES "src/lapack/*.f")
 
 # system handling sources 
 set ( CORESOURCES
+    src/core/argsorting_mod.F90
     src/core/vector3d_mod.F90
     src/core/domain3d_mod.F90
     src/core/lj_mod.F90 )

@@ -375,6 +375,117 @@ subroutine fastwhole(n, rw, molecule, nbonds, bonds, a, b, c, r)
 
 end subroutine fastwhole
 
+!> Get the list of neighbors and the corresponding distances
+subroutine fastneighbors(n, r, v0, va, vb, vc, rcut, maxnb, maxatnb, nnb, nb, rnbsq, ierr)
+
+    use vector3d
+    use domain3d
+    use argsorting
+
+    implicit none
+
+    integer(4), intent(in) :: n          !< number of atoms
+    real(8), dimension(0:n-1,0:2), intent(in) :: r   !< atoms wrapped coordinates
+    real(8), dimension(0:2), intent(in) :: v0, va, vb, vc  !< box edges vectors
+    real(8), intent(in) :: rcut !< neighbor cutoff distance
+    ! Neighbors (nb) and distances (rnb) arrays are linear and the
+    ! specific range for each atsom is retrieved from nnb array, i.e.,
+    ! for atom i the neighbors are placed in nb(si:si+nnb(i)-1) with
+    ! si = sum( nnb( 0:i-1))
+    !> dimension of nb array (i.e. ~ n x [max number of neighbors per atom])
+    integer(4), intent(in) :: maxnb
+    integer(4), intent(in) :: maxatnb !< max number of neighbors per atom
+    integer(4), dimension(0:n-1), intent(out) :: nnb   !< # number of neighbors
+    integer(4), dimension(0:maxnb-1), intent(out) :: nb  !< neighbors array
+    real(8), dimension(0:maxnb-1), intent(out) :: rnbsq !< distances array
+    integer(4), intent(out) :: ierr !< error flag (0: no error, <0 atom where maxatnb isexceed )
+
+    type(SimulationBox) :: box                ! simulation cell
+    type(BoxCells) :: cells                   ! grid sub-cells
+    integer(4), dimension(0:2) :: dn          ! grid sub-division 
+    integer(4) :: ncc                         ! number of neighbor cells
+    integer(4), dimension(27) :: cc           ! neighbor cells indexes
+    integer(4) :: cnat                        ! cell number of atoms
+    integer(4), pointer, dimension (:) :: cat ! cell atoms
+
+    integer(4) :: iat, icell, ic, jcell, j, jat, cnt, k, kk
+    real(8) :: rcutsq, drsq
+    real(8), dimension(3) :: ri, dr
+    integer(4), dimension(0:maxatnb-1,0:n-1) :: nblist
+    real(8), dimension(0:maxatnb-1,0:n-1) :: rsqnblist
+    integer(4), dimension(maxatnb) :: sorted
+    real*8, dimension(0:2,0:n-1) :: rtmp
+
+    ! initialize
+    rcutsq = rcut * rcut
+    nnb = 0
+    nb = -1
+    rnbsq = 0.0
+
+    ! fill cells
+    rtmp = transpose( r)
+    call box%initialize( v0, va, vb, vc, .true.)
+    dn = [ int(1.d0/box%px/rcut), int(1.d0/box%py/rcut), int(1.d0/box%pz/rcut) ]
+    call cells%splitAndfill( box, dn(0), dn(1), dn(2), n, rtmp)
+    if ( .not. cells%initialized) then
+        ierr = 1
+        return
+    endif
+    ! find neighbors
+    ATOMLOOP: do iat = 0, n-1
+        ri = r(iat,:)
+        icell = cells%findcell( ri) !< r(iat,:) no need to be wrapped
+        call cells%getNeighbourCells( icell, ncc, cc) !< get the neighbour cells
+        NBCELLSLOOP: do ic = 1, 27
+            jcell = cc(ic)
+            if ( jcell .eq. -1) cycle
+            ! loop over cell's atoms
+            call cells%getCellAtoms(jcell, cnat, cat)
+            NBATOMSLOOP: do j = 1, cnat
+                jat = cat(j) - 1
+                if ( iat .ge. jat) cycle NBATOMSLOOP
+                dr = r(jat,:) - ri
+                call box%minImgTo( dr)
+                drsq = square(dr)
+                if ( drsq .le. rcutsq) then
+                    if (nnb(iat) .ge. maxatnb ) then
+                        ierr = -iat
+                        return
+                    else
+                        nblist(nnb(iat),iat) = jat
+                        rsqnblist(nnb(iat),iat) = drsq
+                        nnb(iat) = nnb(iat) + 1
+                    endif
+                    if (nnb(jat) .ge. maxatnb ) then
+                        ierr = -jat
+                        return
+                    else
+                        nblist(nnb(jat),jat) = iat
+                        rsqnblist(nnb(jat),jat) = drsq
+                        nnb(jat) = nnb(jat) + 1
+                    endif
+
+                endif
+            end do NBATOMSLOOP
+        end do NBCELLSLOOP
+    end do ATOMLOOP
+
+    ! Copy to output arrays (linearize)
+    ! & sort neighbors based on distances
+    cnt = 0
+    do iat = 0, n-1
+        sorted(1:nnb(iat)) = argsort(rsqnblist(0:nnb(iat)-1,iat))
+        do j = 1, nnb(iat)
+            k = cnt + j - 1
+            kk = sorted(j) - 1
+            nb( k) = nblist( kk, iat)
+            rnbsq( k) = rsqnblist( kk, iat)
+        enddo
+        cnt = cnt + nnb(iat)
+    end do
+
+end subroutine fastneighbors
+
 !> Accelerate checking for concatenations/penetrations (only ortho boxes are supported for now)
 subroutine fastconcatenation(n, r, group, nbonds, bonds, v0, va, vb, vc, rchk, precision)
 
@@ -382,7 +493,7 @@ subroutine fastconcatenation(n, r, group, nbonds, bonds, v0, va, vb, vc, rchk, p
 
     implicit none
 
-    integer, intent(in) :: n                        !< number of atoms
+    integer, intent(in) :: n            !< number of atoms
     real*8, dimension(0:n-1,0:2), intent(in) :: r   !< atoms wrapped coordinates
     !> atoms molecule (zero indexed array)
     integer, dimension(0:n-1), intent(in) :: group
@@ -466,7 +577,7 @@ subroutine fastconcatenation(n, r, group, nbonds, bonds, v0, va, vb, vc, rchk, p
     rtmp = transpose(r)
     call box%initialize( v0, va, vb, vc, .true.)
     dn = [ int(1.d0/box%px/rchk), int(1.d0/box%py/rchk), int(1.d0/box%pz/rchk) ]
-    call cells%splitAndfill( box, dn(0), dn(1), dn(2), n, r)
+    call cells%splitAndfill( box, dn(0), dn(1), dn(2), n, rtmp)
 
     ! find atoms' bonds stuff
     allocate( atbnd(0:2*nbonds-1))
