@@ -175,7 +175,8 @@ class MDAnalysisReader(abcReader):
                 # create the data (LDP TODO automate this based on the given attributes)
                 data = np.zeros( natoms, dtype={ 'names':self.names, 'formats':self.types} )
                 data['id'][:] = atoms.ids
-                data['type'][:] = atoms.types
+                if 'types' in self.names: # LDP: check the attributes set
+                    data['type'][:] = atoms.types
                 # data['el'][:] = map( lambda x: MDAnalysis.topology.core.guess_atom_element(x), atoms.names)
 
                 if self.do_whole:
@@ -424,6 +425,9 @@ class MDAnalysisReader(abcReader):
         '''
         lines = f.readlines()
         atoms = []
+        va = np.zeros(3, dtype=float)
+        vb = np.zeros(3, dtype=float)
+        vc = np.zeros(3, dtype=float)        
         for line in lines[2:2+int(lines[1].strip())]:
             resid = int(line[:5])
             resname = line[5:10]
@@ -439,7 +443,28 @@ class MDAnalysisReader(abcReader):
             else:
                 vx = vy = vz = 0.0
             atoms.append((resid, resname, atomname, atomid, x, y, z, vx, vy, vz))
-        return atoms
+        # get the box
+        tk = lines[-1].strip().split()
+        nbox = len(tk)
+        if nbox == 9:
+            va[0] = float(tk[0])
+            va[1] = float(tk[3])
+            va[2] = float(tk[4])
+            vb[0] = float(tk[5])
+            vb[1] = float(tk[1])
+            vb[2] = float(tk[6])
+            vc[0] = float(tk[7])
+            vc[1] = float(tk[8])
+            vc[2] = float(tk[2])
+        elif nbox == 3:
+            va[0] = float(tk[0])
+            vb[1] = float(tk[1])
+            vc[2] = float(tk[2])
+        else:
+            msg = "ERROR invalid box check the last line of the input gro file."
+            raise MDAnalysisReaderException( msg)
+
+        return atoms, (va,vb,vc)
 
 def main():
     parser = MDAnalysis.core._get_readers.get_parser_for('/Users/loukas.peristeras/linux/files/kerogens/ucl_sructure/gromacs.methane/nvt1.tpr',format=None)

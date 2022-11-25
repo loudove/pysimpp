@@ -875,7 +875,7 @@ def command():
       7) qlong : global order, and
       8) qlocal : local order.
     The property of a molecular species is named by appending "_{SPECIES SNAME}" at the property's name.
-    For example, with argument "0.01,c_CTAC:0.05", the bin length of the
+    For example, with argument "c:0.01@c_CTAC:0.05", the bin length of the
     acylindricity distribution of the clusters is set to 0.01 and for the CTAC molecules to 0.05.
     The special keywords 'all', 'clusters', and 'species' can be given instead of a property's name.
     In this case, all the available properties, the properties of the traced clusters, or the 
