@@ -449,7 +449,7 @@ subroutine fastneighbors(n, r, v0, va, vb, vc, rcut, maxnb, maxatnb, nnb, nb, rn
                 drsq = square(dr)
                 if ( drsq .le. rcutsq) then
                     if (nnb(iat) .ge. maxatnb ) then
-                        ierr = -iat
+                        ierr = -iat-1
                         return
                     else
                         nblist(nnb(iat),iat) = jat
@@ -457,7 +457,7 @@ subroutine fastneighbors(n, r, v0, va, vb, vc, rcut, maxnb, maxatnb, nnb, nb, rn
                         nnb(iat) = nnb(iat) + 1
                     endif
                     if (nnb(jat) .ge. maxatnb ) then
-                        ierr = -jat
+                        ierr = -jat-1
                         return
                     else
                         nblist(nnb(jat),jat) = iat
@@ -485,6 +485,32 @@ subroutine fastneighbors(n, r, v0, va, vb, vc, rcut, maxnb, maxatnb, nnb, nb, rn
     end do
 
 end subroutine fastneighbors
+
+!> Accelerate coordinates deployment around a point 
+!> Essentially, spatial discontinuities of a body due
+!> to periodic boundary conditions are removed. 
+subroutine fastlocal(n, r, r0, v0, va, vb, vc, rlocal)
+    use domain3d
+    implicit none
+    integer, intent(in) :: n
+    real*8, dimension(0:n-1,0:2), intent(in) :: r
+    real*8, dimension(0:2), intent(in) :: r0, v0, va, vb, vc
+    real*8, dimension(0:n-1,0:2), intent(out) :: rlocal
+
+    type(SimulationBox) :: box
+    integer :: i
+    real(8), dimension(3) :: dr
+
+    call box%initialize( v0, va, vb, vc, .true.)
+!$omp parallel do private( i, dr)    
+    do i = 0, n-1 
+        dr = r(i,:) - r0(:)
+        call box%minImgTo(rlocal)
+        rlocal(i,:) = r0(:) + dr(:)
+    enddo
+!$omp end parallel do
+
+end subroutine fastlocal
 
 !> Accelerate checking for concatenations/penetrations (only ortho boxes are supported for now)
 subroutine fastconcatenation(n, r, group, nbonds, bonds, v0, va, vb, vc, rchk, precision)
@@ -1318,7 +1344,7 @@ subroutine fastcom(n, r, mass, molecule, m, cm)
 
 end subroutine fastcom
 
-!> Accelerate fast radious of gyratio calculation
+!> Accelerate fast radious of gyration calculation
 !> (the given coordinates should be unwrapped)
 subroutine fastrg(n, r, mass, molecule, m, excluded, cm, rg)
     implicit none
@@ -1578,7 +1604,7 @@ subroutine gyration(n, r, mass, molecule, m, mexclude, rp, rg, eigval, eigvec, i
     integer, dimension(0:n-1), intent(in) :: molecule ! atom molecule (zero starting indexes)
     integer, intent(in) :: m                          ! # molecules
     logical, dimension(0:m-1), intent(in) :: mexclude ! molecules to be excluded
-    real*8, dimension(0:n-1,0:2), intent(out) :: rp   ! coordinates alligned to the invariant, primary (gyration tensor) frame
+    real*8, dimension(0:n-1,0:2), intent(out) :: rp   ! coordinates aligned to the invariant, principal (gyration tensor) frame
     real*8, dimension(0:m-1,0:5), intent(out) :: rg
     real*8, dimension(0:m-1,0:2), intent(out) :: eigval
     real*8, dimension(0:m-1,0:8), intent(out) :: eigvec
@@ -1635,7 +1661,7 @@ subroutine gyration(n, r, mass, molecule, m, mexclude, rp, rg, eigval, eigvec, i
       rg(im,:) = rg(im,:) / mmass(im)
     end do
 
-    ! calculate eigen and specify the primary axes for each molecule
+    ! calculate eigen and specify the principal axes for each molecule
     NB_ = ILAENV( 1, 'DSYTRD',  UPLO_, N_, -1, -1, -1 )
     LWORK_ = MAX( 1, ( NB_+2 ) * N_ )
     allocate ( WORK_(LWORK_))
@@ -1653,12 +1679,12 @@ subroutine gyration(n, r, mass, molecule, m, mexclude, rp, rg, eigval, eigvec, i
             print*, 'fastpost.f90:gyration: problem in eigenvectors calculation.'
             ! mexclude(im) = .TRUE.
             ! or establish a local frame of convience
-            ! find three atoms and use
+            ! using three atoms of the molecule
             i1 = -1
             i2 = -1
             i3 = -1
             do i = 0, n-1, 3
-                ! find three atoms form the molecule
+                ! find three atoms of the molecule
                 if (molecule(i) == im ) then
                     if ( i1 == -1 ) then
                         i1 = i
@@ -1782,7 +1808,7 @@ subroutine inertia(n, r, mass, molecule, m, mexclude, inert, eigval, eigvec, ier
         inert(im,5) = inert(im,5) - mass(i)*dr(1)*dr(2) ! yz
     end do
 
-    ! calculate eigen and specify the primary axes for each molecule
+    ! calculate eigen and specify the principal axes for each molecule
     NB_ = ILAENV( 1, 'DSYTRD',  UPLO_, N_, -1, -1, -1 )
     LWORK_ = MAX( 1, ( NB_+2 ) * N_ )
     allocate ( WORK_(LWORK_))
@@ -1813,6 +1839,111 @@ subroutine inertia(n, r, mass, molecule, m, mexclude, inert, eigval, eigvec, ier
 
 end subroutine inertia
 
+!> Accelerate alignment with principal frame using gyration/inertia tensor 
+subroutine aligne_principal(n, r, mass, ref, cm, rp, tensor, eigval, eigvec, ierr)
+
+    use vector3d
+
+    implicit none
+
+    integer, intent(in) :: n                          ! # atoms
+    real*8, dimension(0:n-1,0:2), intent(in) :: r     ! unwrapped atom coordinates
+    real*8, dimension(0:n-1), intent(in) :: mass      ! atom mass
+    integer, intent(in) :: ref                        ! reference tensor {0:gyration, 1:inertia}
+    real*8, dimension(0:2), intent(out) :: cm         ! center of mass
+    real*8, dimension(0:n-1,0:2), intent(out) :: rp   ! coordinates aligned to the invariant, principal (gyration tensor) frame
+    real*8, dimension(0:5), intent(out) :: tensor
+    real*8, dimension(0:2), intent(out) :: eigval
+    real*8, dimension(0:8), intent(out) :: eigvec
+    integer, intent(out) :: ierr                       ! error flag (0 on normal exit)
+
+    integer i
+    real*8 :: m
+    real*8, dimension(0:2) :: dr
+    real*8, dimension(3,3) :: frame
+
+    ! eigenvectors stuff
+    character(LEN=1), parameter :: UPLO_ = 'U'
+    integer, parameter :: N_ = 3, LDA_ = 3
+    integer :: LWORK_, NB_, INFO_
+    real*8 :: A_(LDA_,N_), W_(3)
+    real*8, allocatable, dimension (:) :: WORK_
+    integer, external :: ILAENV
+
+    ! initialize
+    rp = 0.d0
+    tensor = 0.d0
+    eigval = 0.d0
+    eigvec = 0.d0
+    ierr = 0
+
+    call fastcom_total(n, r, mass, cm, m)
+    if (ref .eq. 0) then
+        do i = 0, n-1
+            dr = r(i,:) - cm(:)
+            tensor(0) = tensor(0) + mass(i)*dr(0)*dr(0) ! xx
+            tensor(1) = tensor(1) + mass(i)*dr(1)*dr(1) ! yy
+            tensor(2) = tensor(2) + mass(i)*dr(2)*dr(2) ! zz
+            tensor(3) = tensor(3) + mass(i)*dr(0)*dr(1) ! xy
+            tensor(4) = tensor(4) + mass(i)*dr(0)*dr(2) ! xz
+            tensor(5) = tensor(5) + mass(i)*dr(1)*dr(2) ! yz
+        end do
+        tensor = tensor / m
+    elseif (ref .eq. 1) then
+        do i = 0, n-1
+            dr = r(i,:) - cm(:)
+            tensor(0) = tensor(0) + mass(i)*(dr(1)*dr(1)+dr(2)*dr(2)) ! xx
+            tensor(1) = tensor(1) + mass(i)*(dr(0)*dr(0)+dr(2)*dr(2)) ! yy
+            tensor(2) = tensor(2) + mass(i)*(dr(0)*dr(0)+dr(1)*dr(1)) ! zz
+            tensor(3) = tensor(3) - mass(i)*dr(0)*dr(1) ! xy
+            tensor(4) = tensor(4) - mass(i)*dr(0)*dr(2) ! xz
+            tensor(5) = tensor(5) - mass(i)*dr(1)*dr(2) ! yz
+        end do
+    else
+        ierr = 2
+        return
+    endif
+
+    ! calculate eigen and specify the principal axes for each molecule
+    NB_ = ILAENV( 1, 'DSYTRD',  UPLO_, N_, -1, -1, -1 )
+    LWORK_ = MAX( 1, ( NB_+2 ) * N_ )
+    allocate ( WORK_(LWORK_))
+
+    A_(1,1) = tensor(0)
+    A_(2,2) = tensor(1)
+    A_(3,3) = tensor(2)
+    A_(1,2) = tensor(3)
+    A_(1,3) = tensor(4)
+    A_(2,3) = tensor(5)
+    CALL DSYEV( 'V', 'U', N_, A_, LDA_, W_, WORK_, LWORK_, INFO_ )
+    if (INFO_ .ne. 0) then
+        print*, 'fastpost.f90:aligne_principal: problem in eigenvectors calculation.'
+        IERR = 1
+        forall (i=0:n-1) rp(i,:) = r(i,:) - cm(:)
+        return
+    else
+        frame(:,:) = A_
+        eigval(0) = W_(3)
+        eigval(1) = W_(2)
+        eigval(2) = W_(1)
+        eigvec(0:2) = A_(:,3)
+        eigvec(3:5) = A_(:,2)
+        eigvec(6:8) = A_(:,1)
+    endif
+
+    deallocate( WORK_)
+
+    ! express coordinates in the principal frame
+    ! defined from the reference tensor
+    do i = 0, n-1
+        dr = r(i,:) - cm(:)
+        rp(i,2) = dr(0) * frame(1,1) + dr(1) * frame(2,1) + dr(2) * frame(3,1)
+        rp(i,1) = dr(0) * frame(1,2) + dr(1) * frame(2,2) + dr(2) * frame(3,2)
+        rp(i,0) = dr(0) * frame(1,3) + dr(1) * frame(2,3) + dr(2) * frame(3,3)
+    enddo
+
+end subroutine aligne_principal
+
 !> Accelerate order parameter calculations
 subroutine order_parameter( v, exclude, m, Q, eigval, eigvec, IERR)
 
@@ -1842,7 +1973,7 @@ subroutine order_parameter( v, exclude, m, Q, eigval, eigvec, IERR)
 
     IERR = 0    ! initialize
 
-    ! calculate eigen and specify the primary axes for each molecule
+    ! calculate eigen and specify the principal axes for each molecule
     NB_ = ILAENV( 1, 'DSYTRD',  UPLO_, N_, -1, -1, -1 )
     LWORK_ = MAX( 1, ( NB_+2 ) * N_ )
     allocate ( WORK_(LWORK_))
@@ -2007,7 +2138,7 @@ subroutine order_parameter_inertia( n, r, mass, molecule, mexclude, m, Q, eigval
         inert(im,5) = inert(im,5) - mass(i)*dr(1)*dr(2) ! yz
     end do
 
-    ! calculate eigen and specify the primary axes for each molecule
+    ! calculate eigen and specify the principal axes for each molecule
     NB_ = ILAENV( 1, 'DSYTRD',  UPLO_, N_, -1, -1, -1 )
     LWORK_ = MAX( 1, ( NB_+2 ) * N_ )
     allocate ( WORK_(LWORK_))
@@ -2143,7 +2274,7 @@ subroutine order_parameter_vectors(n, r,  m, P, director, mode, IERR)
     Q(2) = Q(2) - 1.d0
     Q = Q / 2.d0 / ( m * ( nm-1))
 
-    ! calculate eigen and specify the primary axes for each molecule
+    ! calculate eigen and specify the principal axes for each molecule
     NB_ = ILAENV( 1, 'DSYTRD',  UPLO_, N_, -1, -1, -1 )
     LWORK_ = MAX( 1, ( NB_+2 ) * N_ )
     allocate ( WORK_(LWORK_))
