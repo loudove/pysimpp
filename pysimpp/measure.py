@@ -42,7 +42,7 @@ def measure(filename, measurement, ndxfile, start, end, every, groups=[], doacf=
     # setup measurement type stuff 
     _multi={'distanse':2, 'angle':3, 'dihedral':4}[measurement]
     _func={'distanse':fastbonds, 'angle':fastangles, 'dihedral':fastdihedrals}[measurement]
-    _bin={'distanse':2.0, 'angle':2.0*__deg2rad, 'dihedral':2.0*__deg2rad}[measurement]
+    _bin={'distanse':0.05, 'angle':2.0*__deg2rad, 'dihedral':2.0*__deg2rad}[measurement]
 
     # read the index file
     ndxs = read_ndx(ndxfile)

@@ -96,11 +96,11 @@ def clusters(filename,
     reader.set_attributes(attributes)
 
     # set the molecule selection flag
-    molecule_selected = np.empty(shape=(nmolecules), dtype=np.bool)
+    molecule_selected = np.empty(shape=(nmolecules), dtype=np.bool_)
     molecule_selected[:] = False
     molecule_selected[selected] = True
     # set the atom selection flag
-    atom_selected = np.empty(shape=(natoms), dtype=np.bool)
+    atom_selected = np.empty(shape=(natoms), dtype=np.bool_)
     atom_selected[:] = False if len(selected) > 0 else True
     for im in selected:
         atom_selected[molecule_atoms[im]] = True
@@ -143,7 +143,7 @@ def clusters(filename,
         if not len(specific) == len(molnames):
             print( "A specific list of atom names should be provided for each residue to be considered.")
             sys.exit(0)
-        atom_specific = np.zeros((natoms), dtype=np.bool)
+        atom_specific = np.zeros((natoms), dtype=np.bool_)
         for _resname, _specific in zip(molnames, specific):
             _atom_specific = atom_molname == _resname
             if not "*" in _specific:

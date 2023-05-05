@@ -876,24 +876,25 @@ class LammpsReader(abcReader):
 
         return (step, box, data)
 
-    def get_type_mass(self):
+    def get_type_mass(self, chkname=False):
         ''' Retrun the {type:mass} dictionary retrieved from data file.
-            If the type names are provided from the comments in the data
-            file or from the system.yaml file, type name  will be used
-            as key. Otherwise, the type id (casting to str) will be used
-            instead.
+            If chkname is True and the type names are provided from the
+            comments in the data file or from the system.yaml file, type
+            name  will be used as key. Otherwise, the type id (casting 
+            to str) will be used instead.
         '''
         typemass = self.data['Masses']
-        if 'Types' in self.data and set(self.data['Types']) == set(typemass):
-            typemass = { self.data['Types'][k]:typemass[k] for k in typemass.keys()}
-        elif not self.yaml is None:
-            names = list(
-                itertools.chain.from_iterable([
-                    s['atomtype'] * s['nmolecules'] for s in self.yaml['specie']
-                ]))
-            types = self.data['types']
-            if len(names) == len(types):
-                typemass = { n:t for n, t in zip(names,types)}
+        if chkname:
+            if 'Types' in self.data and set(self.data['Types']) == set(typemass):
+                typemass = { self.data['Types'][k]:typemass[k] for k in typemass.keys()}
+            elif not self.yaml is None:
+                names = list(
+                    itertools.chain.from_iterable([
+                        s['atomtype'] * s['nmolecules'] for s in self.yaml['specie']
+                    ]))
+                types = self.data['types']
+                if len(names) == len(types):
+                    typemass = { n:t for n, t in zip(names,types)}
         return typemass
 
     def get_atom_molecule(self):
@@ -1093,7 +1094,7 @@ class LammpsReader(abcReader):
         s = None
         try:
             with open( filename, 'r') as f:
-                line = f.readline().strip() # reade the first line
+                line = f.readline().strip() # read the first line
                 if line.startswith("ITEM:"):
                     s =  ('dump','trj')
                 elif line.startswith("LAMMPS ("):

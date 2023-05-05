@@ -51,7 +51,7 @@ def shape(filename,
 
     r = np.zeros( (natoms, 3), dtype=np.float64)    # wrapped
     rp = np.zeros( (natoms, 3), dtype=np.float64)   # principle frame coordinates
-    exclude = np.zeros( (nmolecules), dtype=np.bool) # all false
+    exclude = np.zeros( (nmolecules), dtype=np.bool_) # all false
     rg = np.zeros( (nmolecules,6), dtype=np.float64)        # gyration tensors
     eigval = np.zeros( (nmolecules,3), dtype=np.float64)    # gyration tensors eigenvalues
     eigvec = np.zeros( (nmolecules,9), dtype=np.float64)    # gyration tensors eigenvectors

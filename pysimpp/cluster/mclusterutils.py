@@ -479,8 +479,8 @@ class MCluster(Cluster):
         _masses = atom_mass[ _catoms]
         _molecules = np.array( _molecules)
         eigvec = np.zeros( (len(cluster.molecules),9), dtype=np.float64)
-        exclude = np.zeros( len(cluster.molecules), dtype=np.bool)
-        _exclude = np.zeros( len(cluster.molecules), dtype=np.bool)
+        exclude = np.zeros( len(cluster.molecules), dtype=np.bool_)
+        _exclude = np.zeros( len(cluster.molecules), dtype=np.bool_)
         _molecule_name = molecule_name[ list(cluster.molecules)]
 
         # groups molecules per species

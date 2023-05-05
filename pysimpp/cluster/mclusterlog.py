@@ -112,7 +112,7 @@ class ClOrderLog(ClusterLog):
         qlong = np.array([cl.qlong for cl in clusters])
         # order parameter based on the primary cluster axis
         _v = np.array([cl.rgvec[0:3] for cl in clusters])
-        _exclude = np.zeros(len(_v), dtype=np.bool)
+        _exclude = np.zeros(len(_v), dtype=np.bool_)
         _q, _eigval, _eigvec, _ierr = order_parameter(_v, _exclude)
 
         self.f.write("%d %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n" % # pylint: disable=bad-string-format-type

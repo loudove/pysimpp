@@ -175,7 +175,7 @@ class MDAnalysisReader(abcReader):
                 # create the data (LDP TODO automate this based on the given attributes)
                 data = np.zeros( natoms, dtype={ 'names':self.names, 'formats':self.types} )
                 data['id'][:] = atoms.ids
-                if 'types' in self.names: # LDP: check the attributes set
+                if 'type' in self.names: # LDP: check the attributes set
                     data['type'][:] = atoms.types
                 # data['el'][:] = map( lambda x: MDAnalysis.topology.core.guess_atom_element(x), atoms.names)
 

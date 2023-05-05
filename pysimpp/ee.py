@@ -120,7 +120,7 @@ def endtoend(filename,
     hasselected = nselected > 0  # selected flag
 
     r = np.zeros((natoms, 3), dtype=np.float64)  # wrapped
-    exclude = np.zeros((nmolecules), dtype=np.bool)  # all false
+    exclude = np.zeros((nmolecules), dtype=np.bool_)  # all false
     cm = np.zeros((nmolecules, 3), dtype=np.float64)  # center of mass
     sqrg_ = np.zeros((nmolecules), dtype=np.float64)  # gyration tensors
 
