@@ -51,10 +51,10 @@ def error_print(message,exeption):
     sys.exit()
 
 def chk_version(file):
-    from setuptools.dist import StrictVersion
+    from pkg_resources import parse_version
     try:
         with open(file,'r') as f:
-            version = StrictVersion( f.readline().strip())
+            version = parse_version( f.readline().strip())
     except Exception as exeption:
         error_print("check the license file %s"%file, exeption)
     return version
