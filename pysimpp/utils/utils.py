@@ -19,7 +19,7 @@ def inspect_classes( module):
     return classes
 
 def sequences(a, w0):
-    ''' returns a tuple of pairs with the ranges of the contignious 
+    ''' returns a tuple of pairs with the ranges of the contignious
         sequences of the array a with values greater or equal with w0.
         >>> sequences( [4, 4, 0, 0, 0, 4, 4, 4, 4, 0, 0, 0, 0, 4, 4, 4, 4, 0, 4], 4)
         '''
@@ -60,7 +60,7 @@ def ispositive( string, numbertype=int):
 
 # this is not a general functionality so remove it from here
 def checkstart(line, name, sep="="):
-    '''Check if the given string line starts with name and if yes return a list tk contains 
+    '''Check if the given string line starts with name and if yes return a list tk contains
        the parsing of line "name tk[0] sep tk[0]" e.g. "#declare r=1.0;" if sep is "=". If
        this is not the case returns an empty pair [None, None]. '''
     if line.startswith( name):
@@ -116,9 +116,9 @@ class IsList(object):
 
 class IsListOfList(object):
     ''' Implements list of lists check functionality with custom setting
-        and error handling. Usefull for argparse type check. 
+        and error handling. Usefull for argparse type check.
         A list of list has the form:
-            A,B,C:D,E,G:H,J,L,R    
+            A,B,C:D,E,G:H,J,L,R
     '''
     def __init__(self, message, itemtype=str, positive=False,
                  llen=-1, sep1=':', sep2=','):
@@ -164,9 +164,9 @@ class IsListOfList(object):
 
 class IsListOfNamedList(IsListOfList):
     ''' Implements list of list check functionality with custom setting
-        and error handling. Usefull for argparse type check. 
+        and error handling. Usefull for argparse type check.
         A list of list has the form:
-            N:M:A,B,C@O:P:D,E@G:X:H,J,L,R    
+            N:M:A,B,C@O:P:D,E@G:X:H,J,L,R
     '''
     def __init__(self, message, itemtype=str, positive=False,
                  klen=-1, llen=-1, sep='@', sep1=':', sep2=',',
@@ -178,7 +178,7 @@ class IsListOfNamedList(IsListOfList):
                 itemtype (type) : the type of the items in the lists. Currently
                     int, float and str types are supported.
                 positive (bool) : check if the numbers in the lists are positive.
-                klen (int) : the length of the name-list 
+                klen (int) : the length of the name-list
                 llen (int) : the length of the named lists. If a possitive integer is
                     provided all the lists shoud have the same length and equal to
                     llen
@@ -207,7 +207,7 @@ class IsListOfNamedList(IsListOfList):
                 raise ArgumentTypeError(message)
             items = [
                 list(map(lambda x: x.strip(), _tk.split(self.sep2)))
-                        if self.itemtype is str else 
+                        if self.itemtype is str else
                 islist(_tk, numbertype=self.itemtype, positive=self.positive, sep=self.sep2)
                         for _tk in tk[1:]
             ]
@@ -409,3 +409,14 @@ def read_ndx(f):
         else:
             _d[_type]+=" "+line
     return { k:np.array(list(map( int, _d[k].split()))) for k in list(_d.keys()) }
+
+def argparse_moleculestype( string):
+    ''' check the "-molecules" option arguments. '''
+    if len( string) == 0:
+        return []
+    numbers = isrange( string, positive=True)
+    if len( numbers) == 0:
+        msg = "wrong molecules indexs range (check: %s)" % string
+        import argparse
+        raise argparse.ArgumentTypeError(msg)
+    return numbers

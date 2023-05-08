@@ -63,14 +63,14 @@ def __acf(t, data, fname):
         f.write( "%.3f %.6f\n" % (x1, x2))
     f.close()
 
-def endtoend(filename, 
-    end1, 
-    end2, 
+def endtoend(filename,
+    end1,
+    end2,
     dt=0.0,
-    start=-1, 
-    end=sys.maxsize, 
-    molids=(), 
-    unwrap=True, 
+    start=-1,
+    end=sys.maxsize,
+    molids=(),
+    unwrap=True,
     camc=False,
     bins={}):
 
@@ -83,15 +83,15 @@ def endtoend(filename,
             return
 
     # update defaualt bins
-    _bins = defaultdict( lambda: 1.0, 
-        { "sqree":100.0, "msqree":100.0, "ree":2.0, "mree":2.0, 
+    _bins = defaultdict( lambda: 1.0,
+        { "sqree":100.0, "msqree":100.0, "ree":2.0, "mree":2.0,
         "sqrg":20.0, "msqrg":20.0, "rg":1.0, "mrg":1.0})
     for k, v in bins.items(): _bins[k] = v[0]
 
     # create the reader. for the moment lammps, gromacs and camc (polybead) are supported.
     reader = pysimpp.readers.create(filename)
 
-    if not reader: 
+    if not reader:
         print("ERROR: it was not possible to parse the given file.")
         return
 
@@ -171,7 +171,7 @@ def endtoend(filename,
     nconfs = len(steps)
 
     # create time array
-    _dt = reader.timestep 
+    _dt = reader.timestep
     if _dt == 0.0:
         if dt == 0.0:
             dt = 1.0
@@ -181,7 +181,7 @@ def endtoend(filename,
             print("INFO: the timestep is set to %.2f fs (provided with -dt option)." % dt)
             print("      Nevertheless, a timestep of %.2f fs is found in the trajectory files." % _dt)
         else:
-            dt = _dt    
+            dt = _dt
     dt /= 1000.0 # form ps to ns
     time = np.array(steps, dtype=float) * dt
 
@@ -266,7 +266,7 @@ The output files are (located at the simulation directory):
     mrg_hist.data : mean radius of gyration distribution ''')
 
     # add arguments (self explaned)
-    string = 'the path to the simulation log file. In the case of gromacs' +\
+    string = 'the path to the simulation file. In the case of gromacs' +\
              'simulation, a topology file should be present in the same' +\
              'directory (preferably a tpr file). In the case of lammps the' +\
              'data and dump files will be traced from the corresponding' +\
@@ -299,20 +299,13 @@ The output files are (located at the simulation directory):
         return numbers
     parser.add_argument('-end1', nargs=1, type=argends, metavar='start atom', default=[()], \
                        help='range (start:end:step) of atoms to be used as molecules first atom')
+
     parser.add_argument('-end2', nargs=1, type=argends, metavar='end atom', default=[()], \
                        help='range (start:end:step) of atoms to be used as molecules last atom')
 
-    def argmoleculestype(string):
-        ''' check the "-molecules" option arguments. '''
-        if len(string) == 0:
-            return []
-        numbers = utils.isrange(string, positive=True)
-        if len(numbers) == 0:
-            msg = "wrong molecules indexs range (check: %s)" % string
-            raise argparse.ArgumentTypeError(msg)
-        return numbers
-    parser.add_argument('-molecules', nargs=1, type=argmoleculestype, default=[[]],  metavar='range', \
+    parser.add_argument('-molecules', nargs=1, type=utils.argparse_moleculestype, default=[[]],  metavar='range', \
                        help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
+
 
     parser.add_argument('--no-unwrap', dest='unwrap', default=True, action='store_false', \
                        help="do not unwrap molecules sine the provided trajectories provide unwrapped coordinates.")
@@ -320,7 +313,7 @@ The output files are (located at the simulation directory):
     chktype = utils.IsListOfNamedList("wrong -bins argument (check: %s)", itemtype=float,
         positive=True, llen=1, choices=("sqree","msqree","ree","mree","sqrg","msqrg","rg","mrg"))
     string = '''
-    provide the bins length for the histograms to be calculated. The following 
+    provide the bins length for the histograms to be calculated. The following
     histograms are supported:
       - sqree : square end-to-end vector (default 100.0 Å²)
       - msqree : mean square end-to-end (default 100.0 Å²)

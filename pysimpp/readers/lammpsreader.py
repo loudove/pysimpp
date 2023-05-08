@@ -15,7 +15,7 @@ import yaml
 
 from pysimpp.utils.simulationbox import SimulationBox
 import pysimpp.utils.statisticsutils as statutils
-from pysimpp.fastpost import fastunwrapv, fastwhole # pylint: disable=no-name-in-module
+from pysimpp.fastpost import fastwrap, fastunwrapv, fastwhole # pylint: disable=no-name-in-module
 
 from .reader import abcReader # pylint: disable=import-error
 
@@ -873,6 +873,17 @@ class LammpsReader(abcReader):
                 data['x'][:] = ru[:,0]
                 data['y'][:] = ru[:,1]
                 data['z'][:] = ru[:,2]
+        elif self.do_wrap:
+            # if coordinates are provided without the periodic indexes, 
+            # it is assumed that they are unwrapped
+            if 'x' in data and not 'ix' in data:
+                r = np.zeros((3, data['x'].size), order='F', dtype=np.float64)
+                for k, v in {'x':0,'y':1,'z':2}.items():
+                    if k in data: np.copyto(r[v, :], data[k])
+                rw = fastwrap( r, box.origin, box.va, box.vb, box.vc)
+                data['x'][:] = rw[0,:]
+                data['y'][:] = rw[1,:]
+                data['z'][:] = rw[2,:]
 
         return (step, box, data)
 

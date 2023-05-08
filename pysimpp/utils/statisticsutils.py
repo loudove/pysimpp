@@ -357,7 +357,7 @@ class Histogram():
         hd = _halfbin * self.d
         x = None
         y = None
-        if not _h == None:
+        if not _h is None:
             if self.type == Histogram.FIXED:
                 x = np.zeros(self.n, dtype=np.float32)
                 y = np.zeros(self.n, dtype=np.float32)

@@ -45,7 +45,6 @@ def set_voropp( voropp=""):
         if __debug:
             print("DEBUG: use voro++ python bindings")
 
-
 def run_voropp( rw, box, atom_radius, atom_excluded, periodic, dirname="."):
     ''' Run voro++ using the extended python binding or the
         external executable to reduce memory requirements. '''
@@ -151,3 +150,193 @@ def debug( ):
     print ("voropp: use extented implementation %r" % __pyvoro_extended)
     print ("voropp: use voro++ executable %r" % __voropp_external)
     print ("voropp: voro++ executable %s " % __voropp_exe)
+
+import numpy as np
+from collections import defaultdict
+from enum import Enum
+# from .vectrorutils import get_unit
+from pysimpp.utils.vectorutils import get_unit
+
+class ViewMode( Enum):
+    ALWAYS = 0  # display allways
+    ANY = 1      # display if vertex free
+    ALL = 2      # display only if all vertexes free
+
+class VoronoiCell():
+    ''' Implements a voronoi cell.'''
+
+    def __init__(self):
+        ''' Default constructor '''
+        self.i = -1
+        self.shared = None
+
+    @classmethod
+    def fromrecord(cls, record, indx, network):
+        ''' Ininitalize a voronoi cell from the record provided from voro++
+        python bindings (hacked). '''
+        obj = cls()
+        obj.i = indx
+        obj.x = record['original']
+        obj.r = record['radius'] #+ network.probecritical
+        obj.rsq = obj.r * obj.r
+        obj.volume = record['volume']
+        obj.surface = record['surface']
+        obj.vrmax = 0.25 * record['rmaxsq'] # according to voro++ code
+
+        _vstr = ["(%.8f,%.8f,%.8f)"%tuple(x) for x in record['vertices']]
+        obj.vertexes = tuple( map(network.add_vertex, _vstr))
+        obj.nv = len( obj.vertexes)
+
+        _vfs = tuple( record['areas'])
+        _faces = [x['vertices'] for x in record['faces']] # faces local indexes
+        _vfl = tuple( [tuple([obj.vertexes[i] for i in x]) for x in _faces])
+        obj.neighbors = [x['adjacent_cell'] for x in record['faces']]
+        obj.normals = tuple( [tuple(x) for x in record['normals']])
+
+        obj.faces = []
+        obj.edges = set()
+        for v, s, n in zip(_vfl, _vfs, obj.normals):
+            face = network.add_face( v, s)
+            obj.faces.append( face)
+            obj.edges = obj.edges.union( face.edges)
+
+        obj.avolume = obj.volume
+        obj.asurface = obj.surface
+
+        return obj
+
+    @classmethod
+    def fromline(cls, line, network):
+        '''Initialize a voronoi cell from the output line of voro++ and update the data
+           of the given network.'''
+        obj = cls()
+        tk = line.split()
+        # %i ( The particle ID number)
+        obj.i = int(tk[0]) - 1
+        # %q ( The position vector of the particle, short for “%x %y %z”, wrapped)
+        obj.x = list(map(float, tk[1:4]))
+        # %r ( The radius of the particle (only printed if the polydisperse information is available))
+        obj.r = float(tk[4]) # + network.probecritical
+        obj.rsq = obj.r * obj.r
+        # %v ( The volume of the Voronoi cell)
+        obj.volume = float(tk[5])
+        # %F ( The total surface area of the Voronoi cell)
+        obj.surface = float(tk[6])
+        # %w ( The number of vertices in the Voronoi cell)
+        obj.nv = int(tk[7])
+        nv = obj.nv  # keep the number of vertexes
+        # keep only the indexes of each vertex
+        # %P ( A list of the vertices of the Voronoi cell in the format (x,y,z), relative to the global coordinate system)
+        obj.vertexes = tuple( map(network.add_vertex, tk[8:8 + nv]))
+        # %o ( A list of the orders of each vertex) IS NOT NEEDED TODO: remove it
+        #obj.vo = tuple( map( int, tk[8+nv:8+2*nv]))
+        # %m ( The maximum radius squared of a vertex position, relative to the particle center)
+        obj.vrmax = float(tk[8 + 2 * nv])
+        # %g ( The number of edges of the Voronoi cell)
+        obj.ne = int(tk[8 + 2 * nv + 1])
+        # %s ( The number of faces of the Voronoi cell)
+        obj.nf = int(tk[8 + 2 * nv + 2])
+        nf = obj.nf  # keep the number of faces
+        # %a ( A list of the orders of the faces, showing how many edges make up each face) IS NOT NEEDED TODO: remove it
+        #vfo = tuple( map( int, tk[8+2*nv+3:8+2*nv+3+nf]))
+        # %f ( A list of areas of each face)
+        vfs = tuple(
+            map(float, tk[8 + 2 * nv + 3 + nf:8 + 2 * nv + 3 + 2 * nf]))
+        # %t ( A list of bracketed sequences of vertices that make up each face index @zero)
+        vfl = tuple([tuple([obj.vertexes[int(i)] for i in x[
+                    1:-1].split(",")]) for x in tk[8 + 2 * nv + 3 + 2 * nf:8 + 2 * nv + 3 + 3 * nf]])
+        # %l ( A list of normal vectors for each face : can be calculated instead)
+        obj.normals = tuple([tuple(map(
+            float, x[1:-1].split(","))) for x in tk[8 + 2 * nv + 3 + 3 * nf:8 + 2 * nv + 3 + 4 * nf]])
+        obj.faces = []
+        obj.edges = set()
+        for v, s, n in zip(vfl, vfs, obj.normals):
+            face = network.add_face(v, s)
+            obj.faces.append(face)
+            obj.edges = obj.edges.union(face.edges)
+        # %n ( A list of the neighboring particle or wall IDs corresponding to each face)
+        obj.neighbors = tuple(
+            [int(x)-1 for x in tk[8 + 2 * nv + 3 + 4 * nf:8 + 2 * nv + 3 + 5 * nf]])
+        # accessible volume and surface
+        obj.avolume = obj.volume
+        obj.asurface = obj.surface
+
+        return obj
+
+    @staticmethod
+    def get_neighbors( record):
+        return extruct_close_neighbors( record)
+
+    def face_point(self):
+        '''Returns the points on the constituent faces.'''
+        points = []
+        for f in self.faces:
+            points.append(list(f.vertexes)[0].x)
+        return np.array(points)
+
+    def resetshared(self):
+        ''' Reset xplanes attribute. '''
+        if not self.shared == None:
+            del self.shared
+            self.shared = None
+
+    def updateshared(self):
+        ''' Check if this cell is shared between two or more pores.
+            Is should be called only after pore identification. '''
+        pores = defaultdict( list)
+        for v in [x for x in self.vertexes if not x.overlaped]:
+            pores[ v.cluster].append(v)
+        vects = {}
+        for k, v in pores.items():
+            vects[k] = np.sum( np.array([x.x for x in v]), axis=0)
+        xplanes = defaultdict( list)
+        keys = list(pores.keys())
+        size = len( keys)
+        for k1 in range( size-1):
+            for k2 in range(k1+1, size):
+                p1 = keys[k1]
+                p2 = keys[k2]
+                u = get_unit( vects[ p1] - vects[ p2])
+                xplanes[p1].append( u)
+                xplanes[p2].append( -u)
+        self.shared = xplanes
+
+    def tovmd(self, offset=0.1, viewmode = ViewMode.ALWAYS, particle=False,
+              vertexes=False, vradius=0.2, edges=False, ewidth=2, VMDresolution = 17, color="red3", fcolor="blue2"):
+        '''Retruns draw commands to display this cell to vmd.'''
+        ret = "draw color %s\n" % color
+        # draw cell center (i.e. the coresponding particle) using commnet if the partilce flag is False
+        ret += "" if particle else ";"
+        if particle:
+            ret += "draw sphere {%f %f %f} radius %f resolution %d\n" % tuple( list(self.x) + [ self.r/2, VMDresolution])
+        ret += "draw color %s\n" % fcolor
+        # ret += "draw material Transparent\n"
+        if viewmode == ViewMode.ALWAYS: # print without checking overlap flag
+            for f, n in zip(self.faces, self.normals):
+                ret += f.tovmd(self.x, -np.array(n), offset=offset)
+            ret += "draw color %s\n" % color
+            # ret += "draw material Opaque\n"
+            if vertexes:
+                for v in self.vertexes:
+                    if not v.overlaped: ret += v.tovmd(radius=vradius)
+            if edges:
+                for e in self.edges:
+                    if not e.overlaped: ret += e.tovmd(width=ewidth)
+        else:
+            if viewmode == ViewMode.ANY:   # print face only if any of the vertexes is not overlaped
+                for f, n in zip(self.faces, self.normals):
+                    if any( [not x.overlaped for x in f.vertexes]):
+                        ret += f.tovmd(self.x, -np.array(n), offset=offset)
+            elif viewmode == ViewMode.ALL: # print face only if all the vertexes are not overlaped
+                for f, n in zip(self.faces, self.normals):
+                    if all( [not x.overlaped for x in f.vertexes]):
+                        ret += f.tovmd(self.x, -np.array(n), offset=offset)
+            ret += "draw color %s\n" % color
+            # ret += "draw material Opaque\n"
+            if vertexes: # print vertex if is not overlaped
+                for v in self.vertexes:
+                    if not v.overlaped: ret += v.tovmd(radius=vradius)
+            if edges:    # print edge if is not overlaped
+                for e in self.edges:
+                    if not e.overlaped: ret += e.tovmd(width=ewidth)
+        return ret

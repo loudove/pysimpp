@@ -18,16 +18,16 @@ def _short_description(): return 'Calculate gyration tensor and stuff.'
 
 def _command(): command()
 
-def shape(filename, 
-    start=-1, 
-    end=sys.maxsize, 
-    molids=(), 
+def shape(filename,
+    start=-1,
+    end=sys.maxsize,
+    molids=(),
     unwrap=True,
     camc=False):
 
-    # create the reader. for the moment lammps, gromacs and camc (polybead)
+    # create the reader
     reader = pysimpp.readers.create(filename)
-    if not reader: 
+    if not reader:
         print("ERROR: it was not possible to parse the given file.")
         return
 
@@ -191,25 +191,23 @@ The output files are (located at the simulation directory):
     dprof.cube : mass density spatian distribution(3d) ''')
 
     # add arguments (self explaned)
-    string = 'the path to the simulation log file. In the case of gromacs simulation, a topology file' + \
-             'should be present in the same directory (preferably a tpr file).'
+    string = 'the path to the simulation file. In the case of gromacs' +\
+             'simulation, a topology file should be present in the same' +\
+             'directory (preferably a tpr file). In the case of lammps the' +\
+             'data and dump files will be traced from the corresponding' +\
+             'log records, otherwise a data and a dump file with the same' +\
+             'base name as the log file should exist in the same directory.'
+
     parser.add_argument('path', default="."+os.sep,  \
                        help=string)
+
     parser.add_argument('-start', nargs=1, type=int, metavar='n', default=[-1], \
                        help='start processing form configuration START [inclusive]')
+
     parser.add_argument('-end', nargs=1, type=int, metavar='n', default=[sys.maxsize], \
                        help='stop processing at configuration END [inclusive]')
 
-    def argmoleculestype( string):
-        ''' check the "-molecules" option arguments. '''
-        if len( string) == 0:
-            return []
-        numbers = utils.isrange( string, positive=True)
-        if len( numbers) == 0:
-            msg = "wrong molecules indexs range (check: %s)" % string
-            raise argparse.ArgumentTypeError(msg)
-        return numbers
-    parser.add_argument('-molecules', nargs=1, type=argmoleculestype, default=[[]],  metavar='range', \
+    parser.add_argument('-molecules', nargs=1, type=utils.argparse_moleculestype, default=[[]],  metavar='range', \
                        help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
 
     parser.add_argument('--no-unwrap', dest='unwrap', default=True, action='store_false', \
@@ -233,9 +231,9 @@ The output files are (located at the simulation directory):
     if __debug:
         print(args.molecules[0])
 
-    shape( args.path, 
-        start=args.start[0], 
-        end=args.end[0], 
+    shape( args.path,
+        start=args.start[0],
+        end=args.end[0],
         molids=args.molecules[0],
         unwrap=args.unwrap)
         # camc=args.camc)

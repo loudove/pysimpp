@@ -43,8 +43,9 @@ class abcReader(metaclass=abc.ABCMeta):
         self.natoms = 0
         self.timestep = 0.0
         self.yaml = None
-        self.do_unwrap = False
-        self.do_whole = False
+        self.do_unwrap = False # force unwrap
+        self.do_wrap = False   # force wrap
+        self.do_whole = False  # force whole
         self.error = ""
 
     @abc.abstractmethod
@@ -191,6 +192,18 @@ class abcReader(metaclass=abc.ABCMeta):
                     in the keys 'xu', 'yu', and 'zu'.
         '''
         self.do_unwrap = flag
+
+    def set_wrap(self, flag):
+        ''' Set reader's wrap flag.
+            Args:
+                flag(bool): if true the data dict returned form the read_next_frame
+                    method reader will include the rapped coordinates of the frame
+                    in the keys 'x', 'y', and 'z'. if unwrapper coordinate already
+                    exist in the data dict (i.e., 'x', 'y', or 'z') without the
+                    corrsponding periodic flags (i.e., 'ix', 'iy', or 'iz') they will
+                    be also wrapped into the cell.
+        '''
+        self.do_wrap = flag
 
     def set_whole(self, flag):
         ''' Set reader's whole flag.

@@ -10,10 +10,10 @@ import numpy as np
 from scipy import stats
 
 import pysimpp.readers
-from pysimpp.utils.utils import isrange, islist, read_ndx, ispositive
+from pysimpp.utils.utils import isrange, islist, read_ndx, ispositive, argparse_moleculestype
 from pysimpp.utils.statisticsutils import Histogram
 
-from pysimpp.fastpost import fasts1, fasts1x, fastwrap, fastunwrapv, fastunwrap, fastcom, fastcom_total
+from pysimpp.fastpost import fasts1x, fastwrap, fastcom, fastcom_total
 
 def _is_command(): return True
 def _short_description(): return 'Calculate mean square displacement.'
@@ -215,18 +215,17 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
     usecom = True
 
     # TODO check for gromacs: the provided trajectory is assumed allready unwrapped.
-    _unwrap = True 
+    _unwrap = True
     reader.set_unwrap( _unwrap)
     attributes = 'id x y z type'
     reader.set_attributes( attributes)
 
     dirname = reader.dir
-    natoms = reader.natoms
 
+    natoms = reader.natoms
     # get molecular data and select molecules of interest
     # TODO refactor massesar
     types = reader.get_atom_type()              # atom type array (number or string based)
-    ntypes = len( set( types))
     masses = reader.get_type_mass()             # type mass
     massesar = np.array( [ masses[ types[iat]] for iat in range( natoms) ]) # atom mass array (accelerate)
     molecules = reader.get_atom_molecule() - 1  # atom molecule array (index @zero)
@@ -242,7 +241,7 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
         _molids = set().union( molids, *(_grps.values()))
     else:
         _molids = molids
-    
+
     selected = np.sort( _molids) - 1             # selected molecules (index @zero)
     if not usecom:                              # if needed convert to atoms
         satoms = []
@@ -260,29 +259,24 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
     _dimensions = 'xyz'
     attributes, dmap, dmapinv = _dimsbookkeep( _dimensions, _unwrap)
     ndims = len( _dimensions)
+    reader.set_attributes( attributes)
 
     print('>> count configurations in dump file(s) ...')
-    reader.set_attributes( attributes)
     nconfs = reader.count_frames( start, end) if  maxconfs == -1 else maxconfs
 
     # allocate wrapped and unwrapped molecules coordinates
     n_ = nselected if hasselected else nmolecules if usecom else natoms
     cmw = np.zeros( (nconfs, n_, ndims), dtype=np.float32) # wrapped
     cm = np.zeros( (nconfs, n_, ndims), dtype=np.float32)
-
     r = np.empty( shape=(natoms,ndims), dtype=np.float32)      # unwrapped coordinates
-    if _unwrap:
-        rw = np.empty( shape=(natoms,ndims), dtype=np.float32) # wrapped coordinates
-        ip = np.empty( shape=(natoms,ndims), dtype=np.int32)   # periodic offsets
-    steps = []
-    boxes = []
-
     # initial system center of mass
     cm0 = np.zeros((3),dtype=np.float32)
     # vector for com move removal
     delta = np.zeros((3),dtype=np.float32)
 
     print('\n>> reading dump file(s) ...')
+    steps = []
+    boxes = []
     iconf = -1
     iconf_ = 0
     while( True):
@@ -307,7 +301,7 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
             if __rmcm:
                 cmtotal, masstotal = fastcom_total( r, massesar)
                 if len(boxes) == 1:
-                    cm0[:] = cmtotal                
+                    cm0[:] = cmtotal
                 else:
                     delta[:] = cmtotal-cm0
                     r -= delta
@@ -339,7 +333,7 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
         cmw = np.resize( cmw, (nconfs, _s[1], _s[2]))
 
     # get the timestep in ps and handle some cases
-    _dt = reader.timestep 
+    _dt = reader.timestep
     if _dt == 0.0:
         if dt == 0.0:
             dt = 1.0
@@ -594,7 +588,7 @@ def _max_consecutive( data, stepsize=1):
         return (imin,imax)              # return the indexes
     else:
         return (1, data.size-1)
-# LDP: this is kept only for archive 
+# LDP: this is kept only for archive
 def msd_straight( r):
     ''' Calculate the MDS using the conventional approach and a time
         based loop. The input array should contain atom's coordinates
@@ -629,7 +623,7 @@ def msd_straight( r):
     msds[1:] /= (natoms*ncnt[1:])
     return msds
 
-# LDP: this is kept only for archive 
+# LDP: this is kept only for archive
 def msd_shift( r):
     ''' Calculate the MDS using the conventional approach and a shihft
         based loop. The input array
@@ -694,7 +688,7 @@ def msd_fft( r, atomic=True):
     elif n == 1:
         return _msd_fft1( r), None
 
-# LDP: this is kept only for archive 
+# LDP: this is kept only for archive
 def _msd_fft1( r):
     ''' One atom/One dimension. The argument is expected to be
         one dimension array (r[nconfs]).'''
@@ -709,7 +703,7 @@ def _msd_fft1( r):
         S1[m] = Q / _N
     return (S1-2*S2)
 
-# LDP: this is kept only for archive 
+# LDP: this is kept only for archive
 def _msd_fft2( r):
     ''' Many atoms/One dimension. The argument is expected to be
         two dimension array (r[nconfs,atoms]).'''
@@ -766,7 +760,7 @@ def _msd_fft3x( r, path="", w=None):
         two dimension array (r[nconfs,atoms,n]). The total msd and
         the msd per for each dimension are returned. In addition
         the file with the msds for each particle is writen in
-        path+atomic.pkl pickle file and the weights w for each 
+        path+atomic.pkl pickle file and the weights w for each
         timestep are calculated to be used in teh fitting of msd(t)
         performed ala gromacs. '''
     # check also:
@@ -774,11 +768,11 @@ def _msd_fft3x( r, path="", w=None):
 
     N, natoms, n = r.shape
 
-    # calculate position components squares and find their 
+    # calculate position components squares and find their
     # mean values (over particles)
     _Ds = np.square(r)
     Ds = _Ds.sum( axis=1)
-    # calculate the ACF for each particle and find their 
+    # calculate the ACF for each particle and find their
     # mean value (over particles)
     _S2 = [ _FFTND(r[:, i]) for i in range(r.shape[1])]
     S2 = np.sum( _S2, axis=0)
@@ -887,42 +881,42 @@ def command():
     parser = argparse.ArgumentParser(description='Calculate mean square displacement.')
 
     # add arguments (self explaned)
-    string = 'the path to the simulation log file. In the case of gromacs simulation, a topology file' + \
-             'should be present in the same directory (preferably a tpr file).'
+    string = 'the path to the simulation file. In the case of gromacs' +\
+             'simulation, a topology file should be present in the same' +\
+             'directory (preferably a tpr file). In the case of lammps the' +\
+             'data and dump files will be traced from the corresponding' +\
+             'log records, otherwise a data and a dump file with the same' +\
+             'base name as the log file should exist in the same directory.'
+
     parser.add_argument('path', default="."+os.sep,  \
                        help=string)
+
     parser.add_argument('-dim', nargs=1, choices=[ 'x', 'y', 'z', 'xy', 'xz', 'yz', 'xyz'], \
                        metavar='dim', default=['xyz'], \
                        help='produce the MSD for the given dimension(s)')
+
     parser.add_argument('-maxconfs', nargs=1, type=int, metavar='n', default=[-1], \
                        help='pre-allocate memmory for the given number of cofigurations.')
+
     parser.add_argument('-start', nargs=1, type=int, metavar='n', default=[-1], \
                        help='start processing form configuration START [inclusive]')
+
     parser.add_argument('-end', nargs=1, type=int, metavar='n', default=[sys.maxsize], \
                        help='stop processing at configuration END [inclusive]')
+
     parser.add_argument('-every', nargs=1, type=int, metavar='n', default=[1], \
                        help='process every EVERY configuration')
+
     def argdttype( string):
         val = ispositive( string, numbertype=float)
         if val is None:
             msg = "wrong integration timestep (check: %s)" % string
             raise argparse.ArgumentTypeError(msg)
         return val
-
     parser.add_argument('-dt', nargs=1, type=argdttype, default=[0.0], metavar='timestep', \
                        help='integration timeste in ps')
 
-    def argmoleculestype( string):
-        ''' check the "-molecules" option arguments. '''
-        if len( string) == 0:
-            return []
-        numbers = isrange( string, positive=True)
-        if len( numbers) == 0:
-            msg = "wrong molecules indexs range (check: %s)" % string
-            raise argparse.ArgumentTypeError(msg)
-        return numbers
-
-    parser.add_argument('-molecules', nargs=1, type=argmoleculestype, default=[[]],  metavar='range', \
+    parser.add_argument('-molecules', nargs=1, type=argparse_moleculestype, default=[[]],  metavar='range', \
                        help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
 
     def argslabtype( string):
@@ -957,7 +951,7 @@ def command():
 
     string = 'the file with the molecular indexes (starting from 1) to consideted in the calculation of the msd. ' + \
         'The file should conform with gromacs format. All the groups found in the file will be considered.'
-    parser.add_argument('-ndx', nargs=1, type=argparse.FileType('r'), metavar='file', default=[None], required=False, help=string)             
+    parser.add_argument('-ndx', nargs=1, type=argparse.FileType('r'), metavar='file', default=[None], required=False, help=string)
 
     # parse the arguments
     args = parser.parse_args()
