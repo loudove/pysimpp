@@ -980,11 +980,12 @@ subroutine fastwrap(n, r, v0, va, vb, vc, rw)
     real*8, dimension( 0:2, 0:n-1), intent(out) :: rw !< atoms wrapped coordinates
 
     type(SimulationBox) :: box
+    real*8, dimension( 0:2), parameter :: zr = (/ 0.d0, 0.d0, 0.d0 /)
 
     rw = r
     call box%initialize( v0, va, vb, vc, .true.)
     call box%toFractional( n, rw)
-    call fastwrapo(n, rw, v0, 1.D0, 1.D0, 1.D0, rw)
+    call fastwrapo(n, rw, zr, 1.D0, 1.D0, 1.D0, rw)
     call box%toCartesian( n, rw)
 
 end subroutine fastwrap
