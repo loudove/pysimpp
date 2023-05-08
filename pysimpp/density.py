@@ -167,9 +167,9 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
             break
 
     for _d, profile in profiles.items():
-        _dname = "%s%s"%(_dnames[ _d], "_com" if usecom else "")
+        _dname = "%s%s"%("com_" if usecom else "", _dnames[ _d])
         header="# %s_[A] probability_[1/A]" % ( _dname)
-        profile.write(reader.dir+os.sep+"cm_%s.data" % _dname, header=header)
+        profile.write(reader.dir+os.sep+"%s_prf.data" % _dname, header=header)
 
 def command():
 
