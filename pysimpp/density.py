@@ -130,9 +130,10 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
 
             if len(profiles) == 0:
                 for _d in _dims:
-                    length = (box.a,box.b,box.c)[_d]
+                    origin = box.origin[_d]
+                    length = origin + (box.a,box.b,box.c)[_d]
                     # nbins=round(length/bin)
-                    profiles[_d] = Histogram.fixed( 0.0, length, bin)
+                    profiles[_d] = Histogram.fixed( origin, length, bin)
 
             steps.append( step)
             boxes.append( box)
