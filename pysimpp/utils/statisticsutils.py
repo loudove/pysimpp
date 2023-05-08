@@ -212,11 +212,12 @@ class Binning():
         y = None
         std = None
         if not _h == None:
+            # TODO: fix the output range          
             if self.type == Histogram.FIXED:
-                x = np.zeros(self.n, dtype=np.float32)
-                y = np.zeros(self.n, dtype=np.float32)
-                std = np.zeros(self.n, dtype=np.float32)
-                for i in range(self.n):
+                x = np.zeros(self.n-1, dtype=np.float32)
+                y = np.zeros(self.n-1, dtype=np.float32)
+                std = np.zeros(self.n-1, dtype=np.float32)
+                for i in range(self.n-1):
                     x[i] = self.min + i * self.d + hd
                     y[i] = _h[i].mean()
                     std[i] = _h[i].std()
@@ -358,10 +359,14 @@ class Histogram():
         x = None
         y = None
         if not _h is None:
+            # TODO: fix the output range
+            # the last bin keeps the out-of-range data. 
+            # a different mechanism should be implemented
+            # for this, and the output range should be fixed             
             if self.type == Histogram.FIXED:
-                x = np.zeros(self.n, dtype=np.float32)
-                y = np.zeros(self.n, dtype=np.float32)
-                for i in range(self.n):
+                x = np.zeros(self.n-1, dtype=np.float32)
+                y = np.zeros(self.n-1, dtype=np.float32)
+                for i in range(self.n-1):
                     x[i] = self.min + i * self.d + hd
                     y[i] = _h[i]
             elif self.type == Histogram.FREE:
