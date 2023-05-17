@@ -1013,8 +1013,9 @@ subroutine pefastunwrap(n, rw, nch, maxnatch, natch, chat , a, b, c, r)
 
     box = (/ a(0), b(1), c(2) /)
     rbox = 1.d0 / box
-    r = 0.d0
+    r(:,:) = 0.d0
 
+!$omp parallel do private(i,j,k,l,dr)
     do i = 0, nch-1
         k = chat(i,0)
         r( k, 0:2) = rw( k, 0:2)
@@ -1026,8 +1027,85 @@ subroutine pefastunwrap(n, rw, nch, maxnatch, natch, chat , a, b, c, r)
             r(l,0:2) = r(k,0:2) + dr
         end do
     end do
+!$omp end parallel do
 
 end subroutine pefastunwrap
+
+!> Accelerate coordinateas unwrapping and adding the missing hydrogens 
+!> in the UA representation of polyethylene model
+!> (only ortho boxes are supported for now)
+subroutine pefastaddhydrogens(n, rw, nch, maxnatch, natch, chat , a, b, c, len, theta, r)
+
+    use vector3d
+
+    implicit none
+    !> # of atoms, # of chains, max atoms per chain
+    integer, intent(in) :: n, nch, maxnatch
+    !> unwrapped coordinates
+    real(8), dimension(0:n-1,0:2), intent(in) :: rw
+    !> # of atoms per chain
+    integer, dimension(0:nch-1), intent(in) :: natch
+    !> atoms for each chain
+    integer, dimension(0:nch-1, 0:maxnatch-1), intent(in) :: chat
+    !> box spanning vectors
+    real(8), dimension(0:2), intent(in) :: a, b, c
+    !> C-H bond length
+    real(8), intent(in) :: len
+    !> H-C-H angle
+    real(8), intent(in) :: theta
+    !> all atom representation coordinates
+    real(8), dimension(0:n*3+nch*2-1,0:2), intent(out) :: r
+
+    !> unwrapped coordinates
+    real(8), dimension(0:n-1,0:2) :: ru
+
+    integer :: ich
+    integer :: i, j, k
+    integer :: iat, cnt
+    real*8, dimension(3) :: p
+    real*8, dimension(0:2) :: box, rbox
+
+    box = (/ a(0), b(1), c(2) /)
+    rbox = 1.d0 / box
+
+    call pefastunwrap(n, rw, nch, maxnatch, natch, chat , a, b, c, ru)
+
+!$omp parallel do private(ich,cnt,i,j,k,p,iat)
+    do ich = 0, nch-1
+        ! the index of the first atom of the chain in all atoms represenetaion
+        cnt = sum( natch(0:ich-1)) * 3 + ich * 2
+        i = chat(ich,0)
+        j = chat(ich,1)
+        k = chat(ich,2)
+        !> find the position of the first hydrogen
+        p = build_dihedral( ru(k,:), ru(j,:), ru(i,:), len, theta, 0.d0)
+        !> add carbon and hydrogens of the first methylene
+        r(cnt,:) = p
+        r(cnt+1,:) = ru(i,:)
+        call build_tetrahedral(p, ru(i,:), ru(j,:), len, theta, r(cnt+2,:), r(cnt+3,:))
+        cnt = cnt + 4
+        !> add the carbon and hydrogens of the inner methylenes
+        do iat = 1, natch(ich)-2
+            i = chat(ich,iat-1)
+            j = chat(ich,iat)
+            k = chat(ich,iat+1)
+            r(cnt,:) = ru(j,:)
+            call build_tetrahedral(ru(i,:), ru(j,:), ru(k,:), len, theta, r(cnt+1,:), r(cnt+2,:))
+            cnt = cnt + 3
+        enddo
+        !> find the position of the last hydrogen
+        i = chat(ich,natch(ich)-3)
+        j = chat(ich,natch(ich)-2)
+        k = chat(ich,natch(ich)-1)
+        p = build_dihedral( ru(i,:), ru(j,:), ru(k,:), len, theta, 0.d0)
+        !> add the carbon and the hydrogens of the last methylene
+        r(cnt,:) = ru(k,:)
+        call build_tetrahedral(ru(j,:), ru(k,:), p, len, theta, r(cnt+1,:), r(cnt+2,:))
+        r(cnt+3,:) = p
+    end do
+!$omp end parallel do
+
+end subroutine pefastaddhydrogens
 
 !> calculate energy and virial pressure (molecular) for pe
 !> ua-model using trappe force field (CH2 for all the atoms)
