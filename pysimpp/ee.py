@@ -41,9 +41,8 @@ def __acf(t, data, fname):
 
     a=np.zeros( (M,N), dtype=float)
     for i, d in enumerate(data):
-        ld=np.sqrt((d*d).sum(axis=1)) # convert to unit
-        a_=d/ld[:,np.newaxis]
-        a[:,i]=a_.reshape(M)
+        ld=np.sqrt((d*d).sum(axis=1,keepdims=True)) # convert to unit
+        a[:,i]=(d/ld).reshape(M)
     acf=[]
     nrm_ = np.arange(N, 0, -1, dtype=float)
     for i, ai in enumerate(a):
@@ -53,7 +52,7 @@ def __acf(t, data, fname):
         # tmp = np.correlate(ai, ai, mode='full')
         tmp = correlate(ai, ai, mode='full')
         # s_ += tmp[int(tmp.size/2):]/tmp[int(tmp.size/2)]
-        s_ += tmp[int(tmp.size/2):]
+        s_ += tmp[tmp.size//2:]
         # s_ += _FFT1D(ai,normalize=False)
 
     acf=np.array(acf).mean(axis=0).transpose()
@@ -71,13 +70,16 @@ def endtoend(filename,
     end=sys.maxsize,
     molids=(),
     unwrap=True,
+    persistence=False,
     camc=False,
     bins={}):
 
     # check the ends
     if not camc:
         e1 = list(range(end1[0]-1, end1[1]+1, end1[2]))
+        e1p = np.array( range(end1[0], end1[1]+1, end1[2]))
         e2 = list(range(end2[0]-1, end2[1]+1, end2[2]))
+        e2p = np.array( range(end2[0], end2[1]+1, end2[2]))
         if not len(e1) == len(e2):
             print("ERROR: incompatible first/last atoms range.")
             return
@@ -85,7 +87,7 @@ def endtoend(filename,
     # update defaualt bins
     _bins = defaultdict( lambda: 1.0,
         { "sqree":100.0, "msqree":100.0, "ree":2.0, "mree":2.0,
-        "sqrg":20.0, "msqrg":20.0, "rg":1.0, "mrg":1.0})
+          "sqrg":20.0, "msqrg":20.0, "rg":1.0, "mrg":1.0, "pl":1.0,"bnd":0.2})
     for k, v in bins.items(): _bins[k] = v[0]
 
     # create the reader. for the moment lammps, gromacs and camc (polybead) are supported.
@@ -136,6 +138,18 @@ def endtoend(filename,
     iconf = -1
     eevectors = []
     sqrg = []
+
+    # persistence length stuff
+    if persistence:
+        bnd = np.zeros( (natoms,3), dtype=np.float64)
+        natch_ = natoms//nmolecules
+        nbndch_ = natch_ - 1
+        bndacf = []
+        hlp = Histogram.free(_bins["pl"], 0.0, addref=False)
+        _hlp = defaultdict( lambda: Histogram.free(_bins["pl"], 0.0, addref=False))
+        hbndl = Histogram.free(_bins["bnd"], 0.0, addref=False)
+        nrm_ = np.arange( nbndch_, 0, -1, dtype=float)
+
     while (True):
         step, box, data = reader.read_next_frame()
         if step == None:
@@ -154,6 +168,8 @@ def endtoend(filename,
                 natch, chat, e1_, e2_ = reader.get_topology()
                 e1 = np.array(e1_)[selected]
                 e2 = np.array(e2_)[selected]
+                e1p = e1+1
+                e2p = e2+1
                 molecules = reader.get_atom_molecule() - 1
                 masses = reader.get_atom_mass()
             r[:, 0] = data['x']
@@ -166,6 +182,27 @@ def endtoend(filename,
         eevectors.append(eev)
         cm[:,:], sqrg__ = fastrg( r, masses, molecules, exclude)
         sqrg.append( sqrg__[selected])
+
+        if persistence:
+            bnd[1:,:] = r[1:,:] - r[:-1,:]
+            bnd[e1,:] = eev
+            bndl = np.sqrt( (bnd*bnd).sum(axis=1,keepdims=True))
+            bnd[:] = bnd / bndl
+            # flory definition
+            np.vectorize(hlp.add)( ( eev*bnd[e1p,:]).sum(axis=1))
+            for k in range(nbndch_):
+                np.vectorize( _hlp[k].add)( ( eev*bnd[e1p+k,:]).sum(axis=1))
+            # bond length distribution
+            np.vectorize(hbndl.add)( bndl)
+            # acf definition
+            for i, j in zip(e1p,e2p):
+                v = bnd[i:j].transpose()
+                s_ = np.zeros(nbndch_, dtype=float)
+                for i, vi in enumerate(v):
+                    tmp = correlate(vi, vi, mode='full')
+                    s_ += tmp[tmp.size//2:]
+                s_/=nrm_
+                bndacf.append(s_)
 
     # number of configurations - resize if needed
     nconfs = len(steps)
@@ -228,20 +265,37 @@ def endtoend(filename,
     f1.close()
     f2.close()
     # output end-to-end data
-    hsqree.write(reader.dir+os.sep+"sqree_hist.data", fmt="%f %g")
-    hree.write(reader.dir+os.sep+"ree_hist.data")
-    hmsqree.write(reader.dir+os.sep+"msqree_hist.data")
-    hmree.write(reader.dir+os.sep+"mree_hist.data")
+    hsqree.write(reader.dir+os.sep+"sqree_hist.data", fmt="%f %g", header="# %s"%str(hsqree.variable))
+    hree.write(reader.dir+os.sep+"ree_hist.data", header="# %s"%str(hree.variable))
+    hmsqree.write(reader.dir+os.sep+"msqree_hist.data", header="# %s"%str(hmsqree.variable))
+    hmree.write(reader.dir+os.sep+"mree_hist.data", header="# %s"%str(hmree.variable))
     # output radious of gyration data
-    hsqrg.write(reader.dir+os.sep+"sqrg_hist.data", fmt="%f %g")
-    hrg.write(reader.dir+os.sep+"rg_hist.data")
-    hmsqrg.write(reader.dir+os.sep+"msqrg_hist.data")
-    hmrg.write(reader.dir+os.sep+"mrg_hist.data")
+    hsqrg.write(reader.dir+os.sep+"sqrg_hist.data", fmt="%f %g", header="# %s"%str(hsqrg.variable))
+    hrg.write(reader.dir+os.sep+"rg_hist.data", header="# %s"%str(hrg.variable))
+    hmsqrg.write(reader.dir+os.sep+"msqrg_hist.data", header="# %s"%str(hmsqrg.variable))
+    hmrg.write(reader.dir+os.sep+"mrg_hist.data", header="# %s"%str(hmrg.variable))
 
     # mean square end-to-end vector autocorrelation
     __acf(time, eevectors, reader.dir+os.sep+"ree_acf.data")
 
     print()
+    if persistence:
+        hlp.write(reader.dir+os.sep+"lp_hist.data", header="# %s"%str(hlp.variable))
+        hbndl.write(reader.dir+os.sep+"bndl_hist.data", header="# %s"%str(hbndl.variable))
+
+        # flory flory definition (bond dependent)
+        f=open(reader.dir+os.sep+"lp_bnd.data",'w')
+        f.write("# mean     std       min       max\n")
+        for k in range(nbndch_):
+            v = _hlp[k].variable
+            f.write("%d %g %g %g %g\n"%(k, v.mean(), v.std(), v.min(), v.max()))
+        f.close()
+
+        # get the mean, normalize, and write down bndacf
+        bndacf = np.array(bndacf).mean(axis=0).transpose()
+        f=open(reader.dir+os.sep+"lp_acf.data",'w')
+        for x, y in enumerate(bndacf): f.write("%f.1 %g\n"%(x*hbndl.variable.mean(), y))
+        f.close()
 
 def command():
 
@@ -263,7 +317,13 @@ The output files are (located at the simulation directory):
     sqrg_hist.data : square radius of gyration distribution
     msqrg_hist.data : mean square radius of gyration distribution
     rg_hist.data : radius of gyration distribution
-    mrg_hist.data : mean radius of gyration distribution ''')
+    mrg_hist.data : mean radius of gyration distribution 
+If the "--lp" option is enabled:
+    bndl_hist.data : bond length distribution
+    lp_hist.data : distribution of the projection length of the end-to-end vector in the direction
+                   of the first bond (according to Flory's definition of the persistence length) 
+    lp_bnd.data : presistance length calculated using Flory's definition for each of the backbone bonds
+    lp_acf.data : backbone bond autocorrelation (--lp enabled) ''')
 
     # add arguments (self explaned)
     string = 'the path to the simulation file. In the case of gromacs' +\
@@ -311,7 +371,7 @@ The output files are (located at the simulation directory):
                        help="do not unwrap molecules sine the provided trajectories provide unwrapped coordinates.")
 
     chktype = utils.IsListOfNamedList("wrong -bins argument (check: %s)", itemtype=float,
-        positive=True, llen=1, choices=("sqree","msqree","ree","mree","sqrg","msqrg","rg","mrg"))
+        positive=True, llen=1, choices=("sqree","msqree","ree","mree","sqrg","msqrg","rg","mrg","pl","bnd"))
     string = '''
     provide the bins length for the histograms to be calculated. The following
     histograms are supported:
@@ -330,9 +390,17 @@ The output files are (located at the simulation directory):
     parser.add_argument('-bins', nargs=1, type=chktype, default=[{}], \
         metavar='<list of porperties histograms>', help=string)
 
+    string = '''
+    calculate the persistence length assuming a linear polybead topology with a single
+    type of bead where end1 is the first atom and end2 is the last atom of the sequence.
+    If this option is enalbed files bndl_hist.data, lp_hist.data, lp_bnd.data, and 
+    lp_acf.data will be created in the simulation directory (see epilogue).
+    '''
+    parser.add_argument('--lp', dest='lp', default=False, action='store_true', \
+                       help=string)
 
-    # parser.add_argument('--camc', dest='camc', default=False, action='store_true', \
-    #                    help="process connectivity monte carlo output")
+    parser.add_argument('--camc', dest='camc', default=False, action='store_true', \
+                       help="process connectivity monte carlo output")
 
     # parse the arguments
     args = parser.parse_args()
@@ -344,8 +412,10 @@ The output files are (located at the simulation directory):
     print("end : ", "max" if args.end[0] == sys.maxsize else args.end[0])
     string = " ".join( map(str, args.molecules[0]))
     print("molecules : %s" % ('-' if len(string)==0 else string ) )
-    print("unwrap : %s \n" % ("True" if args.unwrap else "False"))
-    # print("camc : %s \n" % ("True" if args.camc else "False"))
+    print("unwrap : %s" % ("True" if args.unwrap else "False"))
+    print("persistence length : %s" % ("True" if args.camc else "False"))
+    print("camc : %s" % ("True" if args.camc else "False"))
+    print()
     if __debug:
         print(args.molecules[0])
 
@@ -358,8 +428,9 @@ The output files are (located at the simulation directory):
         end=args.end[0],
         molids=args.molecules[0],
         unwrap=args.unwrap,
-        bins=args.bins[0])
-        # camc=args.camc)
+        bins=args.bins[0],
+        persistence=args.lp,
+        camc=args.camc)
 
 if __name__ == '__main__':
     command()
