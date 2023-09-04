@@ -409,13 +409,15 @@ class LammpsDump():
         ''' Find file with self.file+'n' for n = 1,2,... in the same path,
             adds them in self.files and terminates this list with None. '''
         i = 0
+        lst_=[]
         while True:
             i += 1
             name = self.filename + ".%d" % i
             if not os.path.isfile( name) and i >=2 :
                 break
             if not os.path.isfile( name) and i==1 : continue
-            self.files.append( name)
+            lst_.append(name)
+        self.files = lst_ + self.files
         self.files.append( None)
 
     def _scan_first( self):
