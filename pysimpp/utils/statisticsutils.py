@@ -35,7 +35,7 @@ class Variable():
     def reset(self):
         ''' Reset the variable. '''
         self._current = 0.0               # current value
-        self._min = sys.float_info.min    # miminmum value
+        self._min = sys.float_info.max    # miminmum value
         self._max = -sys.float_info.max    # maximum value
         self._n = 0.0                     # number of values
         self._sum = 0.0                   # sum of values
@@ -78,6 +78,10 @@ class Variable():
         std_ = s - m * m_
         return sqrt(abs(std_))
 
+    def __str__(self):
+        ''' Return str(self). '''
+        return "[ mean=%g, std=%g, min=%g, max%g ]" % (self.mean(), self.std(), self.min(), self.max())
+
 class HistogramException(Exception): ...
 
 class Binning():
@@ -91,8 +95,8 @@ class Binning():
         self.type = -1                # histogram type 1: fixed, 2:free
         self.n = 0.0                  # number of bin values in the histogram
         self.d = 0                    # bining
-        self.min = sys.float_info.min # min value in fixed, reference value in free
-        self.max = sys.float_info.max # max value in fixed
+        self.min = sys.float_info.max # min value in fixed, reference value in free
+        self.max = -sys.float_info.max # max value in fixed
         self.range = 0.0              # range = max - min
         self.h = None                 # histogram data
         self.variable = Variable()    # global variable
@@ -258,8 +262,8 @@ class Histogram():
         self.type = -1                # histogram type 1: fixed, 2:free
         self.n = 0.0                  # number of bin values in the histogram
         self.d = 0                    # bining
-        self.min = sys.float_info.min # min value in fixed, reference value in free
-        self.max = sys.float_info.max # max value in fixed
+        self.min = sys.float_info.max # min value in fixed, reference value in free
+        self.max = -sys.float_info.max # max value in fixed
         self.range = 0.0              # range = max - min
         self.h = None                 # histogram data
         self.variable = Variable()  # histogram variable
