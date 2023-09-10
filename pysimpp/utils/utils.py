@@ -238,7 +238,7 @@ def islist(string, numbertype=int, positive=False, sep=','):
     return numbers
 
 def isrange(string, positive=True, sep=',', rangesep=':'):
-    '''Check if the given string is list of positive numbers (of numbertype) ranges separated by sep.
+    '''Check if the given string is list of positive numbers (of int type) ranges separated by sep.
        If yes returns the list of integers otherwise returns an empty list. If positive is True
        the number should also be positive. The range speperator can be specifide using the rangesep argument. '''
     fnc = ispositive if positive else isnumber

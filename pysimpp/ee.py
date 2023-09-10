@@ -278,7 +278,6 @@ def endtoend(filename,
     # mean square end-to-end vector autocorrelation
     __acf(time, eevectors, reader.dir+os.sep+"ree_acf.data")
 
-    print()
     if persistence:
         hlp.write(reader.dir+os.sep+"lp_hist.data", header="# %s"%str(hlp.variable))
         hbndl.write(reader.dir+os.sep+"bndl_hist.data", header="# %s"%str(hbndl.variable))
@@ -296,6 +295,8 @@ def endtoend(filename,
         f=open(reader.dir+os.sep+"lp_acf.data",'w')
         for x, y in enumerate(bndacf): f.write("%f.1 %g\n"%(x*hbndl.variable.mean(), y))
         f.close()
+
+    print()
 
 def command():
 
@@ -365,7 +366,6 @@ If the "--lp" option is enabled:
 
     parser.add_argument('-molecules', nargs=1, type=utils.argparse_moleculestype, default=[[]],  metavar='range', \
                        help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
-
 
     parser.add_argument('--no-unwrap', dest='unwrap', default=True, action='store_false', \
                        help="do not unwrap molecules sine the provided trajectories provide unwrapped coordinates.")

@@ -80,7 +80,7 @@ class Variable():
 
     def __str__(self):
         ''' Return str(self). '''
-        return "[ mean=%g, std=%g, min=%g, max%g ]" % (self.mean(), self.std(), self.min(), self.max())
+        return "[ mean=%g, std=%g, min=%g, max=%g ]" % (self.mean(), self.std(), self.min(), self.max())
 
 class HistogramException(Exception): ...
 

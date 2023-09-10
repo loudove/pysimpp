@@ -225,7 +225,7 @@ The output files are (located at the simulation directory):
     print("end : ", "max" if args.end[0] == sys.maxsize else args.end[0])
     string = " ".join( map(str, args.molecules[0]))
     print("molecules : %s" % ('-' if len(string)==0 else string ) )
-    print("unwrap : %s \n" % ("True" if args.camc else "False"))
+    print("unwrap : %s \n" % ("True" if args.unwrap else "False"))
     # print("camc : %s \n" % ("True" if args.camc else "False"))
 
     if __debug:
