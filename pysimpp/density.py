@@ -11,11 +11,15 @@ import numpy as np
 from scipy import stats
 
 import pysimpp.readers
-from pysimpp.utils.utils import argparse_moleculestype
+from pysimpp.utils.utils import IsListOfList, argparse_moleculestype
 from pysimpp.utils.statisticsutils import Histogram
-from pysimpp.fastpost import fastunwrapv, fastcom, fastcom_total
+from pysimpp.fastpost import fastunwrapv, fastcom, fastcom_total, fast_localdensity
+
 
 __debug = False
+
+__kb = 1.380649e-23 # J/K 
+__T = 300. # K
 
 def _is_command(): return True
 
@@ -48,7 +52,7 @@ def _dimsbookkeep( dimensions, unwrap=True):
     return attributes, dmap, dmapinv
 
 # @profile
-def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z'], molids=(), dowrap=True, usecom=True):
+def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z'], molids=(), local=(), dowrap=True, usecom=True):
 
     # create the reader
     reader = pysimpp.readers.create(filename)
@@ -62,7 +66,7 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
     reader.set_wrap( dowrap)
     _unwrap = not dowrap
 
-    attributes = 'id mol x y z'
+    attributes = 'id mol type x y z'
     reader.set_attributes( attributes)
 
     print('>> reading data file ...')
@@ -114,6 +118,16 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
     boxes = []
     profiles = {}
     iconf = 0
+
+    dolocal = False
+    if len( local) > 0:
+        dolocal = True
+        seed = np.array((43924342,),dtype=np.int32)
+        hld = defaultdict(lambda: Histogram.free(4.0, 0.0, addref=False))
+        l, nl = zip(*local)
+        l = [ 250.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0]
+        nl = [ 10000, 10000, 10000, 5000, 5000, 2500.0]
+
     while( True):
         step, box, data = reader.read_next_frame()
         iconf += 1
@@ -161,7 +175,13 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
             for _d in _dims:
                 profile = profiles[_d]
                 for _cm in cm:
+                #for _cm in cm[np.where( data['type'] == 2)[0]]:
                     profile.add(_cm[_d])
+
+            if dolocal:
+                for l_, nl_ in zip(l,nl):
+                    ld = fast_localdensity(cm, box.origin, box.a,  box.b, box.c, seed, l_, nl_)
+                    np.vectorize( hld[l_].add)( ld)
 
         else:
             break
@@ -170,6 +190,28 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
         _dname = "%s%s"%("com_" if usecom else "", _dnames[ _d])
         header="# %s_[A] probability_[1/A]" % ( _dname)
         profile.write(reader.dir+os.sep+"%s_prf.data" % _dname, header=header)
+
+    print()
+
+    # print locan density and stuff
+    if dolocal:
+        f=open(reader.dir+os.sep+"ld.data",'w')
+        header = "box[nm]         " + \
+                "mean[#beads]    " + \
+                "std[#beads]     " + \
+                "compressibility[1/bar]"
+        f.write("# %s\n"%header)
+        for i, l_ in enumerate(l):
+            h = hld[l_]
+            h.write(reader.dir+os.sep+"ld_%d_hist.data"%i, header="# %s l = %g vol = %g"%(str(h.variable),l_,l_*l_*l_))
+            mean = h.variable.mean()
+            std = h.variable.std()
+            vol = l_**3 * 1.e-30
+            k =  std**2 * vol / __kb / __T / mean**2 / 0.00001
+            f.write( " %-16g %-16g %-16g %-16g\n"%(l_/10.0, mean, std, k))
+        f.close()
+
+    print()
 
 def command():
 
@@ -208,11 +250,31 @@ def command():
     parser.add_argument('-molecules', nargs=1, type=argparse_moleculestype, default=[[]],  metavar='range', \
                        help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
 
+    def arglocal(string):
+        ''' check the "-local" option arguments. '''
+        chktype = IsListOfList("wrong local density argument (check: %s)")
+        lst_ = chktype(string)
+        lst = []
+        for l_ in lst_:
+            try:
+                lst.append( [ float(l_[0]), int(l_[1])])
+            except:
+                msg = "wrong local density argument (check: %s)" % l_.join( ":")
+                raise argparse.ArgumentTypeError(msg)
+        return lst
+    string = '''
+    The length of the cubic box and the number of trials to be used for the 
+    calculation of the local density. A list of pairs (length:trials) should
+    be provided e.g. "25.0,2000:50.,1000".
+    '''
+    parser.add_argument('-local', nargs=1, type=arglocal, metavar='local density', default=[()], \
+                       help=string)
+
     parser.add_argument('--no-wrap', dest='dowrap', default=True, action='store_false', \
-                       help="do not wrap molecules sine the provided trajectories provide wrapped coordinates.")
+                       help="do not wrap molecules sine the provided trajectories provide wrapped coordinates")
 
     parser.add_argument('--no-com', dest='usecom', default=True, action='store_false', \
-                       help="calculate the distributions using atoms rather that molecules' centers of mass.")
+                       help="calculate the distributions using atoms rather that molecules' centers of mass")
 
     # parse the arguments
     args = parser.parse_args()
@@ -223,6 +285,7 @@ def command():
     print("end   : ", args.end[0])
     print("every : ", args.every[0])
     print("dim   : ", args.dim[0])
+    print("local : ", args.local[0])
     print("wrap  : %s" % ("True" if args.dowrap else "False"))
     print("com   : %s" % ("True" if args.usecom else "False"))
 
@@ -233,7 +296,7 @@ def command():
 
     _dims = [_d for _d in args.dim[0]]
     density( args.path, args.bin[0], start=args.start[0], end=args.end[0], every=args.every[0], \
-        dimensions=_dims, molids=args.molecules[0], dowrap=args.dowrap, usecom=args.usecom)
+        dimensions=_dims, molids=args.molecules[0], local=args.local[0], dowrap=args.dowrap, usecom=args.usecom)
 
 if __name__ == '__main__':
     command()

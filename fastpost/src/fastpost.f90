@@ -2387,8 +2387,91 @@ subroutine order_parameter_vectors(n, r,  m, P, director, mode, IERR)
 
 end subroutine order_parameter_vectors
 
+!> Accelerate local density calculation
+!> currently works only for cubic cells and the coordinates 
+!> should be provided in wrapped coordinates
+subroutine fast_localdensity(n, r, v0, a, b, c, nseed, seed, l, m, densities)
+
+    use vector3d
+    use domain3d
+    use argsorting
+
+    implicit none
+
+    integer(4), intent(in) :: n          !< number of atoms
+    real(8), dimension(0:n-1,0:2), intent(in) :: r   !< atoms wrapped coordinates
+    real(8), dimension(0:2), intent(in) :: v0  !< box origin
+    real(8), intent(in) :: a, b, c  !< box  edges lengths
+    !> size of the randomo number generator seed. Should be obtained by calling
+    !> the random_seed_size subroutine
+    integer(4), intent(in) :: nseed
+    !> random number generator seed it should be initialized prior to the call
+    integer(4), dimension(0:nseed-1), intent(inout) :: seed
+    real(8), intent(in) :: l !< local density box lenght
+    integer(4), intent(in) :: m !< number of local density measurements
+    real(8), dimension(0:m-1), intent(out) :: densities !< local number density measurements
+
+    real(8), dimension(0:2, 0:m-1) :: x0
+    real(8), dimension(0:2) :: x1, x2, rs, box
+    logical(4), dimension(0:2) :: ok
+
+    integer(4) :: i, j, k
+
+    ! initialize output
+    densities = 0.d0
+
+    ! basic check
+    box = (/ a, b, c/)
+    if ( any( box .lt. l)) return
+
+    ! initiailize random seed
+    call random_seed( put = seed(0:nseed-1))
+
+    ! select random cell origins
+    call random_number( x0)
+    x0(0,:) = x0(0,:) * a
+    x0(1,:) = x0(1,:) * b
+    x0(2,:) = x0(2,:) * c
+
+!$omp parallel do private(i, j, k, x1, x2, rs, ok)
+    do i = 0, m-1
+        
+        do k = 0, 2
+            x1( k) = x0( k, i) + l
+            if ( x1( k) .ge. box( k)) then
+                x2( k) = x1( k) - box( k)
+                x1( k) = box( k)
+            else
+                x2( k) = -1.d0
+            endif
+        enddo
+
+        do j = 0, n-1
+            rs = r( j, :) - v0
+            do k = 0, 2
+                if ( ( rs( k) .gt. x0( k, i) .and. rs( k) .lt. x1( k)) .or. &
+                     ( rs( k) .lt. x2( k) .and. rs( k) .gt. 0.d0 )) then 
+                ! if ( rs( k) .gt. x0( k, i) .and. rs( k) .lt. x1( k)) then
+                !     ok( k) = .true.
+                ! elseif ( rs( k) .gt. 0.d0 .and. rs( k) .lt. x2( k) ) then 
+                    ok( k) = .true.
+                else
+                    ok( k) = .false.
+                endif
+            enddo     
+            if ( all( ok)) &
+                densities( i) = densities( i) + 1.d0
+        enddo
+    enddo
+!$omp end parallel do
+
+    ! retrieve random seed
+    call random_seed( get = seed(0:nseed-1))
+
+end subroutine fast_localdensity
+
 !> Accelerate percistance length calculation
-! subroutine percistance_length(n, r,  m, lp_acf, lp_flory, lp_curvature, IERR)
+! subroutine percistance_length(n, r,  m, lp_acf, lp_flory, IERR)
 
 !     use vector3d
 !     use, intrinsic :: iso_c_binding
@@ -2407,8 +2490,7 @@ end subroutine order_parameter_vectors
 !     integer, intent(in) :: m                                ! # batches
 !     integer, intent(in) :: nm                               ! # points per batches
 !     real*8, dimension(0:nm-1), intent(out) :: lp_acf        ! percistance length using tangent vectors auto-correlation function
-!     real*8, dimension(0:nm-1), intent(out) :: lp_flory      ! percistance length usnig flory definition
-!     real*8, dimension(0:nm-1), intent(out) :: lp_curvature  ! percistance length usnig curvature
+!     real*8, dimension(0:m-1), intent(out) :: lp_flory      ! percistance length usnig flory definition
 !     integer, intent(out) :: IERR
 
 !     real*8, dimension(3) :: re
