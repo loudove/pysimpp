@@ -235,7 +235,7 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
     # selected molecules
     if not ndxfile is None:
         _grps = read_ndx( ndxfile)
-        if not len( _selected) == 1:
+        if not len( _grps) == 1:
             print('WARNING: more than one groups was found in %s' % ndxfile.name)
         _molids = set().union( molids, *(_grps.values()))
     else:
@@ -251,7 +251,7 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
     nselected = selected.size                   # number of selected molecules
     hasselected = nselected > 0                 # selected flag
 
-    # region based calculation
+    # flag for region based calculation
     hasregion = len( region) > 0
 
     # bookkeeping dimensions to read
