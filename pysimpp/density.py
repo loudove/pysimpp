@@ -18,7 +18,7 @@ from pysimpp.fastpost import fastunwrapv, fastcom, fastcom_total, fast_localdens
 
 __debug = False
 
-__kb = 1.380649e-23 # J/K 
+__kb = 1.380649e-23 # J/K
 __T = 300. # K
 
 def _is_command(): return True
@@ -75,15 +75,12 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
     # TODO create a utility method in pysimpp.readers for accessing molecular data
     natoms = reader.natoms
     # get molecular data and select molecules of interest
-    # TODO refactor massesar
-    types = reader.get_atom_type()              # atom type array (number or string based)
-    masses = reader.get_type_mass()             # type mass
-    massesar = np.array( [ masses[ types[iat]] for iat in range( natoms) ]) # atom mass array (accelerate)
-    molecules = reader.get_atom_molecule() - 1  # atom molecule array (index @zero)
-    nmolecules = molecules.max() + 1            # number of molecules
+    masses = reader.get_atom_mass()
+    molecule = reader.get_atom_molecule() - 1  # atom molecule array (index @zero)
+    nmolecules = molecule.max() + 1            # number of molecules
     # TODO add this functionality in reader
     mol_atoms = defaultdict( list)              # molecule atoms array
-    for i, im in enumerate( molecules):
+    for i, im in enumerate( molecule):
         mol_atoms[ im].append(i)
 
     # selected molecules
@@ -156,7 +153,7 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
                 np.copyto(r[:, k] ,  data[v[0]])
 
             if rmcom:
-                cmtotal, masstotal = fastcom_total( r, massesar)
+                cmtotal, masstotal = fastcom_total( r, masses)
                 if len(boxes) == 1:
                     cm0[:] = cmtotal
                 else:
@@ -167,10 +164,10 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
             # set also the wraped coordinates to ensure
             # the correct bining
             if hasselected:
-                cm_ = fastcom( r, massesar, molecules, nmolecules) if usecom else r
+                cm_ = fastcom( r, masses, molecule, nmolecules) if usecom else r
                 cm[:,:] = cm_[selected,:]
             else:
-                cm[:,:] = fastcom( r, massesar, molecules, nmolecules) if usecom else r
+                cm[:,:] = fastcom( r, masses, molecule, nmolecules) if usecom else r
 
             for _d in _dims:
                 profile = profiles[_d]
@@ -263,7 +260,7 @@ def command():
                 raise argparse.ArgumentTypeError(msg)
         return lst
     string = '''
-    The length of the cubic box and the number of trials to be used for the 
+    The length of the cubic box and the number of trials to be used for the
     calculation of the local density. A list of pairs (length:trials) should
     be provided e.g. "25.0,2000:50.,1000".
     '''

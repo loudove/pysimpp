@@ -224,25 +224,24 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
 
     natoms = reader.natoms
     # get molecular data and select molecules of interest
-    # TODO refactor massesar
-    types = reader.get_atom_type()              # atom type array (number or string based)
-    masses = reader.get_type_mass()             # type mass
-    massesar = np.array( [ masses[ types[iat]] for iat in range( natoms) ]) # atom mass array (accelerate)
-    molecules = reader.get_atom_molecule() - 1  # atom molecule array (index @zero)
-    nmolecules = molecules.max() + 1            # number of molecules
+    masses = reader.get_atom_mass()
+    molecule = reader.get_atom_molecule() - 1  # atom molecule array (index @zero)
+    nmolecules = molecule.max() + 1            # number of molecules
     # TODO add this functionality in reader
-    mol_atoms = defaultdict( list)              # molecule atoms array
-    for i, im in enumerate( molecules):
+    mol_atoms = defaultdict( list)             # molecule atoms array
+    for i, im in enumerate( molecule):
         mol_atoms[ im].append(i)
 
     # selected molecules
     if not ndxfile is None:
         _grps = read_ndx( ndxfile)
+        if not len( _selected) == 1:
+            print('WARNING: more than one groups was found in %s' % ndxfile.name)
         _molids = set().union( molids, *(_grps.values()))
     else:
         _molids = molids
 
-    selected = np.sort( _molids) - 1             # selected molecules (index @zero)
+    selected = np.sort( _molids) - 1            # selected molecules (index @zero)
     if not usecom:                              # if needed convert to atoms
         satoms = []
         for im in selected:
@@ -299,7 +298,7 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
                 np.copyto(r[:, k] ,  data[v[0]])
 
             if __rmcm:
-                cmtotal, masstotal = fastcom_total( r, massesar)
+                cmtotal, masstotal = fastcom_total( r, masses)
                 if len(boxes) == 1:
                     cm0[:] = cmtotal
                 else:
@@ -310,14 +309,14 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
             # set also the wraped coordinates to ensure
             # the correct bining
             if hasselected:
-                cm_ = fastcom( r, massesar, molecules, nmolecules) if usecom else r
+                cm_ = fastcom( r, masses, molecule, nmolecules) if usecom else r
                 cm[iconf,:,:] = cm_[selected,:]
                 if hasregion:
                     # LDP TODO check the API of fastwarp
                     cmw_ = fastwrap( cm_.transpose(), box.origin, box.va, box.vb, box.vc)
                     cmw[iconf,:,:] = cmw_[:,selected].transpose()
             else:
-                cm[iconf,:,:] = fastcom( r, massesar, molecules, nmolecules) if usecom else r
+                cm[iconf,:,:] = fastcom( r, masses, molecule, nmolecules) if usecom else r
                 if hasregion:
                     cmw_ = fastwrap( cm[iconf,:,:].transpose(), box.origin, box.va, box.vb, box.vc)
                     cmw[iconf,:,:] = cmw_.transpose()
@@ -797,7 +796,7 @@ def _msd_fft3x( r, path="", w=None):
     S1s = fasts1x( Ds)
     msds = (S1s-2*S2) / np.float32(natoms)
 
-    print("finished")
+    # print("finished")
     return sum( msds), msds
 
 # @profile
@@ -846,7 +845,7 @@ def _msd_fft3( r):
     S1s = fasts1x( Ds)
 
     msds = (S1s-2*S2) / natoms
-    print("finished")
+    # print("finished")
     return sum( msds), msds
 
 # @profile
