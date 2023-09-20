@@ -402,7 +402,7 @@ subroutine fastneighbors(n, r, v0, va, vb, vc, rcut, maxnb, maxatnb, nnb, nb, rn
 
     type(SimulationBox) :: box                ! simulation cell
     type(BoxCells) :: cells                   ! grid sub-cells
-    integer(4), dimension(0:2) :: dn          ! grid sub-division 
+    integer(4), dimension(0:2) :: dn          ! grid sub-division
     integer(4) :: ncc                         ! number of neighbor cells
     integer(4), dimension(27) :: cc           ! neighbor cells indexes
     integer(4) :: cnat                        ! cell number of atoms
@@ -486,9 +486,9 @@ subroutine fastneighbors(n, r, v0, va, vb, vc, rcut, maxnb, maxatnb, nnb, nb, rn
 
 end subroutine fastneighbors
 
-!> Accelerate coordinates deployment around a point 
+!> Accelerate coordinates deployment around a point
 !> Essentially, spatial discontinuities of a body due
-!> to periodic boundary conditions are removed. 
+!> to periodic boundary conditions are removed.
 subroutine fastlocal(n, r, r0, v0, va, vb, vc, rlocal)
     use domain3d
     implicit none
@@ -502,8 +502,8 @@ subroutine fastlocal(n, r, r0, v0, va, vb, vc, rlocal)
     real(8), dimension(3) :: dr
 
     call box%initialize( v0, va, vb, vc, .true.)
-!$omp parallel do private( i, dr)    
-    do i = 0, n-1 
+!$omp parallel do private( i, dr)
+    do i = 0, n-1
         dr = r(i,:) - r0(:)
         call box%minImgTo(rlocal)
         rlocal(i,:) = r0(:) + dr(:)
@@ -669,7 +669,7 @@ subroutine fastconcatenation(n, r, group, nbonds, bonds, v0, va, vb, vc, rchk, p
                         jt = grpat( grpiat(ig)+jj)
                         kk = jj + 1
                         kt = grpat( grpiat(ig)+kk)
-                        ! loop over the neighbors' boxes                        
+                        ! loop over the neighbors' boxes
                         ! check for concatenation
                         ! construct the transformation matrix a, from the triangle's
                         ! local to the lab frame (the coloumns are the vectors of the
@@ -716,7 +716,7 @@ write(*,'("Bond ", I0, "-", I0, " concatenates with the group (", I0,") of atoms
 write(*,'(", ",I0)', advance='no') grpat(j)
     end do
 write(*,*)
-write(*,'("detetrminant : ", F14.6)') det    
+write(*,'("detetrminant : ", F14.6)') det
 write(*,'("solution :( ", F14.6,",",x,F14.6,",",x,F14.6,")")') sol(0), sol(1), sol(2)
 cycle NBATOMSLOOP
 
@@ -871,7 +871,7 @@ subroutine fastconcatenation2(n, r, ngroups, grpnat, ngrpat, grpat, nbonds, bond
                         jt = grpat( grpiat(ig)+jj)
                         kk = jj + 1
                         kt = grpat( grpiat(ig)+kk)
-                        ! loop over the neighbors' boxes                        
+                        ! loop over the neighbors' boxes
                         ! check for concatenation
                         ! construct the transformation matrix a, from the triangle's
                         ! local to the lab frame (the coloumns are the vectors of the
@@ -912,14 +912,14 @@ subroutine fastconcatenation2(n, r, ngroups, grpnat, ngrpat, grpat, nbonds, bond
                         if ( sol(1) > PPRECISION .or. sol(1) < NPRECISION ) cycle
 
                         if ( sol(1) <= 1.0 - sol(0) + precision ) then
-			
+
 write(*,'("Bond ", I0, "-", I0, " concatenates with the group (", I0,") of atoms : ", I0)', advance='no') &
     iat, jat, ig, grpat( grpiat(ig))
     do j = grpiat(ig)+1,grpiat(ig)+grpnat(ig)-1
 write(*,'(" ",I0)', advance='no') grpat(j)
     end do
 write(*,*)
-write(*,'("detetrminant : ", F14.6)') det    
+write(*,'("detetrminant : ", F14.6)') det
 write(*,'("solution :( ", F14.6,",",x,F14.6,",",x,F14.6,")")') sol(0), sol(1), sol(2)
 cycle GRPLOOP
 
@@ -1031,7 +1031,7 @@ subroutine pefastunwrap(n, rw, nch, maxnatch, natch, chat , a, b, c, r)
 
 end subroutine pefastunwrap
 
-!> Accelerate coordinateas unwrapping and adding the missing hydrogens 
+!> Accelerate coordinateas unwrapping and adding the missing hydrogens
 !> in the UA representation of polyethylene model
 !> (only ortho boxes are supported for now)
 subroutine pefastaddhydrogens(n, rw, nch, maxnatch, natch, chat , a, b, c, len, theta, r)
@@ -1413,6 +1413,8 @@ subroutine fastcom(n, r, mass, molecule, m, cm)
     mmass = 0.d0
     do i = 0, n-1
         im = molecule(i)
+        !> ignore atoms with negative molecule index
+        if ( im .lt. 0) cycle
         cm( im, :) = cm( im, :) + mass(i)*r(i,:)
         mmass( im) = mmass( im) + mass(i)
     end do
@@ -1918,7 +1920,7 @@ subroutine inertia(n, r, mass, molecule, m, mexclude, inert, eigval, eigvec, ier
 
 end subroutine inertia
 
-!> Accelerate alignment with principal frame using gyration/inertia tensor 
+!> Accelerate alignment with principal frame using gyration/inertia tensor
 subroutine aligne_principal(n, r, mass, ref, cm, rp, tensor, eigval, eigvec, ierr)
 
     use vector3d
@@ -2388,7 +2390,7 @@ subroutine order_parameter_vectors(n, r,  m, P, director, mode, IERR)
 end subroutine order_parameter_vectors
 
 !> Accelerate local density calculation
-!> currently works only for cubic cells and the coordinates 
+!> currently works only for cubic cells and the coordinates
 !> should be provided in wrapped coordinates
 subroutine fast_localdensity(n, r, v0, a, b, c, nseed, seed, l, m, densities)
 
@@ -2435,7 +2437,7 @@ subroutine fast_localdensity(n, r, v0, a, b, c, nseed, seed, l, m, densities)
 
 !$omp parallel do private(i, j, k, x1, x2, rs, ok)
     do i = 0, m-1
-        
+
         do k = 0, 2
             x1( k) = x0( k, i) + l
             if ( x1( k) .ge. box( k)) then
@@ -2450,15 +2452,15 @@ subroutine fast_localdensity(n, r, v0, a, b, c, nseed, seed, l, m, densities)
             rs = r( j, :) - v0
             do k = 0, 2
                 if ( ( rs( k) .gt. x0( k, i) .and. rs( k) .lt. x1( k)) .or. &
-                     ( rs( k) .lt. x2( k) .and. rs( k) .gt. 0.d0 )) then 
+                     ( rs( k) .lt. x2( k) .and. rs( k) .gt. 0.d0 )) then
                 ! if ( rs( k) .gt. x0( k, i) .and. rs( k) .lt. x1( k)) then
                 !     ok( k) = .true.
-                ! elseif ( rs( k) .gt. 0.d0 .and. rs( k) .lt. x2( k) ) then 
+                ! elseif ( rs( k) .gt. 0.d0 .and. rs( k) .lt. x2( k) ) then
                     ok( k) = .true.
                 else
                     ok( k) = .false.
                 endif
-            enddo     
+            enddo
             if ( all( ok)) &
                 densities( i) = densities( i) + 1.d0
         enddo
