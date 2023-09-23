@@ -10,7 +10,7 @@ subroutine fastbonds(n, r, va, vb, vc, nbnd, bnd, lengths)
     real*8, dimension(0:2,0:n-1), intent(in)  :: r      !< atoms unwrapped coordinates
     real*8, dimension(0:2), intent(in) :: va, vb, vc    !< simulation box spanning vectors
     integer, intent(in) :: nbnd                         !< number of bonds
-    integer, dimension(0:1,0:nbnd-1), intent(in) :: bnd !< bond info b(i,:) = (type, atom1, atom2) for ith bond
+    integer, dimension(0:1,0:nbnd-1), intent(in) :: bnd !< bond info b(i,:) = (atom1, atom2) for ith bond
     real*8, dimension(0:nbnd-1), intent(out) :: lengths !< bond lengths
 
     integer :: i

@@ -201,7 +201,7 @@ def smsd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz
     print("msd was calculated")
     t = np.array( steps, dtype= np.float32) * dt
     du = MSDDataUtility( t, msd, msds, dimensions)
-    f = open( reader.dir+os.sep+"msd.dat", 'w')
+    f = open( reader.dir+os.sep+"smsd.dat", 'w')
     du.write(f=f, var=0.10)
     f.close()
 

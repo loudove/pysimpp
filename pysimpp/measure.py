@@ -95,7 +95,7 @@ def command():
     parser = argparse.ArgumentParser(description=_short_description())
 
     # add arguments (self explaned)
-    string = 'the path to the simulation trajectory file.A topology file' + \
+    string = 'the path to the simulation trajectory file. A topology file' + \
              'should be present in the same directory (preferably a tpr file).'
     parser.add_argument('path', default="."+os.sep, help=string)
 
@@ -130,7 +130,7 @@ def command():
 
     message='''
     calculate the total autocorrelation function for each group considered. The calculated
-    acf is written in the trajectory dirtory is the file trjbasename}_acf_{group}.dat. '''
+    acf is written in the trajectory directory is the file trjbasename}_acf_{group}.dat. '''
     parser.add_argument('--acf', dest='doacf', default=False, action='store_true',
                         help=message)
 

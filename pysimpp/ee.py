@@ -39,6 +39,24 @@ def __acf(t, data, fname):
     n = len(data[0])
     M = 3*n
 
+    # conventional calculation for testing
+    # # convert to unit
+    # a=np.zeros((N,n,3),dtype=float)
+    # for i, d in enumerate(data):
+    #     l_=np.sqrt((d*d).sum(axis=1))
+    #     a[i,:,:]=d/l_[:,np.newaxis]
+    # acf=np.zeros(N,dtype=float)
+    # count=np.zeros(N,dtype=float)
+    # for i in range(N):
+    #     ai=a[i]
+    #     for j in range(i,N):
+    #         aj=a[j]
+    #         d=j-i
+    #         for k in range(n):
+    #             acf[d]+=np.sum(aj[k]*ai[k])
+    #             count[d]+=1.0
+    # acf /= count
+
     a=np.zeros( (M,N), dtype=float)
     for i, d in enumerate(data):
         ld=np.sqrt((d*d).sum(axis=1,keepdims=True)) # convert to unit

@@ -114,18 +114,25 @@ def command():
     parser = argparse.ArgumentParser(description=_short_description())
 
     # add arguments (self explaned)
-    string = 'the path to the simulation trajectory file.A topology file' + \
+    string = 'the path to the simulation trajectory file. A topology file' + \
              'should be present in the same directory (preferably a tpr file).'
-    parser.add_argument('-ndx', nargs=1, type=argparse.FileType('r'), metavar='file', required=True, help=string)             
-    parser.add_argument('path', default="."+os.sep,  \
-                       help=string)
+    parser.add_argument('path', default="."+os.sep, help=string)
+
+    message='''
+    a file with the gromacs style indexes for the dihedrals to be considered.
+    The calculated probability distribution is written in the trajectory file
+    direcory in a file {trjbasename}_{group}.dat. '''    
+    parser.add_argument('-ndx', nargs=1, type=argparse.FileType('r'), metavar='file',
+                        required=True, help=message)
+
     parser.add_argument('-start', nargs=1, type=int, metavar='n', default=[-1], \
                        help='start processing form configuration n [inclusive]')
+
     parser.add_argument('-end', nargs=1, type=int, metavar='n', default=[sys.maxsize], \
                        help='stop processing at configuration n [inclusive]')
+
     parser.add_argument('-every', nargs=1, type=int, metavar='n', default=[1], \
                        help='processing frequency (every n configurations)')
-
 
     # parse the arguments
     args = parser.parse_args()
