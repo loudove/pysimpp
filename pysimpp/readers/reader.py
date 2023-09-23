@@ -169,6 +169,14 @@ class abcReader(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
+    def get_bond_type(self):
+        ''' Retruns bonds' type.
+            Returns:
+                np.array(..., dtype=int): bonds' type array.
+        '''
+        pass
+
+    @abc.abstractmethod
     def get_molecule_name(self):
         ''' Retruns molecule names retrieved from the topology  file.
             Returns:

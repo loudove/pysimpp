@@ -273,6 +273,14 @@ class MDAnalysisReader(abcReader):
         except:
             bonds = np.array((),dtype=np.int32)
         return bonds
+    
+    def get_bond_type(self):
+        ''' Retruns bonds' type. '''
+        try:
+            bpnd_type = self.u.bonds.type
+        except:
+            bpnd_type = np.array((),dtype=np.int32)
+        return bpnd_type        
 
     def get_topology(self):
         ''' Return the system topology (see McReader) '''

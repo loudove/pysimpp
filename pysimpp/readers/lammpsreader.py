@@ -68,10 +68,10 @@ class LammpsDumpsHandler():
         #         requested = requested.difference(supported)
         if extra: # do not check for the extra attributes
             requested = requested.difference(_poff)
-        # if coordinates are not pressent in the supported attributes
-        # the try to see if unwrapped can be added
+        # if coordinates are not pressent in the supported attributes then 
+        # try to see if unwrapped can be added
         self._make_link = {}
-        if len( supported.intersection(set(('x','xu')))) == 0 :
+        if self._canread( 'xu') and len( supported.intersection(set(('x','xu')))) == 0 :
             _tmp=(('x','y','z'),('xu','yu','zu'))
             _rm, _add = _tmp if ('x' in requested) else reversed(_tmp)
             requested.difference_update(_rm)
@@ -88,6 +88,12 @@ class LammpsDumpsHandler():
 
         self.canread = len(requested) == 0
         return self.canread
+
+    def _canread(self, requested):
+        ''' returns tru if the handler can read the requested attribute. '''
+        for v in self.dumps.values():
+            if requested in v.attributes: return True
+        return False
 
     def _update_canread(self, requested):
         ''' update self.toread based on the requested set of attributes
@@ -117,7 +123,7 @@ class LammpsDumpsHandler():
                     natoms = v._natoms
                 elif not v._natoms == natoms:
                     raise LammpsReaderException(
-                        "different number of atoms in hundlers dumps")
+                        "different number of atoms in handlers dumps")
         return natoms
 
     def count_frames(self, start=-1, end=sys.maxsize):
@@ -187,6 +193,11 @@ class LammpsDump():
             [c28_60.dump, c28_60.dump.1, c28_60.dump.2, ... ]
     '''
 
+    _ITEM_NUMBER_OF_ATOMS = "ITEM: NUMBER OF ATOMS"
+    _ITEM_ATOMS = "ITEM: ATOMS"
+    _ITEM_NUMBER_OF_ENTRIES = "ITEM: NUMBER OF ENTRIES"
+    _ITEM_ENTRIES = "ITEM: ENTRIES"
+
     def __init__(self, line, path):
         ''' Initialize a dump from the corresponding line of
             lammps input script.
@@ -212,6 +223,10 @@ class LammpsDump():
         else:
             self.name = tk[1]            # dump name
             self.filename = path + tk[5] # dump file name (absolute path)
+
+        # read atom stuff
+        self.ITEM_NUMBER_OF_ENTRIES = LammpsDump._ITEM_NUMBER_OF_ATOMS
+        self.ITEM_ENTRIES = LammpsDump._ITEM_ATOMS
 
         # check if the file exist
         if not os.path.isfile(self.filename):
@@ -283,7 +298,9 @@ class LammpsDump():
             return ( None, None, None)
 
         # initialize
-        natoms = 0
+        ITEM_NUMBER_OF_ENTRIES_ = self.ITEM_NUMBER_OF_ENTRIES
+        ITEM_ENTRIES_ = self.ITEM_ENTRIES
+        nentries = 0
         istep = box = None
         ok = False
         for line in self.f:
@@ -300,8 +317,8 @@ class LammpsDump():
                     sys.stdout.flush()
                 continue
 
-            elif line.startswith("ITEM: NUMBER OF ATOMS"):
-                natoms = int( next(self.f).strip())
+            elif line.startswith( ITEM_NUMBER_OF_ENTRIES_):
+                nentries = int( next(self.f).strip())
                 continue
 
             elif line.startswith("ITEM: BOX BOUNDS"):
@@ -320,7 +337,7 @@ class LammpsDump():
                 # support old lammps dumps. the next line will
                 # used right after in any case
                 line = next(self.f).strip()
-                if not line.startswith("ITEM: ATOMS"):
+                if not line.startswith( ITEM_ENTRIES_):
                     _list = line.split()
                     xy = float(_list[0])
                     xz = float(_list[1])
@@ -328,11 +345,11 @@ class LammpsDump():
                 box = SimulationBox()
                 box.set_from_lammps(xlo, xhi, ylo, yhi, zlo, zhi, xy, xz, yz)
 
-            if line.startswith("ITEM: ATOMS"):
-                # read the next natoms lines, convert them to ndarray and then
+            if line.startswith( ITEM_ENTRIES_):
+                # read the next nentries lines, convert them to ndarray and then
                 # fill the dump data.
-                _lines = list( itertools.islice(self.f, natoms))
-                data = np.zeros( natoms, dtype={ 'names':self.attributes, 'formats':self.types})
+                _lines = list( itertools.islice(self.f, nentries))
+                data = np.zeros( nentries, dtype={ 'names':self.attributes, 'formats':self.types})
                 try:
                     if _fixcamc:
                         for i, _line in enumerate( _lines):
@@ -384,16 +401,17 @@ class LammpsDump():
         ''' Skip the current configuration (self.f should be
             available and valid).
         '''
+        ITEM_NUMBER_OF_ENTRIES_ = self.ITEM_NUMBER_OF_ENTRIES
         skiped = False
         for line in self.f:
             line = line.strip()
-            if line.startswith("ITEM: NUMBER OF ATOMS"):
+            if line.startswith( ITEM_NUMBER_OF_ENTRIES_):
                 skiped = True
-                natoms = int(next(self.f).strip())
+                nentries = int(next(self.f).strip())
                 # read the box block and check if box tilt line exist
                 lines = list( itertools.islice(self.f,5))  # check the fifth line for box tilts
                 line = lines[-1].strip()
-                n = natoms if line.startswith("ITEM") else natoms + 1
+                n = nentries if line.startswith("ITEM") else nentries + 1
                 itertools.islice(self.f, n)
                 for _ in range(n):
                     line = next(self.f)
@@ -425,11 +443,24 @@ class LammpsDump():
         _lines = list ( itertools.islice(f, 10))
         f.close()
         self._natoms = int( _lines[3].strip())
+        tk = None
         for line in _lines[8:]:
-            if line.startswith("ITEM: ATOMS"):
+            if line.startswith( LammpsDump._ITEM_ATOMS) or \
+               line.startswith( LammpsDump._ITEM_ENTRIES):
                 tk = line.strip().split()
                 self.attributes = tk[2:]
+        if tk is None:
+            raise LammpsReaderException("no proper entries line was found in %s"% self.files[0])
         self.types = tuple([LammpsReader._typesDump[x] for x in self.attributes])
+
+class LammpsBondsDump(LammpsDump):
+        
+        ''' Initialize a collector object. '''
+        def __init__(self, line, path):
+            super(LammpsBondsDump, self).__init__( line, path)
+            # read general (e.g. bond) stuff
+            self.ITEM_NUMBER_OF_ENTRIES = LammpsDump._ITEM_NUMBER_OF_ENTRIES
+            self.ITEM_ENTRIES = LammpsDump._ITEM_ENTRIES
 
 class LammpsReader(abcReader):
     ''' Implements lammps reader functionality.
@@ -500,11 +531,11 @@ class LammpsReader(abcReader):
     # known dump attributes
     _keyDump = [' '+x+' ' for x in [
            'id', 'type', 'q', 'x', 'y', 'z', 'xs', 'ys', 'zs', 'xu', 'yu', 'zu',
-           'ix', 'iy', 'iz', 'vx', 'vy', 'vz', 'fx', 'fy', 'fz', 'mol' ]]
+           'ix', 'iy', 'iz', 'vx', 'vy', 'vz', 'fx', 'fy', 'fz', 'mol', 'bead1', 'bead2' ]]
     _ATTRIBUTES = [ x.strip() for x in _keyDump]
     # dump attribute types (default of float32 and then correct)
     _typesDump = defaultdict( lambda:'f4', { k:'f4' for k in _ATTRIBUTES })
-    for k in ('id', 'type', 'ix', 'iy', 'iz', 'mol'):
+    for k in ('id', 'type', 'ix', 'iy', 'iz', 'mol', 'bead1', 'bead2'):
         _typesDump[k] = 'i4'
 
     # supported atom styles
@@ -964,6 +995,14 @@ class LammpsReader(abcReader):
             bonds = np.array((),dtype=np.int32)
         return bonds
 
+    def get_bond_type(self):
+        ''' Retruns bonds' type. '''
+        try:
+            np.array( [ v[1] for k, v in sorted(self.data['Bonds'].items(), key=lambda item:item[0])])
+        except:
+            bpnd_type = np.array((),dtype=np.int32)
+        return bpnd_type  
+    
     def get_topology(self):
         ''' Return the system topology (see McReader) '''
         message = '%s.%s is not yet supported.' % (self.__class__.__name__,inspect.currentframe().f_code.co_name)
@@ -1088,6 +1127,36 @@ class LammpsReader(abcReader):
         _thermo_t = self.data['thermo_t'] = np.array( _thermo_n, dtype=np.float32) * self.options['timestep']
         # keep number of nconfigurations in log file
         self.nconfLog = len( _thermo_t)
+
+    @staticmethod
+    def create_bond_dump_handler( reader):
+        '''
+        HACK: support bonds per frame when the dump file is found
+              assuming without checking the same number of frames
+              as in the atoms dump file(s)
+        Check if a companion dump file with bond info is present in
+        the same directory and if yes returns a dumps handler that
+        works sxs with main reader's dumps handler. '''
+        bonds_dumpshandler = None
+        shortname = reader.basename + '.bonds.dump_local'
+        if os.path.exists( reader.dir + os.sep + shortname):
+            dumps = { reader.basename: LammpsBondsDump( shortname, reader.dir+os.sep)}
+            bonds_dumpshandler = LammpsDumpsHandler( dumps)
+            bonds_dumpshandler.set_attributes(['type','bead1','bead2'])
+        return bonds_dumpshandler
+
+    @staticmethod
+    def read_next_frame_handler( dumpshandler, step, box, skip=False):
+        ''' Read and return the next frame of the given dumps handler. 
+            If given step is not equal to the step of the frame then
+            an exception is raised  '''
+        _step, _box, _data = dumpshandler.read_next( skip)
+        if not _step == step:
+            messaage = "the frame found in %s (%d) is not the expected one (%d)" % \
+                (dumpshandler.f.name, _step, step)
+            raise LammpsReaderException( messaage)
+        return (_step, _box, _data)
+
 
     @staticmethod
     def is_supported(filename):
