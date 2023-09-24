@@ -998,10 +998,10 @@ class LammpsReader(abcReader):
     def get_bond_type(self):
         ''' Retruns bonds' type. '''
         try:
-            np.array( [ v[1] for k, v in sorted(self.data['Bonds'].items(), key=lambda item:item[0])])
+            bond_type = np.array( [ v[1] for k, v in sorted(self.data['Bonds'].items(), key=lambda item:item[0])])
         except:
-            bpnd_type = np.array((),dtype=np.int32)
-        return bpnd_type  
+            bond_type = np.array((),dtype=np.int32)
+        return boond_type  
     
     def get_topology(self):
         ''' Return the system topology (see McReader) '''
