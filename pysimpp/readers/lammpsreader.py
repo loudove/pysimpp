@@ -1001,7 +1001,7 @@ class LammpsReader(abcReader):
             bond_type = np.array( [ v[1] for k, v in sorted(self.data['Bonds'].items(), key=lambda item:item[0])])
         except:
             bond_type = np.array((),dtype=np.int32)
-        return boond_type  
+        return bond_type  
     
     def get_topology(self):
         ''' Return the system topology (see McReader) '''
@@ -1152,9 +1152,10 @@ class LammpsReader(abcReader):
             an exception is raised  '''
         _step, _box, _data = dumpshandler.read_next( skip)
         if not _step == step:
-            messaage = "the frame found in %s (%d) is not the expected one (%d)" % \
-                (dumpshandler.f.name, _step, step)
-            raise LammpsReaderException( messaage)
+            fname = tuple(dumpshandler.toread)[0].f.name
+            message = "the frame found in %s (%d) is not the expected one (%d)" % \
+                (fname, _step, step)
+            raise LammpsReaderException( mesaage)
         return (_step, _box, _data)
 
 
