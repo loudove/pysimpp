@@ -20,6 +20,7 @@ __debug = False
 
 __kb = 1.380649e-23 # J/K
 __T = 300. # K
+__hack = False
 
 def _is_command(): return True
 
@@ -114,6 +115,7 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
     steps = []
     boxes = []
     profiles = {}
+    profiles_entg = {}
     iconf = 0
 
     dolocal = False
@@ -145,6 +147,8 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
                     length = origin + (box.a,box.b,box.c)[_d]
                     # nbins=round(length/bin)
                     profiles[_d] = Histogram.fixed( origin, length, bin)
+                    if __hack:
+                        profiles_entg[_d] = Histogram.fixed( origin, length, bin)
 
             steps.append( step)
             boxes.append( box)
@@ -172,8 +176,11 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
             for _d in _dims:
                 profile = profiles[_d]
                 for _cm in cm:
-                #for _cm in cm[np.where( data['type'] == 2)[0]]:
                     profile.add(_cm[_d])
+                if __hack:
+                    profile = profiles_entg[_d]
+                    for _cm in cm[np.where( data['type'] == 2)[0]]:
+                        profile.add(_cm[_d])
 
             if dolocal:
                 for l_, nl_ in zip(l,nl):
@@ -187,6 +194,11 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
         _dname = "%s%s"%("com_" if usecom else "", _dnames[ _d])
         header="# %s_[A] probability_[1/A]" % ( _dname)
         profile.write(reader.dir+os.sep+"%s_prf.data" % _dname, header=header)
+
+    for _d, profile in profiles_entg.items():
+        _dname = "%s%s"%("com_" if usecom else "", _dnames[ _d])
+        header="# %s_[A] probability_[1/A]" % ( _dname)
+        profile.write(reader.dir+os.sep+"%s_prf_entg.data" % _dname, header=header)
 
     print()
 
