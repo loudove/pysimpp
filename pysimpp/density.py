@@ -116,12 +116,12 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
     boxes = []
     profiles = {}
     profiles_entg = {}
-    iconf = 0
+    iconf = -1
 
     dolocal = False
     if len( local) > 0:
         dolocal = True
-        seed = np.array((43924342,),dtype=np.int32)
+        seed = np.array((43924342, 77928374, 46278346, 45329834, 6432847, 23984,9384392, 234198),dtype=np.int32)
         hld = defaultdict(lambda: Histogram.free(4.0, 0.0, addref=False))
         l, nl = zip(*local)
         l = [ 250.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0]
