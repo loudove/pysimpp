@@ -388,6 +388,11 @@ class MDAnalysisReader(abcReader):
             delta = self.u.trajectory.dt # time between successive dumps
             # time of the first and secod dump
             t0, t1 = self.u.trajectory[0].data['step'], self.u.trajectory[1].data['step']
+            # check
+            deltat = t1 - t0
+            if deltat == 0.0:
+                t0, t1 = self.u.trajectory[0].data['time'], self.u.trajectory[1].data['time']
+                deltat = t1 - t0
             self.timestep = delta/(t1-t0) # timestep in ps
         except:
             self.u = None
