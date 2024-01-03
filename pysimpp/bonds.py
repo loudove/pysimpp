@@ -3,14 +3,10 @@ import os
 import sys
 import numpy as np
 from collections import defaultdict
-import itertools
-from math import fabs, acos, copysign
-
-import MDAnalysis
 
 import pysimpp.readers
-from pysimpp.fastpost import fastbonds
-from pysimpp.utils.statisticsutils import Histogram, Histogram2D
+from pysimpp.fastpost import fastbonds # pylint: disable=no-name-in-module
+from pysimpp.utils.statisticsutils import Histogram
 
 def _is_command(): return True
 def _short_description(): return 'Calculate bond lengths distribution and time evolution or the mean value.'

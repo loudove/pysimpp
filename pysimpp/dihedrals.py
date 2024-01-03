@@ -3,19 +3,16 @@ import os
 import sys
 import numpy as np
 from collections import defaultdict
-import itertools
-from math import fabs, acos, copysign
-
-import MDAnalysis
 
 import pysimpp.readers
 
-from pysimpp.utils.simulationbox import SimulationBox, NeighborCellList
+from pysimpp.fastpost import fastdihedrals # pylint: disable=no-name-in-module
+from pysimpp.utils.utils import IsList, read_ndx
 from pysimpp.utils.statisticsutils import Histogram, Histogram2D
-from pysimpp.utils.vectorutils import get_length, get_unit, get_angle, get_angle_unit, get_dihedral
+from pysimpp.utils.vectorutils import get_dihedral
 
 def _is_command(): return True
-def _short_description(): return 'Calculate orientation distribution (angle with z axis).'
+def _short_description(): return 'Calculate then dihedrals distribution (simple and joint).'
 def _command(): command()
 
 # import scipy
@@ -25,7 +22,7 @@ def _command(): command()
 
 __rad2deg = 180./np.pi
 
-def dihedrals(filename, ndxfile, start, end, every):
+def dihedrals(filename, ndxfile, jnt, start, end, every):
 
     # check the input file
     reader = pysimpp.readers.create(filename)
@@ -40,32 +37,56 @@ def dihedrals(filename, ndxfile, start, end, every):
     reader.set_attributes(attributes)
 
     # read index file
-    lines=ndxfile.readlines()
+    ndxs = read_ndx(ndxfile)
     ndxfile.close()
-    # find types and keep angles quatrets per type
-    _d=defaultdict(str)
-    for line in lines:
-        line=line.strip()
-        if len(line) == 0:
-            continue
-        elif line.startswith("["):
-            _type=line[1:-1].strip()
-        else:
-            _d[_type]+=" "+line
+
+    for k in jnt:
+        if not k in ndxs:
+            print("ERROR: group %s cannot be found in %s " % (k,ndxfile.name))
+            return
+
+    # identify the dihedrals to be calculated and assign them a unique id.
+    # for each type keep a list with angles id and the the corresponding histogram.
     d = {}
     h = {}
-    for k in list(_d.keys()):
-        a = np.array(list(map( int, _d[k].split()))) - 1
-        _n = a.size
+    _phi_name = {} # dihedral {name:id} dictionary
+    _phi_seq = [] # list of dihedral sequences; the index corresponds to the id
+    for k, v in ndxs.items():
+        # basic check 
+        kinjnt = k in jnt 
+        _n = v.size
         if not _n % 4 == 0:
-            print("Dihedral indexes should be given in quartets! Check %s type" % k)
+            print("ERROR: indexes should be given in quartets! Check %s type" % k)
             return
-        d[k] = np.array(a).reshape(int(_n/4),4)
-        h[k] = Histogram.free( 2.0, 0.0, addref=False)
+        elif kinjnt and not _n % 4 == 0:
+            print("ERROR: indexes should be given in pairs of quartets! Check %s type" % k)
+            return
+        # parse the quartets and assign them a id
+        idl = [] # list of dihedrals id
+        for _d in np.array(v-1).reshape(int(_n/4),4):
+            # get dihedral unique name 
+            _d0 = _d[0]; _d3 = _d[3]
+            _name = "%d %d %d %d" % tuple(_d) if _d0 < _d3 else (_d3, _d[2], _d[1], _d0)
+            # find the id
+            if not _name in _phi_name:
+                _id = len( _phi_name)
+                _phi_name[ _name] = _id
+                _phi_seq.append( _d)
+            else:
+                _id = _phi_name[ _name]
+            idl.append( _id)
+        # for each type keep the idexes of the dihedrals and the construct the histograms
+        _bin = 2.0 * np.pi / 180.0
+        if kinjnt:
+            d[k] = np.array(idl).reshape(len(idl)//2,2)
+            h[k] = Histogram2D((_bin, _bin), (0, 0), addref=False)
+        else:
+            d[k] = np.array(idl)
+            h[k] = Histogram.free( _bin, _bin, addref=False)
+
+    _phi_seq = np.array( _phi_seq)
 
     # buffer function
-    dot = np.dot
-    sqrt = np.sqrt
     nframes = 0
     r = np.empty(shape=(natoms, 3),
                   dtype=np.float32)  # coordinates
@@ -87,23 +108,18 @@ def dihedrals(filename, ndxfile, start, end, every):
         np.copyto(r[:, 0], data['x'])
         np.copyto(r[:, 1], data['y'])
         np.copyto(r[:, 2], data['z'])
-        set_to_minimum = box.set_to_minimum
+
+        _phi = fastdihedrals(r.T,box.va,box.vb,box.vc,_phi_seq.T)
 
         for k in list(d.keys()):
-            kd = d[k]
-            kh = h[k]
-            for _d in kd:
-                _r = r[ _d,:]
-                v1 = _r[1]-_r[0]
-                v2 = _r[2]-_r[1]
-                v3 = _r[3]-_r[2]
-                set_to_minimum(v1)
-                set_to_minimum(v2)
-                set_to_minimum(v3)
-                angle = get_dihedral( v1, v2, v3)*__rad2deg
-                kh.add( angle)
+            if k in jnt:
+                np.vectorize(h[k].add, signature='(n)->()')(_phi[d[k]])
+            else:
+                np.vectorize(h[k].add)(_phi[d[k]])
 
     for k in list(h.keys()):
+        if k in jnt:
+            h[k].normalize()
         h[k].write( dirname+os.sep+basename+"_%s.data" % k)
 
 def command():
@@ -121,10 +137,19 @@ def command():
     message='''
     a file with the gromacs style indexes for the dihedrals to be considered.
     The calculated probability distribution is written in the trajectory file
-    direcory in a file {trjbasename}_{group}.dat. '''    
+    direcory in a file {trjbasename}_{group}.data. '''    
     parser.add_argument('-ndx', nargs=1, type=argparse.FileType('r'), metavar='file',
                         required=True, help=message)
-
+    
+    chktype = IsList("wrong group names (check: %s)",itemtype=str)
+    message='''
+    a comma separated list with the names of the groups in the index file is to
+    be considered for a correlation check. The groups should contain pairs of
+    dihedrals, the joint probability of which will be calculated. Also in this
+    case the name of the output file will be {trjbasename}_{group}.data.'''
+    parser.add_argument('-j', nargs=1, type=chktype, metavar='joint', default=[[]], \
+                       help=message)
+    
     parser.add_argument('-start', nargs=1, type=int, metavar='n', default=[-1], \
                        help='start processing form configuration n [inclusive]')
 
@@ -139,12 +164,14 @@ def command():
 
     print("INPUT")
     print("ndx : ", args.ndx[0].name)
+    print("joint ", ",".join( args.j[0]) if len(args.j[0]) > 0 else "-")
     print("path : ", args.path)
     print("start : ", args.start[0])
     print("every : ", args.every[0])
     print("end : ", "max" if args.end[0] == sys.maxsize else args.end[0])
+    print()
 
-    dihedrals( args.path, args.ndx[0], args.start[0], args.end[0], args.every[0])
+    dihedrals( args.path, args.ndx[0], args.j[0], args.start[0], args.end[0], args.every[0])
 
 if __name__ == '__main__':
     command()

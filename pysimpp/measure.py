@@ -2,18 +2,11 @@
 import os
 import sys
 import numpy as np
-from collections import defaultdict
-import itertools
-from math import fabs, acos, copysign
-
-import MDAnalysis
 
 import pysimpp.readers
 from pysimpp.fastpost import fastbonds, fastangles, fastdihedrals # pylint: disable=no-name-in-module
 from pysimpp.utils.utils import IsList, read_ndx
-from pysimpp.utils.simulationbox import SimulationBox, NeighborCellList
-from pysimpp.utils.statisticsutils import Histogram, Histogram2D
-from pysimpp.utils.vectorutils import get_length, get_unit, get_angle, get_angle_unit, get_dihedral
+from pysimpp.utils.statisticsutils import Histogram
 
 def _is_command(): return True
 def _short_description(): return 'Calculate orientation distribution (angle with z axis).'
