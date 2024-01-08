@@ -26,6 +26,31 @@ _fixcamc = False # Fix: the global indexing is screwed in old camc output
 # if not _debug:
 #     sys.tracebacklimit=0
 
+def _guess_elements_from_mass( masses, types):
+    ''' guess the element based on the masses '''
+
+    import MDAnalysis
+    _el_mass = dict(MDAnalysis.topology.tables.masses)
+
+    def _guess(m):
+        ''' guess element from mass '''
+        el, eps = None, 0.1
+        for k, v in _el_mass.items():
+            if abs(m-v) < eps: el = k
+        return el.upper()
+
+    def _add_and_return(d,k,v):
+        ''' add the k:v pair do d and return v'''
+        d[k] = v
+        return v
+    
+    _known = {}
+    elements = []
+    for m, t in zip(masses, types):
+        elements.append( _known[t] if t in _known else _add_and_return(_known, t, _guess(m)))
+                        
+    return elements
+
 
 class LammpsReaderException(Exception): ...
 
@@ -775,9 +800,9 @@ class LammpsReader(abcReader):
             # TODO mapping between lammps types and reaxff types.
             # check for inline comments contain the type names, assuming
             # the format: id mass #[ ]*type
-            if len( lst) == 4:
+            if len( lst) == 4 and lst[2] == "#":
                 _types[ lst[0]] = lst[3]
-            elif len(lst) == 3:
+            elif len(lst) == 3 and lst[2].startswith("#"):
                 _types[ lst[0]] = lst[2][1:]
             _masses[ lst[0]] = float( lst[1])
         if len(_types) > 0:
@@ -805,12 +830,20 @@ class LammpsReader(abcReader):
         # for all styles the last record will be either a coordinate (float)
         # or an image (int).
         _lines = blocks[  'Atoms']
-        lastrecord_ = _lines[0].split()[-1] if len(_lines)>1 else ""
-        has_image = not "." in lastrecord_
+        # check for images (assume that comments have been removed and therefore
+        # the first line in not a comment line starting with #)
+        if len(_lines)>1:
+            _tk = _lines[0].split()
+            lastrecord_ = _tk[-1] if not "#" in _tk else _tk[ _tk.index("#")-1]
+        else:
+            lastrecord_ = ""
+        has_image = not "." in lastrecord_ # week check for float numbers
         previous_ = -1
         localid_ = 1
         for i, line in enumerate( _lines):
-            tk = line.split()
+            # ignore comments
+            _tk = line.split()
+            tk = _tk if not "#" in _tk else _tk[ :_tk.index("#")]
             _id = int( tk[0])-1 # if it == 0 else i
             _type[_id] =  tk[it]
             molecule_ = int( tk[im]) if read_molecule else 0
@@ -970,9 +1003,10 @@ class LammpsReader(abcReader):
         ''' Retruns atom's element retrieved from data file. '''
         elements = super(LammpsReader, self).get_atom_element()
         if len(elements) == 0:
-            # TODO add guess element based on mass functionality
-            msg = LammpsReader._yaml_required % (self.__class__.__name__,inspect.currentframe().f_code.co_name)
-            raise LammpsReaderException( msg)
+            elements = _guess_elements_from_mass( self.get_atom_mass(), self.get_atom_type())
+            # # TODO add guess element based on mass functionality
+            # msg = LammpsReader._yaml_required % (self.__class__.__name__,inspect.currentframe().f_code.co_name)
+            # raise LammpsReaderException( msg)
         return elements
 
     def get_atom_charge(self):
@@ -1426,7 +1460,7 @@ class LammpsReader(abcReader):
             f.close()
             blocks = defaultdict(list)
             for line in lines[1:]:
-                if len(line) == 0:
+                if len(line) == 0 or line.startswith("#"):
                     continue
                 found = False
                 for v in LammpsReader._var_names:
