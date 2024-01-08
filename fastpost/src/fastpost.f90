@@ -94,12 +94,12 @@ subroutine fastunwrapf(n, x, y, z, ix, iy, iz, va, vb, vc, r)
     real*8, dimension( 0:2) :: v
 
     r = 0.d0
-!$omp parallel do private(i, v)
+    !$omp parallel do private(i, v)
     do i = 0, n-1
         v =  (/ x(i), y(i), z(i) /)
         r(0:2,i) = v + ix(i) * va  + iy(i) * vb + iz(i) * vc
     end do
-!$omp end parallel do
+    !$omp end parallel do
 
 end subroutine fastunwrapf
 
@@ -118,11 +118,11 @@ subroutine fastunwrap(n, rw, ip, va, vb, vc, r)
     integer :: i
 
     r = 0.d0
-!$omp parallel do private(i)
+    !$omp parallel do private(i)
     do i = 0, n-1
         r(:,i) = rw(:,i) + ip(0,i) * va  + ip(1,i) * vb + ip(2,i) * vc
     end do
-!$omp end parallel do
+    !$omp end parallel do
 
 end subroutine fastunwrap
 
@@ -262,9 +262,9 @@ subroutine fastwhole(n, rw, molecule, nbonds, bonds, a, b, c, r)
     allocate ( track( 0:maxmolnat-1), mask( 0:maxmolnat-1))
     allocate ( buff(maxmolnat))
 
-!$omp parallel do private(im, ntrack, track, itrack, &
-!$omp & nbuff, buff, mask, nmask, maxn, dr, &
-!$omp & i, ii, j, jj, k, kk, ib, it)
+    !$omp parallel do private(im, ntrack, track, itrack, &
+    !$omp & nbuff, buff, mask, nmask, maxn, dr, &
+    !$omp & i, ii, j, jj, k, kk, ib, it)
     do im = 0, nmolecules-1 ! loop over the molecules
         ! track the fragments in the molecule
         ntrack= 0  ! initialize
@@ -364,7 +364,7 @@ subroutine fastwhole(n, rw, molecule, nbonds, bonds, a, b, c, r)
             enddo
         enddo
     enddo
-!$omp end parallel do
+    !$omp end parallel do
 
     if ( allocated( track) )deallocate( track)
     if ( allocated( mask) )deallocate( mask)
@@ -502,13 +502,13 @@ subroutine fastlocal(n, r, r0, v0, va, vb, vc, rlocal)
     real(8), dimension(3) :: dr
 
     call box%initialize( v0, va, vb, vc, .true.)
-!$omp parallel do private( i, dr)
+    !$omp parallel do private( i, dr)
     do i = 0, n-1
         dr = r(i,:) - r0(:)
         call box%minImgTo(rlocal)
         rlocal(i,:) = r0(:) + dr(:)
     enddo
-!$omp end parallel do
+    !$omp end parallel do
 
 end subroutine fastlocal
 
@@ -612,10 +612,10 @@ subroutine fastconcatenation(n, r, group, nbonds, bonds, v0, va, vb, vc, rchk, p
     ! allocate the array for group atoms and their bonded neighbours
     allocate( grpbndd( 0:maxval(grpnat)*( 1 + maxval( atnbnd))-1))
 
-!$omp parallel do private( ig, grpbndd, ngrpbndd, &
-!$omp & i, it, j, jj, jt, jb, jc, k, kk, kt, iat, jat, &
-!$omp & icell, jcell, cc, ncc, cnat, cat, &
-!$omp & rw, cm, p1, p2, a, c, det, inv, sol)
+    !$omp parallel do private( ig, grpbndd, ngrpbndd, &
+    !$omp & i, it, j, jj, jt, jb, jc, k, kk, kt, iat, jat, &
+    !$omp & icell, jcell, cc, ncc, cnat, cat, &
+    !$omp & rw, cm, p1, p2, a, c, det, inv, sol)
     GRPLOOP: do ig = 0, ngroups-1
         ! gather global indexes of group atoms and their bonded neigbors
         grpbndd( 0:grpnat(ig)-1) = grpat(grpiat(ig):grpiat(ig)+grpnat(ig)-1)
@@ -710,15 +710,18 @@ subroutine fastconcatenation(n, r, group, nbonds, bonds, v0, va, vb, vc, rchk, p
                         if ( sol(1) > PPRECISION .or. sol(1) < NPRECISION ) cycle
 
                         if ( sol(1) <= 1.0 - sol(0) + precision ) then
-write(*,'("Bond ", I0, "-", I0, " concatenates with the group (", I0,") of atoms : ", I0)', advance='no') &
-    iat, jat, ig, grpat( grpiat(ig))
-    do j = grpiat(ig)+1,grpiat(ig)+grpnat(ig)-1
-write(*,'(", ",I0)', advance='no') grpat(j)
-    end do
-write(*,*)
-write(*,'("detetrminant : ", F14.6)') det
-write(*,'("solution :( ", F14.6,",",x,F14.6,",",x,F14.6,")")') sol(0), sol(1), sol(2)
-cycle NBATOMSLOOP
+
+    write(*,'("Bond ", I0, "-", I0, " concatenates with' // &
+             ' the group (", I0,") of atoms : ", I0)', advance='no') &
+        iat, jat, ig, grpat( grpiat(ig))
+        do j = grpiat(ig)+1,grpiat(ig)+grpnat(ig)-1
+            write(*,'(", ",I0)', advance='no') grpat(j)
+        end do
+    write(*,*)
+    write(*,'("detetrminant : ", F14.6)') det
+    write(*,'("solution :( ", F14.6,",",x,F14.6,",",x,' // &
+            'F14.6,")")') sol(0), sol(1), sol(2)
+    cycle NBATOMSLOOP
 
                         end if
                     end do TRIANGLESLOOP
@@ -726,7 +729,7 @@ cycle NBATOMSLOOP
             end do NBATOMSLOOP
         end do NBCELLSLOOP
     end do GRPLOOP
-!$omp end parallel do
+    !$omp end parallel do
 
     if ( allocated(grpnat)) deallocate(grpnat)
     if ( allocated(grpiat)) deallocate(grpiat)
@@ -814,10 +817,10 @@ subroutine fastconcatenation2(n, r, ngroups, grpnat, ngrpat, grpat, nbonds, bond
     ! allocate the array for group atoms and their bonded neighbours
     allocate( grpbndd( 0:maxval(grpnat)*( 1 + maxval( atnbnd))-1))
 
-!$omp parallel do private( ig, grpbndd, ngrpbndd, &
-!$omp & i, it, j, jj, jt, jb, jc, k, kk, kt, iat, jat, &
-!$omp & icell, jcell, cc, ncc, cnat, cat, &
-!$omp & rw, cm, p1, p2, a, c, det, inv, sol)
+    !$omp parallel do private( ig, grpbndd, ngrpbndd, &
+    !$omp & i, it, j, jj, jt, jb, jc, k, kk, kt, iat, jat, &
+    !$omp & icell, jcell, cc, ncc, cnat, cat, &
+    !$omp & rw, cm, p1, p2, a, c, det, inv, sol)
     GRPLOOP: do ig = 0, ngroups-1
         ! gather global indexes of group atoms and their bonded neigbors
         grpbndd( 0:grpnat(ig)-1) = grpat(grpiat(ig):grpiat(ig)+grpnat(ig)-1)
@@ -913,15 +916,17 @@ subroutine fastconcatenation2(n, r, ngroups, grpnat, ngrpat, grpat, nbonds, bond
 
                         if ( sol(1) <= 1.0 - sol(0) + precision ) then
 
-write(*,'("Bond ", I0, "-", I0, " concatenates with the group (", I0,") of atoms : ", I0)', advance='no') &
-    iat, jat, ig, grpat( grpiat(ig))
-    do j = grpiat(ig)+1,grpiat(ig)+grpnat(ig)-1
-write(*,'(" ",I0)', advance='no') grpat(j)
-    end do
-write(*,*)
-write(*,'("detetrminant : ", F14.6)') det
-write(*,'("solution :( ", F14.6,",",x,F14.6,",",x,F14.6,")")') sol(0), sol(1), sol(2)
-cycle GRPLOOP
+    write(*,'("Bond ", I0, "-", I0, " concatenates with' // &
+            ' the group (", I0,") of atoms : ", I0)', advance='no') &
+        iat, jat, ig, grpat( grpiat(ig))
+        do j = grpiat(ig)+1,grpiat(ig)+grpnat(ig)-1
+            write(*,'(" ",I0)', advance='no') grpat(j)
+        end do
+    write(*,*)
+    write(*,'("detetrminant : ", F14.6)') det
+    write(*,'("solution :( ", F14.6,",",x,F14.6,",",x,' // &
+            'F14.6,")")') sol(0), sol(1), sol(2)
+    cycle GRPLOOP
 
                         end if
                     end do TRIANGLESLOOP
@@ -929,7 +934,7 @@ cycle GRPLOOP
             end do NBATOMSLOOP
         end do NBCELLSLOOP
     end do GRPLOOP
-!$omp end parallel do
+    !$omp end parallel do
 
     if ( allocated(atbnd)) deallocate(atbnd)
     if ( allocated(grpbndd)) deallocate(grpbndd)
@@ -951,7 +956,7 @@ subroutine fastwrapo(n, r, v0, a, b, c, rw)
     real*8, dimension( 0:2) :: v, d
 
     d = (/ a, b, c /)
-!$omp parallel do private(i,j,k,v)
+    !$omp parallel do private(i,j,k,v)
     do i = 0, n-1
         v =  r(:,i) - v0
         do j = 0, 2
@@ -962,7 +967,7 @@ subroutine fastwrapo(n, r, v0, a, b, c, rw)
         end do
         rw(:,i) = v0 + v
     end do
-!$omp end parallel do
+    !$omp end parallel do
 
 end subroutine fastwrapo
 
@@ -1015,7 +1020,7 @@ subroutine pefastunwrap(n, rw, nch, maxnatch, natch, chat , a, b, c, r)
     rbox = 1.d0 / box
     r(:,:) = 0.d0
 
-!$omp parallel do private(i,j,k,l,dr)
+    !$omp parallel do private(i,j,k,l,dr)
     do i = 0, nch-1
         k = chat(i,0)
         r( k, 0:2) = rw( k, 0:2)
@@ -1027,7 +1032,7 @@ subroutine pefastunwrap(n, rw, nch, maxnatch, natch, chat , a, b, c, r)
             r(l,0:2) = r(k,0:2) + dr
         end do
     end do
-!$omp end parallel do
+    !$omp end parallel do
 
 end subroutine pefastunwrap
 
@@ -1070,7 +1075,7 @@ subroutine pefastaddhydrogens(n, rw, nch, maxnatch, natch, chat , a, b, c, len, 
 
     call pefastunwrap(n, rw, nch, maxnatch, natch, chat , a, b, c, ru)
 
-!$omp parallel do private(ich,cnt,i,j,k,p,iat)
+    !$omp parallel do private(ich,cnt,i,j,k,p,iat)
     do ich = 0, nch-1
         ! the index of the first atom of the chain in all atoms represenetaion
         cnt = sum( natch(0:ich-1)) * 3 + ich * 2
@@ -1103,7 +1108,7 @@ subroutine pefastaddhydrogens(n, rw, nch, maxnatch, natch, chat , a, b, c, len, 
         call build_tetrahedral(ru(j,:), ru(k,:), p, len, theta, r(cnt+1,:), r(cnt+2,:))
         r(cnt+3,:) = p
     end do
-!$omp end parallel do
+    !$omp end parallel do
 
 end subroutine pefastaddhydrogens
 
@@ -1114,8 +1119,8 @@ subroutine peenrgpress(n, r, rw, nch, rcm, atch , a, b, c, temperature,     &
                        rcut, enrg, einter, eintra, eimage, etrunc,                  &
                        press, apress, pid, ptrunc, mstten, astten)
 
-!enrg,einter,eintra,eimage,press,apress,mstens[:,:],astens[:,:]
-!    = peenrgpress(r,rw,rcm,molecules,box.va, box.vb, box.vc, T, rcut)
+    !enrg,einter,eintra,eimage,press,apress,mstens[:,:],astens[:,:]
+    !    = peenrgpress(r,rw,rcm,molecules,box.va, box.vb, box.vc, T, rcut)
     use vector3d
     use domain3d
     use lj_interactions
@@ -1147,7 +1152,7 @@ subroutine peenrgpress(n, r, rw, nch, rcm, atch , a, b, c, temperature,     &
     call d_peenrgpress(n, r, rw, nch, rcm, atch , a, b, c, temperature,     &
     rcut, enrg, einter, eintra, eimage, etrunc,                  &
     press, apress, pid, ptrunc, mstten, astten)
-!
+    !
     ! !> box stuff
     ! type(SimulationBox) :: box
     ! real*8, dimension(0:2) :: r0 = (/ 0.d0, 0.d0, 0.d0/)
@@ -2435,7 +2440,7 @@ subroutine fast_localdensity(n, r, v0, a, b, c, nseed, seed, l, m, densities)
     x0(1,:) = x0(1,:) * b
     x0(2,:) = x0(2,:) * c
 
-!$omp parallel do private(i, j, k, x1, x2, rs, ok)
+    !$omp parallel do private(i, j, k, x1, x2, rs, ok)
     do i = 0, m-1
 
         do k = 0, 2
@@ -2465,7 +2470,7 @@ subroutine fast_localdensity(n, r, v0, a, b, c, nseed, seed, l, m, densities)
                 densities( i) = densities( i) + 1.d0
         enddo
     enddo
-!$omp end parallel do
+    !$omp end parallel do
 
     ! retrieve random seed
     call random_seed( get = seed(0:nseed-1))
