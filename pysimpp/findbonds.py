@@ -23,10 +23,21 @@ def _command(): command()
 # import matplotlib.pyplot as plt
 
 
+_lmp_data_bond_local_header = '''\
+ITEM: TIMESTEP
+%d
+ITEM: NUMBER OF ENTRIES
+%d
+ITEM: BOX BOUNDS pp pp ff
+%s
+ITEM: ENTRIES id type bead1 bead2
+'''
+
+
 _el_vdwradii = dict(MDAnalysis.topology.tables.vdwradii)
 
 
-def findbonds(filename, fradii, scale, pairs, bin, start, end, every):
+def findbonds(filename, fradii, scale, pairs, bin, start, end, every, dump=False):
 
     # check the input file
     reader = pysimpp.readers.create(filename)
@@ -63,9 +74,9 @@ def findbonds(filename, fradii, scale, pairs, bin, start, end, every):
     pairid = np.zeros((ntypes, ntypes), dtype=np.int32)
     pairrc = np.zeros((ntypes, ntypes), dtype=np.float64)
     _radii = radii["elements"] if "elements" in radii else radii["types"]
-    # Inorganic Materials, Vol. 37, No. 9, 2001, pp. 871–885
+    # Check: Inorganic Materials, Vol. 37, No. 9, 2001, pp. 871–885
     if not "CO" in _radii:
-        _radii["CO"] = 2.80
+        _radii["CO"] = 2.30
     if not "TI" in _radii:
         _radii["TI"] = 2.16
     npairs = 0
@@ -99,6 +110,9 @@ def findbonds(filename, fradii, scale, pairs, bin, start, end, every):
     # keep bonds distribution per type
     hst = defaultdict(lambda: Histogram.free(bin, 0.0, addref=False))
 
+    if dump:
+        fd = open(dirname+os.sep+basename+".bonds.dump_local", 'w')
+
     frames = []
     r = np.empty(shape=(natoms, 3), dtype=np.float32)  # coordinates
     print('>> reading dump file(s) ...')
@@ -131,7 +145,15 @@ def findbonds(filename, fradii, scale, pairs, bin, start, end, every):
                 np.vectorize(hst[_t].add)(_b)
                 trj[_t][step] = (len(_b), np.mean(_b), np.std(_b))
 
+        if dump:
+            fd.write(_lmp_data_bond_local_header % (step, nbd, str(box)))
+            for _id, (_t, _at1, _at2) in enumerate(zip(bdid[:nbd], bd[0, :nbd], bd[1, :nbd])):
+                fd.write("%d %d %d %d\n" % (_id+1, _t, _at1+1, _at2+1))
+
     print()
+
+    if dump:  # close bonds local dump
+        fd.close()
 
     # dump time evolution
     _types = sorted(trj.keys())
@@ -158,7 +180,7 @@ def findbonds(filename, fradii, scale, pairs, bin, start, end, every):
 def command():
 
     # import sys
-    # sys.argv += "-scale 0.55 -bin 0.02 -rc A:B:2.0@A:C:2.1 /Users/loukas.peristeras/tmp/asma/sys1.dump".split()
+    # sys.argv += "--dump -scale 0.55 -bin 0.02 -rc A:B:2.0@A:C:2.1 /Users/loukas.peristeras/tmp/asma/sys1.dump".split()
 
     import argparse
 
@@ -224,7 +246,15 @@ def command():
                 else (tk[1], tk[0])] = float(tk[2])
         return ret
 
-    parser.add_argument('-rc', nargs=1, type=chktype, metavar='rc', default=[{("*", "*"): 0.0}],
+    parser.add_argument('-rc', nargs=1, type=chktype, metavar='rc', default=[{}],
+                        help=string)
+
+    string = '''
+    output a lammps local dump trajectory for bonds. The file will be located at
+    the path of the input trajectory, name using the trajectory dump base name
+    with extension ".bonds.dump_local".
+    '''
+    parser.add_argument('--dump', dest='dump', default=False, action='store_true',
                         help=string)
 
     # parse the arguments
@@ -238,10 +268,12 @@ def command():
     print("bin : ", args.bin[0])
     print("radii : ", "-" if args.radii[0] is None else args.radii[0].name)
     print("scale : ", args.scale[0])
-    # print("rcrt : ", ",".join([ for k v in args.rc[0].items()]))
+    print("dump : %s" % ("True" if args.dump else "False"))
+    # print("rcrt : ", ",".join([ "%s:%f.4"%(k,v) for k v in args.rc[0].items()]))
 
     findbonds(args.path, args.radii[0], args.scale[0], args.rc[0],
-            args.bin[0], args.start[0], args.end[0], args.every[0])
+              args.bin[0], args.start[0], args.end[0], args.every[0],
+              dump=args.dump)
 
 
 if __name__ == '__main__':

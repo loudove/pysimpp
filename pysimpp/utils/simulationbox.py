@@ -7,9 +7,10 @@ import networkx as nx
 
 from .vectorutils import *
 
+
 class SimulationBox():
     ''' Implements a periodic parallelepiped sumulation box. 
-    
+
         Attributes:
             origin (np.array((3),float)): the origin of the box.
             ua, ub, uc (np.array((3),float)): box spaning unit
@@ -58,7 +59,23 @@ class SimulationBox():
         self.f2c = np.matrix(np.zeros((3, 3), dtype=np.float32))
         self.c2f = np.matrix(np.zeros((3, 3), dtype=np.float32))
 
-        #print "constructor I"
+        # print "constructor I"
+
+    def __str__(self):
+        ''' Return str(self). lammps based printout of the simulation cell '''
+        ret =  " %.6f %.6f  xlo xhi\n" % (self.origin[0], self.va[0])
+        ret += " %.6f %.6f  ylo yhi\n" % (self.origin[1], self.vb[1])
+        ret += " %.6f %.6f  zlo zhi" % (self.origin[2], self.vc[2])
+        if not self.__is_ortho():
+            ret += "\n %.6f %.6f %.6f  xy xz yz" % (
+                self.vb[0], self.vc[0], self.vc[1])
+        return ret
+
+    def __is_ortho(self):
+        ''' check if the simulation cell is orthogonal '''
+        isclose = np.isclose
+        hpi = 0.5 * np.pi
+        return isclose(self.alpha, hpi) and isclose(self.beta, hpi) and isclose(self.gamma, hpi)
 
     def set_from_scalars(self, a, b, c, alpha=90.0, beta=90.0, gamma=90.0):
         ''' Set the dimensions of the unit cell using the
@@ -102,8 +119,8 @@ class SimulationBox():
             and the origin is assumed zero.
         '''
         (self.xlo, self.xhi, self.ylo, self.yhi, self.zlo, self.zhi, self.xy, self.xz, self.yz) = \
-        (xlo, xhi, ylo, yhi, zlo, zhi, xy, xz, yz)
-        #print "set_from_vectors"
+            (xlo, xhi, ylo, yhi, zlo, zhi, xy, xz, yz)
+        # print "set_from_vectors"
         zlo_ = zlo
         zhi_ = zhi
         ylo_ = max(ylo, ylo-yz)
@@ -145,7 +162,7 @@ class SimulationBox():
 
     def _find_volume(self):
         ''' Calculate box volume. '''
-        self.volume = np.abs( np.dot(self.va, np.cross(self.vb, self.vc)))
+        self.volume = np.abs(np.dot(self.va, np.cross(self.vb, self.vc)))
 
     def _find_normals(self):
         ''' Calculate box faces surface, normal vectors and relevant variables. '''
@@ -165,10 +182,10 @@ class SimulationBox():
         self.b_hnorm = 0.5 * self.volume / self.cxa_
         self.c_hnorm = 0.5 * self.volume / self.axb_
         # for cubic box _rnorm equals (1.0/a,1.0/b,1.0/c)
-        _rnorm = (self.a_rnorm, self.b_rnorm,self.c_rnorm)
+        _rnorm = (self.a_rnorm, self.b_rnorm, self.c_rnorm)
         self._rnorm = np.array(_rnorm)
         self._norm = 1.0/np.array(_rnorm)
-        self._normv = np.array((self.bxc,self.cxa,self.axb))
+        self._normv = np.array((self.bxc, self.cxa, self.axb))
 
     def _set_transformation_matrix(self):
         ''' Calculate box transformation matrixes. '''
@@ -193,34 +210,34 @@ class SimulationBox():
         # f[0] = m0*f[0]+m1*f[1]+m2*f[2] + origin[0]
         # f[1] =         m3*f[1]+m4*f[2] + origin[1]
         # f[2] =                 m5*f[2] + origin[2]
-        self.f2c[0,0] = m0
-        self.f2c[1,0] = m1
-        self.f2c[2,0] = m2
-        self.f2c[1,1] = m3
-        self.f2c[2,1] = m4
-        self.f2c[2,2] = m5
+        self.f2c[0, 0] = m0
+        self.f2c[1, 0] = m1
+        self.f2c[2, 0] = m2
+        self.f2c[1, 1] = m3
+        self.f2c[2, 1] = m4
+        self.f2c[2, 2] = m5
 
         # cartesian to fractional transformation
-        v=a*b*c*sqrt(1.0-cosa*cosa-cosb*cosb-cosg*cosg+2.0*cosa*cosb*cosg)
-        m0=1.0/a
-        m1=-cosg/(a*sing)
-        m2=b*c*(cosg*(cosa-cosb*cosg)/sing-cosb*sing)/v
-        m3=1.0/(b*sing)
-        m4=-a*c*(cosa-cosb*cosg)/(v*sing)
-        m5=a*b*sing/v
+        v = a*b*c*sqrt(1.0-cosa*cosa-cosb*cosb-cosg*cosg+2.0*cosa*cosb*cosg)
+        m0 = 1.0/a
+        m1 = -cosg/(a*sing)
+        m2 = b*c*(cosg*(cosa-cosb*cosg)/sing-cosb*sing)/v
+        m3 = 1.0/(b*sing)
+        m4 = -a*c*(cosa-cosb*cosg)/(v*sing)
+        m5 = a*b*sing/v
         # # r -> f
         # f = r - origin
         # r[0] = m0*r[0] + m1*r[1] + m2*r[2]
-        # r[1] =           m3*r[1] + m4*r[2] 
+        # r[1] =           m3*r[1] + m4*r[2]
         # r[2] =                     m5*r[2]
         # and check for precission; if the values are close to 0.0 or 1.0
         # within epsilon force them to these values
-        self.c2f[0,0] = m0
-        self.c2f[1,0] = m1
-        self.c2f[2,0] = m2
-        self.c2f[1,1] = m3
-        self.c2f[2,1] = m4
-        self.c2f[2,2] = m5
+        self.c2f[0, 0] = m0
+        self.c2f[1, 0] = m1
+        self.c2f[2, 0] = m2
+        self.c2f[1, 1] = m3
+        self.c2f[2, 1] = m4
+        self.c2f[2, 2] = m5
 
     # def setToMinimumImage(self, v):
     #     self.set_to_minimum(v)
@@ -230,20 +247,23 @@ class SimulationBox():
             image(s) and return the periodic indexe(s).
         '''
         # project on the normals
-        prj = np.inner(v,self._normv)
+        prj = np.inner(v, self._normv)
         # periodic indexes
-        pi = np.rint( prj * self._rnorm).astype(dtype=int)
+        pi = np.rint(prj * self._rnorm).astype(dtype=int)
         # non zero periodic indexes
-        xxx = (pi!=0)
+        xxx = (pi != 0)
         if len(v.shape) > 1:
-            for i, w in enumerate((self.va,self.vb,self.vc)):
-                xx = xxx[:,i]
+            for i, w in enumerate((self.va, self.vb, self.vc)):
+                xx = xxx[:, i]
                 if np.any(xx):
-                    v[xx]-=pi[xx,i,np.newaxis]*w
+                    v[xx] -= pi[xx, i, np.newaxis]*w
         else:
-            if xxx[0]: v-=pi[0]*self.va
-            if xxx[1]: v-=pi[1]*self.vb
-            if xxx[2]: v-=pi[2]*self.vc
+            if xxx[0]:
+                v -= pi[0]*self.va
+            if xxx[1]:
+                v -= pi[1]*self.vb
+            if xxx[2]:
+                v -= pi[2]*self.vc
         return pi
 
     def minimum(self, v):
@@ -258,9 +278,9 @@ class SimulationBox():
         '''  Returns a tuple of periodic indexes set the
              given vector to its minimum image.  '''
         # project on the normals
-        prj = np.inner(v,self._normv)
+        prj = np.inner(v, self._normv)
         # periodic indexes
-        pi = np.rint( prj * self._rnorm).astype(dtype=int)
+        pi = np.rint(prj * self._rnorm).astype(dtype=int)
         return tuple(pi)
         # only for cubic boxes
         # return (int( np.rint( v[0]/self.a)),
@@ -270,18 +290,18 @@ class SimulationBox():
     def wrap1(self, v):
         ''' Wraps the given vector(s) into the box. '''
         r = v - self.origin
-        f = np.inner(r,self.c2f)
+        f = np.inner(r, self.c2f)
         f -= np.floor(f)
-        r = np.inner(f,self.f2c)
+        r = np.inner(f, self.f2c)
         return self.origin+r
 
     def wrap(self, v):
         ''' Wraps the given vector into the box. 
             Works only for orthogonal boxes. '''
-        r = v - self.origin      
-        for j, (rd_, d_) in enumerate(zip(self._rnorm,self._norm)):
+        r = v - self.origin
+        for j, (rd_, d_) in enumerate(zip(self._rnorm, self._norm)):
             r[j] -= d_ * np.floor(r[j]*rd_)
-        return self.origin + r        
+        return self.origin + r
 
     def shift_vector(self, ip):
         ''' Return shift vector using the given periodic indexes. '''
@@ -295,48 +315,52 @@ class SimulationBox():
             bonds:          bond pairs
         '''
         G = nx.Graph()
-        box = np.array( self.va[0], self.vb[1], self.vc[2])
+        box = np.array(self.va[0], self.vb[1], self.vc[2])
         # bond vectors
-        bv = rw[bonds[1],:] - rw[bonds[0],:]
+        bv = rw[bonds[1], :] - rw[bonds[0], :]
         # bond periodic index
-        bpi = np.round( bv / box).astype(dtype=int)
+        bpi = np.round(bv / box).astype(dtype=int)
         # bond boundary cross flag
-        bf = np.any( bpi != 0, axis=1)
+        bf = np.any(bpi != 0, axis=1)
         # bonds per molecule
         bm = defaultdict(list)
         for ib, b in enumerate(bonds):
-            bm[ atom_molecule[b[0]]].append((b[0],b[1],bf[ib]))
+            bm[atom_molecule[b[0]]].append((b[0], b[1], bf[ib]))
 
         for im, atoms in enumerate(molecule_atoms):
             G.clear()
             # add atoms local local index as nodes
-            G.add_nodes_from( list( range( len(atoms))))
+            G.add_nodes_from(list(range(len(atoms))))
             # map bonds from global to local index
-            local = { at:i for i, at in enumerate(atoms) }
-            _bonds = tuple( map( lambda b: ( local[b[0]], local[b[1]], b[2]), bm[im]))
+            local = {at: i for i, at in enumerate(atoms)}
+            _bonds = tuple(
+                map(lambda b: (local[b[0]], local[b[1]], b[2]), bm[im]))
             # add the non crossing bonds as edges
-            edges = [ (b[0],b[1]) for b in _bonds if not b[2]]
+            edges = [(b[0], b[1]) for b in _bonds if not b[2]]
             G.add_edges_from(edges)
             # sort the subgraphs (fragments) based on their size
-            fragments = sorted( nx.connected_components(G), key=len, reverse=True)
+            fragments = sorted(nx.connected_components(G),
+                               key=len, reverse=True)
             # if one fragment, the molecule is already in the box (infinit periodic or not)
             if len(fragments) > 1:
                 # set atom fragment
                 atfrg = {}
                 for i, f in enumerate(fragments):
-                    atfrg[f]=i
+                    atfrg[f] = i
                 # find connections and order them
                 _connections = []
                 for b in _bonds:
                     if b[2]:
                         f0 = atfrg[b[0]]
                         f1 = atfrg[b[1]]
-                        _connections.append( (f0, f1, b[0], b[1]) if f0 > f1 else (f1, f0, b[1], b[0]))
-                _connections = set( _connections)
+                        _connections.append(
+                            (f0, f1, b[0], b[1]) if f0 > f1 else (f1, f0, b[1], b[0]))
+                _connections = set(_connections)
                 for i, f in enumerate(fragments):
-                    _connectedto = filter(lambda x: x[0]==i, _connections) 
+                    _connectedto = filter(lambda x: x[0] == i, _connections)
 
-            # _connections = set(map(lambda b: sorted(b), _mb[_crossing])) 
+            # _connections = set(map(lambda b: sorted(b), _mb[_crossing]))
+
 
 class NeighborCellList():
     ''' Implements a basic neighbor cell list. '''
@@ -390,7 +414,8 @@ class NeighborCellList():
             natoms = len(coordinates) / 3
             self.atom = np.zeros(natoms, dtype=int)
             self.cell = []
-            for i in range(self.n): self.cell.append([])
+            for i in range(self.n):
+                self.cell.append([])
             o = self.box.origin
             a = self.box.a
             b = self.box.b
@@ -398,24 +423,36 @@ class NeighborCellList():
             for i in range(natoms):
                 j = i * 3
                 v = coordinates[j:j + 3] - o
-                while v[0] < 0.0: v[0] += a
-                while v[0] > a: v[0] -= a
-                while v[1] < 0.0: v[1] += b
-                while v[1] > b: v[1] -= b
-                while v[2] < 0.0: v[2] += c
-                while v[2] > c: v[2] -= c
+                while v[0] < 0.0:
+                    v[0] += a
+                while v[0] > a:
+                    v[0] -= a
+                while v[1] < 0.0:
+                    v[1] += b
+                while v[1] > b:
+                    v[1] -= b
+                while v[2] < 0.0:
+                    v[2] += c
+                while v[2] > c:
+                    v[2] -= c
 
                 i_ = int(v[0] / self.dx)
-                if i_ < 0: i_ = 0
-                elif i_ >= self.nx: i_ = self.nx-1
+                if i_ < 0:
+                    i_ = 0
+                elif i_ >= self.nx:
+                    i_ = self.nx-1
 
                 j_ = int(v[1] / self.dy)
-                if j_ < 0: j_ = 0
-                elif j_ >= self.ny: j_ = self.ny-1
+                if j_ < 0:
+                    j_ = 0
+                elif j_ >= self.ny:
+                    j_ = self.ny-1
 
                 k_ = int(v[2] / self.dz)
-                if k_ < 0: k_ = 0
-                elif k_ >= self.nz: k_ = self.nz-1
+                if k_ < 0:
+                    k_ = 0
+                elif k_ >= self.nz:
+                    k_ = self.nz-1
 
                 index = self._index(i_, j_, k_)
 
@@ -433,20 +470,25 @@ class NeighborCellList():
         for i in _list:
             # apply pbc
             _i = x + i
-            if _i == -1: _i = self.nx - 1
-            elif _i == self.nx: _i = 0
+            if _i == -1:
+                _i = self.nx - 1
+            elif _i == self.nx:
+                _i = 0
             for j in _list:
                 # apply pbc
                 _j = y + j
-                if _j == -1: _j = self.ny - 1
-                elif _j == self.ny: _j = 0
+                if _j == -1:
+                    _j = self.ny - 1
+                elif _j == self.ny:
+                    _j = 0
                 for k in _list:
                     _k = z + k
-                    if _k == -1: _k = self.nz - 1
-                    elif _k == self.nz: _k = 0
+                    if _k == -1:
+                        _k = self.nz - 1
+                    elif _k == self.nz:
+                        _k = 0
                     _cells.append(self._index(_i, _j, _k))
         return tuple(_cells)
-
 
     def getNeighborAtoms(self, index):
         ''' Returns a tuple with the indexes of the index atoms neighboring atoms
@@ -458,7 +500,7 @@ class NeighborCellList():
             _list.extend(self.cell[c])
         return tuple(_list)
 
-#if __name__ == '__main__':
+# if __name__ == '__main__':
 #    #cProfile.run('reader.read_dump()','dumpprof')
 #    #box = Box()
 #
@@ -515,10 +557,11 @@ class NeighborCellList():
 #    print " neighbors list of atoms 4:\n", nl.getNeighborAtoms(4)
 #
 
+
 def test():
-    v=(np.random.rand(1000,3)*2.0-1.0)*20.0
-    box=SimulationBox()
-    box.set_from_scalars(2.,2.,2.,90.,90.,90.)
+    v = (np.random.rand(1000, 3)*2.0-1.0)*20.0
+    box = SimulationBox()
+    box.set_from_scalars(2., 2., 2., 90., 90., 90.)
     for v_ in v:
         u = box.wrap(v_)
         # u = box.wrap_(v_)
