@@ -2,6 +2,8 @@ from .mdanalysisreader import MDAnalysisReader # pylint: disable=import-error
 from .groreader import GromacsReader # pylint: disable=import-error
 from .lammpsreader import LammpsReader # pylint: disable=import-error
 
+read_gro = GromacsReader.read_gro # pylint: disable=import-error
+
 def _is_command(): return False
 
 # TODO automaticaly add the readers and update the file check

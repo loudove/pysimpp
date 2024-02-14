@@ -133,14 +133,9 @@ class MDAnalysisReader(abcReader):
         '''
         if not self.u is None:
             self.natoms = len( self.u.atoms)
-        elif len(self.topofile):
-            f = open(self.topofile,'r')
-            _atoms = MDAnalysisReader.read_gro(f)
-            _names = ['resid', 'resname', 'atomname', 'atomid', 'x', 'y', 'z', 'vx', 'vy', 'vz']
-            _types = ['i4', '<U5', '<U5', 'i4', 'f4', 'f4', 'f4', 'f4', 'f4', 'f4']
-            data = np.array( _atoms, dtype={ 'names':_names, 'formats':_types})
-            self.data = { k:data[k] for k in _names } # keep in LammpsReader self.data fashion
-            self.natoms = len( _atoms)
+        elif len(self.topofile) and self.fileext == "gro":
+            self.data = MDAnalysisReader.read_gro_data(self.topofile)
+            self.natoms = self.data['x'].size
         return (self.natom > 0)
 
     def read_next_frame(self, skip=False):
@@ -427,6 +422,34 @@ class MDAnalysisReader(abcReader):
         return reader
 
     @staticmethod
+    def read_gro_data(grofile):
+        ''' Parse gro file.
+            Args:
+                f: a valid file object to read
+            Returns:
+                data: a based system info 
+                    {'resid':[dtype='i4'], 'resname':[dtype='<U5'],
+                    'atomname':[dtype='<U5'], 'atomid':[dtype='i4'], 
+                    'x':[dtype='f4'], 'y':[dtype='f4'],'z':[dtype='f4'],
+                    'vx':[dtype='f4'], 'vy':[dtype='f4'], 'vz':[dtype='f4'],
+                    'va':[dtype='f4',  'vb':[dtype='f4',  'vc':[dtype='f4'}
+                    Gromacs units are assumed for coordinates and velocities.
+        '''
+
+        with open(grofile,'r') as f:
+            _atoms,  (va,vb,vc) = MDAnalysisReader.read_gro(f)
+
+            _names = ['resid', 'resname', 'atomname', 'atomid', 'x', 'y', 'z', 'vx', 'vy', 'vz']
+            _types = ['i4', '<U5', '<U5', 'i4', 'f4', 'f4', 'f4', 'f4', 'f4', 'f4']
+            data = np.array( _atoms, dtype={ 'names':_names, 'formats':_types})
+            data = { k:data[k] for k in _names }
+            data['va'] = va
+            data['vb'] = vb
+            data['vc'] = vc
+
+        return data
+
+    @staticmethod
     def read_gro(f):
         ''' Parse gro file.
             Args:
@@ -437,14 +460,22 @@ class MDAnalysisReader(abcReader):
                     Gromacs units are assumed for coordinates and velocities.
         '''
         lines = f.readlines()
+        nlines = len(lines)
+        if nlines < 4:
+            raise MDAnalysisReaderException( 
+                "ERROR: file %s seems empty." % f.name)
         atoms = []
         va = np.zeros(3, dtype=float)
         vb = np.zeros(3, dtype=float)
-        vc = np.zeros(3, dtype=float)        
-        for line in lines[2:2+int(lines[1].strip())]:
+        vc = np.zeros(3, dtype=float)
+        natoms = int(lines[1].strip())
+        if nlines < natoms+3:
+            raise MDAnalysisReaderException( 
+                "ERROR: file %s has fewer lines than expected." % f.name)
+        for line in lines[2:2+natoms]:
             resid = int(line[:5])
-            resname = line[5:10]
-            atomname = line[10:15]
+            resname = line[5:10].strip()
+            atomname = line[10:15].strip()
             atomid = int(line[15:20])
             x = float(line[20:28])
             y = float(line[28:36])
@@ -474,8 +505,8 @@ class MDAnalysisReader(abcReader):
             vb[1] = float(tk[1])
             vc[2] = float(tk[2])
         else:
-            msg = "ERROR invalid box check the last line of the input gro file."
-            raise MDAnalysisReaderException( msg)
+            raise MDAnalysisReaderException( 
+                "ERROR: invalid box found in %s file." % f.name)
 
         return atoms, (va,vb,vc)
 

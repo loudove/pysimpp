@@ -215,16 +215,15 @@ class MCluster(Cluster):
         of connected molecular fragments.
 
         Attributes:
-            molecules (set): a set with the global index of the  molecules
+            molecules (set): a set with the global index of the molecules
                 in the cluster.
             molecules_first (dist): a dict with the first atom of each molecule
                 in the cluster.
             molecules_shift: a dict with the shift (implemented as np.array) of
-                each molecule in the cluster.
-        '''
+                each molecule in the cluster. '''
 
     def __init__( self, i, s):
-        ''' Initialize a molecular cluster with the give set of atom indexes. '''
+        ''' Initialize a molecular cluster with the given set of atom indexes. '''
         super(MCluster, self).__init__( i, s)
         self.molecules = None
         self.molecules_shift = None
@@ -234,6 +233,7 @@ class MCluster(Cluster):
     def update_molecules( self, atom_molecule):
         ''' Update the list with the global indexes of the molecules in the
             cluster. '''
+
         molecules_atoms = defaultdict(list)
         for i in self:
             molecules_atoms[ atom_molecule[i]].append( i)
@@ -244,6 +244,7 @@ class MCluster(Cluster):
         ''' Update molecules and their shifts when join with the parent cluster.
             This method should be called for a parent cluster otherwise nothing
             happens (use this api with care). '''
+
         if self.parent is self:
             if self.molecules_shift is None:
                 # copy other to self
@@ -272,8 +273,7 @@ class MCluster(Cluster):
             Returns:
                 MCluster: the union (parent cluster) of the provided clusters
                     list. Returns an empty molecular cluster if the given
-                    clusters are not connected.
-        '''
+                    clusters are not connected. '''
 
         # prepare the clusters to make their union whole
         connected_sorted = Cluster.whole(connected)
@@ -298,10 +298,9 @@ class MCluster(Cluster):
             Args:
                 clusters: the list of clusters to be connected
             Returns:
-                list: the list of the parent clusters.
-            '''
+                list: the list of the parent clusters. '''
 
-        # Thε given set should be complete i.e. all the nodes of the system
+        # The given set should be complete i.e. all the nodes of the system
         # should have been assigned in one of the clusters
 
         # Make sure that connections at each cluster is updated.
@@ -357,8 +356,9 @@ class MCluster(Cluster):
 
     @staticmethod
     def udpate_coordinates( cluster, box, rw, ruw, atom_molecule, molecule_atoms):
-        ''' update the given unwrapped molecules using the connectivity
+        ''' Update the given unwrapped molecules using the connectivity
             of the cluster specifed in Cluster.defrag method. '''
+
         shift_vector = box.shift_vector
         used=[]
         for i in cluster:
@@ -375,6 +375,8 @@ class MCluster(Cluster):
 
     @staticmethod
     def writendx( fndx, icluster, cluster, molecule_atoms):
+        ''' Write gromacs index file with for the clusters. '''
+
         _every = 20
         fndx.write("[ ASSMBL%d ]\n"%icluster)
         iatom = 0
@@ -410,12 +412,12 @@ class MCluster(Cluster):
 
     @staticmethod
     def write( cluster, r, **kwargs):
-        ''' write down the cluster. keyword arguments are:
-           fmt: output format
-           fname: output file name
-           dirname: output directory
-           molecule_atoms: atoms for each molecule
-        '''
+        ''' Write down the cluster. keyword arguments are:
+               fmt: output format
+               fname: output file name
+               dirname: output directory
+               molecule_atoms: atoms for each molecule '''
+
         fmt = kwargs['fmt'] if 'fmt' in kwargs else ""
         fname = kwargs['fname'] if 'fname' in kwargs else ""
         dirname = kwargs['dirname'] if 'dirname' in kwargs else "."
@@ -469,6 +471,7 @@ class MCluster(Cluster):
     def order( cluster, r, atom_mass, molecule_atoms, molecule_name, neighbors, ends):
         ''' Calculate molecular shape and order characteristics. The calculated
             properties are added as cluster attributes. '''
+
         _catoms = []
         _molecules = []
         for i, im in enumerate(cluster.molecules):
@@ -498,7 +501,7 @@ class MCluster(Cluster):
             cluster._msqrg = {}
             cluster._mb = {}
             cluster._mc = {}
-            cluster._msqk = {}            
+            cluster._msqk = {}
             for _mname, _ends in ends.items():
                 _end0, _end1 = ends[ _mname]
                 _start = [ _mat[_end0] for _mat in _matoms[_mname] ]
@@ -514,7 +517,7 @@ class MCluster(Cluster):
                 _exclude[:] = True
                 _exclude[ _mask] = False
                 _rp, _rg, _eigval, _eigvec, _ierr =  gyration(_r, _masses, _molecules, _exclude)
-                eigvec[ _mask,:] =  _eigvec[ _mask,:]               
+                eigvec[ _mask,:] =  _eigvec[ _mask,:]
 
                 _sqrg = _eigval.sum(axis=1)
                 sqrg = _sqrg.mean() # square radious of gyration
@@ -562,6 +565,7 @@ class MCluster(Cluster):
     def shape( cluster, r, atom_mass, molecule_atoms):
         ''' Calculate cluster shape and order characteristics. The calculated
             properties are added as cluster attributes. '''
+
         # cluster atoms based on molecucles
         _catoms = []
         for im in cluster.molecules:
@@ -581,7 +585,7 @@ class MCluster(Cluster):
         c = _e[1]-_e[2]                # acylindricity
         sqk = (b*b+0.75*c*c)/(sqrg*sqrg)# anisotropy
         # "normalize" asphericity dividing by Rg^2
-        b = b / sqrg 
+        b = b / sqrg
         # b = b / _e[0]  # dividing by max eigenvalue
         # or following gromacs implementation
         # b = (3./2.) * (np.sum((_e - sqrg/3.)**2))/sqrg**2
@@ -837,9 +841,10 @@ class MCluster(Cluster):
         ''' Return an assembly consist of the molecules of the cluster. The kind
             for each molecules is defined from its name given in molecule_name
             argument. '''
+
         assembly = None
         if not self.molecules is None:
-            _nodes = list( map( lambda i: Node(i,kind=molecule_name[i]), self.molecules))
+            _nodes = [ Node(im,kind=molecule_name[im]) for im in self.molecules]
             assembly = Assembly( _nodes, -1)
             _data = {}
             _data['n'] = len(_nodes)
