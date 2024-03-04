@@ -16,7 +16,6 @@ from pysimpp.utils.vectorutils import get_length, get_unit, get_projection, proj
 from pysimpp.fastpost import fastcom, gyration, inertia, order_parameter, order_parameter_local # pylint: disable=no-name-in-module
 
 _debug = False
-_critical_size = 4
 __iu = np.array((1.0,0.0,0.0))
 __ju = np.array((0.0,1.0,0.0))
 __ku = np.array((0.0,0.0,1.0))
@@ -293,17 +292,21 @@ class MCluster(Cluster):
         return( _parent)
 
     @staticmethod
-    def defrag( clusters):
+    def defrag( clusters, critical_size = 4):
         ''' Connect the clusters in the given set.
             Args:
-                clusters: the list of clusters to be connected
+                clusters: list[Cluster]
+                    the list of clusters to be connected.
+                critical_size : int
+                    the minimum number of molecules in a cluster in order
+                    to be encountered.
             Returns:
                 list: the list of the parent clusters. '''
 
         # The given set should be complete i.e. all the nodes of the system
         # should have been assigned in one of the clusters
 
-        # Make sure that connections at each cluster is updated.
+        # Make sure that connections at each cluster are updated.
         for c in clusters:
             c.update_connect()
         # find clusters connectivity
@@ -343,7 +346,7 @@ class MCluster(Cluster):
             _molecules = set()
             for _sc in _c:
                 _molecules.update(_sc.molecules)
-            if len(_molecules) > _critical_size: _connected.append(_c)
+            if len(_molecules) > critical_size: _connected.append(_c)
 
         # and now join the connected clusters to obtain their union
         # (parent clusters)
@@ -353,6 +356,53 @@ class MCluster(Cluster):
             clusterid += i
             parents.append( MCluster.join( _c , clusterid))
         return sorted(parents,key=len, reverse=True)
+
+    @staticmethod
+    def tofragments(molecule_atoms, bonds, offsets, atom_molecule):
+        '''
+        Prepare the molecular fragments based on the input topology. The 
+        fragments could not have common sites but they can be connected
+        through a perodic connection. 
+
+        Args:
+            molecule_atoms : dict{ list(int) }
+                Atoms per molecule dict (could be a subset of the molecules
+                in the system)
+            bonds : list[tuple(int,int)]
+                Bonds between atoms.
+            offsets : list[tuple(int,int,int)]
+                Periodic offsets of the bonds.
+            atom_molecule : list(int)
+                Molecule per atom (for all atoms)
+
+        Returns:
+            fragments : list[MClusters]
+                The list of fragments for the given topology. '''
+
+        # create the nodes using the indexes of atoms per molecule
+        nodes = [ Node(i) for k, v in molecule_atoms.items() for i in v ]
+
+        # create the connections. the bond is directed from the first toward
+        # the second atom; hence, a displacement by its offset-based vector,
+        # brings the second atom in the spatial proximity of the first one.
+        for b, o in zip(bonds, offsets):
+            n0, n1 = nodes[b[0]], nodes[b[1]]
+            n0.connections.append(Connection(n0, n1, pbc = o))
+            n1.connections.append(Connection(n1, n0, pbc = -o))
+
+        # create the graph
+        G = nx.Graph()
+        G.add_nodes_from(nodes) # using the nodes
+        G.add_edges_from([ # and only the non-periodic connections
+            c for n in nodes for c in n.connections if c[0] < c[1] and not c.is_periodic() ])
+        # spot the fragments as the isolated subgraphs
+        connected = sorted(nx.connected_components(G), key = len, reverse = True)
+        fragments = [ MCluster.create(i, x) for i, x in enumerate(connected) ]
+
+        for f in fragments:
+            f.update_molecules(atom_molecule)
+
+        return fragments
 
     @staticmethod
     def udpate_coordinates( cluster, box, rw, ruw, atom_molecule, molecule_atoms):

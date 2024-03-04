@@ -130,7 +130,7 @@ def command():
     parser = argparse.ArgumentParser(description=_short_description())
 
     # add arguments (self explaned)
-    string = 'the path to the simulation trajectory file. A topology file' + \
+    string = 'the path to the simulation trajectory file. A topology file ' + \
              'should be present in the same directory (preferably a tpr file).'
     parser.add_argument('path', default="."+os.sep, help=string)
 

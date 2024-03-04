@@ -18,11 +18,13 @@ class Node(int):
 
     def __new__(cls, *args, **kwargs):
         ''' Create and return a new Node object.
+
         Args:
             *args: argument list for int construction.
             **kwargs: keyword arguments dict including
                 connections: a list with the connections of the node
                 cluster (Cluster): the cluster of the node
+
         Returns:
             Node: the constructed Node object. '''
 
@@ -41,12 +43,17 @@ class Connection(tuple):
         the periodic images of the corresponding spatial connection. '''
 
     def __new__(cls, i, j, pbc=(0, 0, 0)):
-        ''' Create and return a new Connection object. The hash of
-            the object will be the hash of the ordered (i,j) tuple.
+        ''' 
+        Create and return a new Connection object. The hash of
+        the object will be the hash of the ordered (i,j) tuple.
+
         Args:
-            i (Node): the first node
-            j (Node): the second node
-            pbc: a sequence of three int values corresponding to the
+            i : Node
+                the first node
+            j : Node
+                the second node
+            pbc : tuple(3) 
+                a sequence of three int values corresponding to the
                 periodic indexes of the connection due to the PBCs
                 (periodic boundary conditions) imposed spatially. '''
 
@@ -57,56 +64,64 @@ class Connection(tuple):
 
     def __eq__(self, other):
         ''' Return self==other. '''
-
         return self._hash == other._hash if type(other) is type(self) else False  # pylint: disable=no-member
 
     def __hash__(self):
         ''' Return hash(self). '''
-
         return self._hash  # pylint: disable=no-member
 
     def is_periodic(self):
         ''' Check if the connection is periodic i.e. crosses the boundaries.
+    
         Returns:
-            bool: true if any of the periodic indexes is non zero. '''
+            bool: bool
+                true if any of the periodic indexes is non zero. '''
 
         return self.ip.any()  # pylint: disable=no-member
 
 
 class Cluster(set):
-    ''' Implements a Cluster i.e. an ensemble of connected nodes. The
-        connections of the nodes are inherited to the cluster. The non
-        periodic nodes' connections define the cluster connections with
-        other clusters.
+    ''' 
+    Implements a cluster, i.e., a set of connected nodes. The connections
+    between the nodes are inherited from the cluster. Essentially, the 
+    non-periodic connections of the constituent nodes define the cluster
+    connections with other clusters.
 
-        A cluster may represent a part of a molecule, a pore or an other
-        3d object which, due to the periodic boundary conditions (PBCs),
-        is fragmented (spatially interrupted).
+    A cluster may represent a part of a molecule, a pore, or another
+    3D object, which, due to the periodic boundary conditions (PBCs),
+    is fragmented (spatially interrupted).
 
-        The class provides the functionality for join a set of clusters
-        connected through PBCs, making their union (parent cluster) whole.
+    The class provides the functionality to join a set of clusters connected
+    through PBCs, making their union (parent cluster) whole.
 
-        Attributes:
-            id: cluster global index used also as its hash
-            connections: a list with the non-periodic connections of
-                the constituent nodes
-            periodic_connections: a list with the periodic connections
-                of the constituent nodes
-            connectedto: {Cluster:{(ix,iy,iz):n}} a dict with keys the
-                connected clusters and  values the corresponing connection
-                periodic info. The periodic info is itself a dictionaly
-                whith keys the periodic index of the connections and values
-                the number of the connections of the specific periodic index.
-            shift: a squence with the translation indexes i.e. the number
-                of boundary edges vectors to translate the cluster in order
-                to recontruct its parent cluster.
-            parent: the parent cluster. '''
+    Attributes:
+
+        id : int
+            cluster global index used also as its hash
+        connections : list[Connection]
+            a list with the non-periodic connections of the constituent nodes
+        periodic_connections : list[Connection]
+            list with the periodic connections of the constituent nodes
+        connectedto : dict{ Cluster:dict{ tuple(int,int,int):int } } 
+            a dict with keys the connected clusters and  values the corresponing
+            connection periodic info. The periodic info is itself a dictionaly
+            whith keys the periodic index of the connections and values the number
+            of the connections of the specific periodic index.
+        shift : tuple(float,float,float)
+            a squence with the translation indexes i.e. the number of boundary
+            edges vectors to translate the cluster in order to recontruct its
+            parent cluster.
+        parent : Cluster
+            the parent cluster. '''
 
     def __init__(self, i, s):
         ''' Initialize a Cluster object.
+
         Args:
-            i (int): cluster id. It will be used also as hash for the object.
-            s : a container of Node objects. '''
+            i :int
+                cluster id. It will be used also as hash for the object.
+            s : tuple(Node)
+                a container of Node objects. '''
 
         super(Cluster, self).__init__(s)
         self.i = i
@@ -118,30 +133,28 @@ class Cluster(set):
 
     def __str__(self):
         ''' Return str(self). '''
-
         return "%s %d\n nodes: %s" % (self.__class__.__name__, self.i, " ".join(map(str, self)))
 
     def __repr__(self):
         ''' Return repr(self). '''
-
         return "%s %d" % (self.__class__.__name__, self.i)
 
     def __eq__(self, other):
         ''' Return self==other. '''
-
         return self.i == other.i if type(other) is type(self) else False
 
     def __hash__(self):
         ''' Return hash(self) '''
-
         return self.i
 
     @classmethod
     def create(cls, i, nodes):
         ''' Returns a Cluster object.
         Args:
-            i: the cluster global id to be used also as hash
-            node: a sequence with the nodes of the cluster. '''
+            i : int
+                the cluster global id to be used also as hash.
+            node: tuple(Node)
+                a sequence with the nodes of the cluster. '''
 
         obj = cls(i, nodes)
         for n in obj:
@@ -150,13 +163,14 @@ class Cluster(set):
 
     def set_parent(self, parent):
         ''' Set the parent cluster. '''
-
         self.parent = parent
 
     def is_infinit(self):
-        ''' Check if the cluster is infinite i.e. is connected with it self through PBCs.
-            Returns:
-                bool: True if the cluster is infinit and False otherwise. '''
+        ''' 
+        Check if the cluster is infinite i.e. is connected with it self through PBCs.
+
+        Returns:
+            bool: True if the cluster is infinit and False otherwise. '''
 
         return self in self.connectedto
 
@@ -229,7 +243,7 @@ class Cluster(set):
         self.shift += shift
 
         # now update the shift of self cluster in the connected clusters
-        # (for both for nodes and clusters connections).
+        # (for both the nodes and clusters connections).
         for _c in connectedto.keys():
             if not _c is self:
                 _c.__update_shift_other(self, shift)
@@ -270,14 +284,17 @@ class Cluster(set):
 
     @staticmethod
     def whole(connected):
-        ''' Update the given clusters to make their union whole again.
-            After returning the connections lists (nodes and cluster)
-            of the clusters and their shift have been updated.
-            Args:
-                connected: a list with connected clusters.
-            Returns:
-                list: the connected list sorted based on the size of
-                    the clusters in descending order. '''
+        ''' 
+        Update the given clusters to make their union whole again.
+        After returning the connections lists (nodes and cluster)
+        of the clusters and their shift have been updated.
+
+        Args:
+            connected: a list with connected clusters.
+
+        Returns:
+            list: the connected list sorted based on the size of
+                the clusters in descending order. '''
 
         # copy the list and in any case sort it
         connected_sorted = sorted(connected, key=len, reverse=True)
@@ -603,8 +620,8 @@ class Reaction():
     def __init__(self, reactants, products, step):
         ''' Initialize a reaction object. '''
 
-        self.reactants = Counter(
-            reactants)  # stoichiometry dict for reactants {reactant:#}
+        # stoichiometry dict for reactants {reactant:#}
+        self.reactants = Counter(reactants)
         self.reactants_string = Reaction.__get_string(self.reactants)
         # stoichiometry dict for products {products:#}
         self.products = Counter(products)

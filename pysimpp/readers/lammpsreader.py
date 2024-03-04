@@ -744,7 +744,7 @@ class LammpsReader(abcReader):
             Args:
                 atomstyle (str): the lammps atom_style for parsing the Atoms block.
             Returns:
-                bool: success status
+                bool: success status.
             Raises:
                 LammpsReaderException: if the simulation data file is invalid.
                 LammpsReaderException: if the length of the atoms or bonded terms
