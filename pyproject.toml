@@ -1,11 +1,65 @@
 [build-system]
-requires = [
-    'numpy',
-    'setuptools',
-    'wheel',
-    'pyyaml',
-    'networkx',
-    'MDAnalysis',
+requires = ["scikit-build-core", "numpy"]
+build-backend = "scikit_build_core.build"
+
+
+[project]
+name = "pysimpp"
+dynamic = ["version",]
+description = "Post-process functionality and utilities for molecular simulations."
+readme = {file = "README.md", content-type = "text/markdown"}
+keywords = ["simulation", "molecular modeling", "post-proces", "lammps", "gromacs"]
+requires-python = ">=3.6"
+dependencies = [
+    "numpy",
+    "pyyaml",
+    "networkx",
+    # "voropp",
+    "MDAnalysis"
+]
+license = {file = "LICENSE"}
+authors = [
+  { name = "Loukas Peristeras", email = "l.peristeras@inn.demokritos.gr" },
+]
+maintainers = [
+  { name = "Loukas Peristeras", email = "l.peristeras@inn.demokritos.gr" },
+]
+classifiers = [
+    "Intended Audience :: Molecular modeling community",
+    "License :: OSI Approved :: GPL 3.0",
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent" 
 ]
 
-build-backend = "setuptools.build_meta"
+
+[project.urls]
+homepage = "https://github.com/loudove/pysimpp"
+documentation = "https://github.com/loudove/pysimpp"
+"Bug Tracker" = "https://github.com/loudove/pysimpp/issues"
+
+
+[project.scripts]
+pysimpp = "pysimpp.__init__:main  "
+
+
+[tool.scikit-build.metadata.version]
+provider = "scikit_build_core.metadata.regex"
+input = "pysimpp/version"
+regex = '(?P<value>...)'
+
+
+[tool.scikit-build]
+cmake.verbose = true
+logging.level = "INFO"
+# minimum-version = "0.2"
+# make.version = ">=3.5"
+# ninja.version = ">=1.11"
+# backport.find-python = "3.26.1"

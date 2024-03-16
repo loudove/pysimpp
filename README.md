@@ -33,17 +33,9 @@ enter the pysimpp directory and use pip:
 
     pip3 install .
 
-or `setup.py`:
-
-    python3 setup.py install
-
 to install pysimpp system-wide. Otherwise use:
 
     pip3 install . --user
-
-or:
-
-    python setup.py install --user
 
 to install it only for the current user.
 
