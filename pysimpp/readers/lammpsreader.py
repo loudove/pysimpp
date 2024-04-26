@@ -1024,7 +1024,7 @@ class LammpsReader(abcReader):
     def get_bonds(self):
         ''' Retruns bonds' atoms indexes. '''
         try:
-            bonds = np.array( [ (v[2],v[3]) for k, v in sorted(self.data['Bonds'].items(), key=lambda item:item[0])])
+            bonds = np.array( [ (v[2]-1,v[3]-1) for k, v in sorted(self.data['Bonds'].items(), key=lambda item:item[0])])
         except:
             bonds = np.array((),dtype=np.int32)
         return bonds
@@ -1035,8 +1035,12 @@ class LammpsReader(abcReader):
             bond_type = np.array( [ v[1] for k, v in sorted(self.data['Bonds'].items(), key=lambda item:item[0])])
         except:
             bond_type = np.array((),dtype=np.int32)
-        return bond_type  
-    
+        return bond_type
+
+    def get_bond_types(self):
+        ''' Retruns unique bond types. '''
+        return np.unique(self.get_bond_type())
+
     def get_topology(self):
         ''' Return the system topology (see McReader) '''
         message = '%s.%s is not yet supported.' % (self.__class__.__name__,inspect.currentframe().f_code.co_name)

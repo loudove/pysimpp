@@ -197,7 +197,7 @@ class MDAnalysisReader(abcReader):
                 self.frames.append( (ts.frame, ts.time+self.timeoffset, ts.data['step']+_istepoffset)) # keep frames info (debug info)
 
                 if _inform:
-                    print('>> ... reading %d step dump' % istep, end="\r")
+                    print('>> ... reading %d step dump' % (self.nsteps if istep == 0 else istep) , end="\r")
                     sys.stdout.flush()
 
         return ( istep, box, data)
@@ -272,10 +272,20 @@ class MDAnalysisReader(abcReader):
     def get_bond_type(self):
         ''' Retruns bonds' type. '''
         try:
-            bond_type = self.u.bonds.type
+            bond_type = np.array(["%s-%s" % tuple(sorted(t)) for t in np.array(
+                self.u.atoms.types, dtype=object)[self.u.bonds.indices]], dtype=object)
         except:
-            bond_type = np.array((),dtype=np.int32)
-        return bond_type        
+            bond_type = np.array((), dtype=np.int32)
+        return bond_type
+
+    def get_bond_types(self):
+        ''' Retruns unique bond types. '''
+        # convert a list of str pairs to a list of strings of ordered pairs
+        try:
+            bond_types = np.array(["%s-%s" % tuple(sorted(t)) for t in self.u.bonds.types()], dtype=object)
+        except:
+            bond_types = np.array((), dtype=np.int32)
+        return bond_types
 
     def get_topology(self):
         ''' Return the system topology (see McReader) '''

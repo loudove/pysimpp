@@ -37,7 +37,7 @@ def bonds(filename, bin, start, end, every):
         bndhandler = pysimpp.readers.LammpsReader.create_bond_dump_handler( reader)
     # if not retrieve bonds that do not change during the simulation
     if bndhandler is None:
-        bonds = reader.get_bonds() - 1
+        bonds = reader.get_bonds()
         bond_type = reader.get_bond_type()
         bond_types = np.unique( bond_type)
 

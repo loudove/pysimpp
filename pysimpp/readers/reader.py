@@ -172,7 +172,15 @@ class abcReader(metaclass=abc.ABCMeta):
     def get_bond_type(self):
         ''' Retruns bonds' type.
             Returns:
-                np.array(..., dtype=int): bonds' type array.
+                np.array(..., dtype=(int|object)): bonds' type array.
+        '''
+        pass
+
+    @abc.abstractmethod
+    def get_bond_types(self):
+        ''' Retruns unique bond types.
+            Returns:
+                np.array(..., dtype=(int|object)): bonds' type array.
         '''
         pass
 
