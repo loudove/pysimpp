@@ -1193,7 +1193,7 @@ class LammpsReader(abcReader):
             fname = tuple(dumpshandler.toread)[0].f.name
             message = "the frame found in %s (%d) is not the expected one (%d)" % \
                 (fname, _step, step)
-            raise LammpsReaderException( mesaage)
+            raise LammpsReaderException( message)
         return (_step, _box, _data)
 
 
