@@ -10,7 +10,7 @@ from collections import defaultdict
 from pysimpp.utils.statisticsutils import Histogram
 import pysimpp.utils.utils as utils
 import pysimpp.readers
-from pysimpp.fastpost import fastunwrapv, fastrg, pefastunwrap
+from pysimpp.fastpost import fastrg
 
 __debug = False
 
@@ -87,7 +87,7 @@ def endtoend(filename,
     start=-1,
     end=sys.maxsize,
     molids=(),
-    unwrap=True,
+    whole=True,
     persistence=False,
     camc=False,
     bins={}):
@@ -115,7 +115,7 @@ def endtoend(filename,
         print("ERROR: it was not possible to parse the given file.")
         return
 
-    reader.set_unwrap( unwrap)
+    reader.set_whole( whole)
     attributes = 'id x y z'
     reader.set_attributes(attributes)
 
@@ -139,7 +139,7 @@ def endtoend(filename,
     nselected = selected.size  # number of selected molecules
     hasselected = nselected > 0  # selected flag
 
-    r = np.zeros((natoms, 3), dtype=np.float64)  # wrapped
+    r = np.zeros((natoms, 3), dtype=np.float64)  # whole
     exclude = np.zeros((nmolecules), dtype=np.bool_)  # all false
     cm = np.zeros((nmolecules, 3), dtype=np.float64)  # center of mass
     sqrg_ = np.zeros((nmolecules), dtype=np.float64)  # gyration tensors
@@ -385,8 +385,8 @@ If the "--lp" option is enabled:
     parser.add_argument('-molecules', nargs=1, type=utils.argparse_moleculestype, default=[[]],  metavar='range', \
                        help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
 
-    parser.add_argument('--no-unwrap', dest='unwrap', default=True, action='store_false', \
-                       help="do not unwrap molecules sine the provided trajectories provide unwrapped coordinates.")
+    parser.add_argument('--no-whole', dest='whole', default=True, action='store_false', \
+                       help="do not make molecules whole sine they are already in the trajectories.")
 
     chktype = utils.IsListOfNamedList("wrong -bins argument (check: %s)", itemtype=float,
         positive=True, llen=1, choices=("sqree","msqree","ree","mree","sqrg","msqrg","rg","mrg","pl","bnd"))
@@ -424,15 +424,15 @@ If the "--lp" option is enabled:
     args = parser.parse_args()
 
     print("INPUT")
-    print("path : ", args.path)
-    print("dt (ps) : ", args.dt[0])
-    print("start : ", args.start[0])
-    print("end : ", "max" if args.end[0] == sys.maxsize else args.end[0])
+    print("path      : ", args.path)
+    print("dt (ps)   : ", args.dt[0])
+    print("start     : ", args.start[0])
+    print("end       : ", "max" if args.end[0] == sys.maxsize else args.end[0])
     string = " ".join( map(str, args.molecules[0]))
     print("molecules : %s" % ('-' if len(string)==0 else string ) )
-    print("unwrap : %s" % ("True" if args.unwrap else "False"))
+    print("whole     : %s" % ("True" if args.whole else "False"))
     print("persistence length : %s" % ("True" if args.camc else "False"))
-    print("camc : %s" % ("True" if args.camc else "False"))
+    print("camc      : %s" % ("True" if args.camc else "False"))
     print()
     if __debug:
         print(args.molecules[0])
@@ -445,7 +445,7 @@ If the "--lp" option is enabled:
         start=args.start[0],
         end=args.end[0],
         molids=args.molecules[0],
-        unwrap=args.unwrap,
+        whole=args.whole,
         bins=args.bins[0],
         persistence=args.lp,
         camc=args.camc)
