@@ -45,9 +45,10 @@ def bonds(filename, bin, start, end, every):
     trj = defaultdict( list)
     hst = defaultdict( lambda: Histogram.free( bin, 0.0, addref=False))
 
-    frames = []
+    steps = []
     r = np.empty(shape=(natoms, 3), dtype=np.float32)  # coordinates
     print('>> reading dump file(s) ...')
+    iframe = 0
     while (True):
         step, box, data = reader.read_next_frame()
 
@@ -63,13 +64,13 @@ def bonds(filename, bin, start, end, every):
 
         if step < start:
             continue
+        elif not iframe % every == 0:
+            continue
         elif step > end:
             break
 
-        frames.append( step)
-
-        if not step % every == 0:
-            continue
+        iframe += 1
+        steps.append( step)
 
         np.copyto(r[:, 0], data['x'])
         np.copyto(r[:, 1], data['y'])
@@ -88,7 +89,7 @@ def bonds(filename, bin, start, end, every):
     _types = sorted( trj.keys())
     header = "# %-12s" % 'frame' + " ".join( [ "mean_t%-6s std_t%-7s" % ((str(_t),)*2) for _t in _types])
     f = open( dirname+os.sep+basename+"_bonds.dat", 'w')
-    lines = [ "%-12s" % str(x) for x in frames]
+    lines = [ "%-12s" % str(x) for x in steps]
     for _t in _types:
         for i, _v in enumerate(trj[_t]):
             lines[i] += " %-12g %-12g" % _v
@@ -115,14 +116,14 @@ def command():
     parser.add_argument('-bin', nargs=1, type=float, metavar='bin', default=[0.2], \
                        help='bin length (Å) for the distribution')
 
-    parser.add_argument('-start', nargs=1, type=int, metavar='n', default=[-1], \
-                       help='start processing form configuration n [inclusive]')
+    parser.add_argument('-start', nargs=1, type=int, metavar='START', default=[-1], \
+                       help='start processing form step START [inclusive]')
 
-    parser.add_argument('-end', nargs=1, type=int, metavar='n', default=[sys.maxsize], \
-                       help='stop processing at configuration n [inclusive]')
+    parser.add_argument('-end', nargs=1, type=int, metavar='END', default=[sys.maxsize], \
+                       help='stop processing at step END [inclusive]')
 
-    parser.add_argument('-every', nargs=1, type=int, metavar='n', default=[1], \
-                       help='processing frequency (every n configurations)')
+    parser.add_argument('-every', nargs=1, type=int, metavar='EVERY', default=[1], \
+                       help='process every EVERY frames (process frequency)')
 
     # parse the arguments
     args = parser.parse_args()

@@ -306,235 +306,230 @@ def clusters(filename,
     print('>> reading dump file(s) ...')
     if _debug:
         fndx = open(dirname + os.sep + "assemblies.ndx",'w')
-    istep=-1
+    iframe = 0
     while (True):
         step, box, data = reader.read_next_frame()
-        istep+=1
         if step is None:
             break
         elif step < start:
             continue
+        elif not iframe % every == 0:
+            continue
         elif step > end:
             break
 
-        if not step % every == 0:
-            continue
+        iframe+=1
+        steps.append(step)
+        boxes.append(box)
+        
+        for k, v in {'x':0,'y':1,'z':2}.items():
+            np.copyto(rw[:, v], data[k])
 
-        if box:
+        # get voronoi cells for each atom
+        fields = run_voropp(rw,
+                            box,
+                            atom_radius,
+                            atom_excluded,
+                            periodic,
+                            dirname=dirname)
 
-            steps.append(step)
-            boxes.append(box)
-            for k, v in {'x':0,'y':1,'z':2}.items():
-                np.copyto(rw[:, v], data[k])
+        # get the volume and the neighbors of the voronoi cells
+        # and create connections list of connected molecule pairs (im,jm)
+        neighbors = [set() for i in range(nmolecules) ]  # molecular neighbors per molecule
+        atom_neighbors = [None for i in range(natoms) ]  # molecular neighbors per atom
+        _nodes = {}
+        _connections = {}
+        for i, field in enumerate(fields):
+            if not atom_selected[i]:
+                continue
+            im = atom_molecule[i]
+            _neighbors = extruct_close_neighbors(field)
+            if atom_specific[i]:
+                _cc = [j for j in _neighbors if atom_specific[j]]
+                _indexes = tuple(
+                    map(lambda x: box.minimum_index(x), rw[_cc] - rw[i]))
+                # _connections = [ Connection(i,j,pbc=jp) for j, jp in zip(_cc,_indexes) ]
+                _nodes[i] = Node(i)
+                _connections[i] = zip(_cc, _indexes)
+            # convert to molecular neighbors
+            _neighbors = tuple(
+                set(jm for jm in [atom_molecule[j] for j in _neighbors]
+                    if jm != im))
+            atom_neighbors[i] = _neighbors
+            neighbors[im].update(_neighbors)
 
-            # get voronoi cells for each atom
-            fields = run_voropp(rw,
-                                box,
-                                atom_radius,
-                                atom_excluded,
-                                periodic,
-                                dirname=dirname)
-
-            # get the volume and the neighbors of the voronoi cells
-            # and create connections list of connected molecule pairs (im,jm)
-            neighbors = [set() for i in range(nmolecules) ]  # molecular neighbors per molecule
-            atom_neighbors = [None for i in range(natoms) ]  # molecular neighbors per atom
-            _nodes = {}
-            _connections = {}
-            for i, field in enumerate(fields):
-                if not atom_selected[i]:
-                    continue
-                im = atom_molecule[i]
-                _neighbors = extruct_close_neighbors(field)
-                if atom_specific[i]:
-                    _cc = [j for j in _neighbors if atom_specific[j]]
-                    _indexes = tuple(
-                        map(lambda x: box.minimum_index(x), rw[_cc] - rw[i]))
-                    # _connections = [ Connection(i,j,pbc=jp) for j, jp in zip(_cc,_indexes) ]
-                    _nodes[i] = Node(i)
-                    _connections[i] = zip(_cc, _indexes)
-                # convert to molecular neighbors
-                _neighbors = tuple(
-                    set(jm for jm in [atom_molecule[j] for j in _neighbors]
-                        if jm != im))
-                atom_neighbors[i] = _neighbors
-                neighbors[im].update(_neighbors)
-
-            for i, n in _nodes.items():
-                n.connections = [
-                    Connection(n, _nodes[j], pbc=jp)
-                    for j, jp in _connections[i]
-                ]
-            # free some memory
-            del _connections
-            del fields
-
-            # update atom based neighbors histograms
-            ########################################
-            for k, v in _chk_grps_indxs.items():
-                for _indxs in v:
-                    nb = set()
-                    im = atom_molecule[_indxs[0]]
-                    for _i in _indxs:
-                        if not atom_neighbors[_i] is None:
-                            nb.update(atom_neighbors[_i])
-                    _c = Counter(map(lambda x: molecule_name[x], nb))
-                    for res in _all_res[k]:
-                        _c[res] += 0
-                    for jname in _c.keys():
-                        hist_neighbors[k][jname].add(_c[jname])
-
-            # update residue based neighbors histograms
-            ###########################################
-            if hasTotalHistograms:
-                for im, nb in enumerate(neighbors):
-                    iname = molecule_name[im]
-                    if molecule_selected[im]:
-                        _c = Counter(map(lambda x: molecule_name[x], nb))
-                        for res in __all_res:  # all residues should be present
-                            _c[res] += 0
-                        if nbhist:
-                            for jname in _c.keys():
-                                hist_neighbors[iname][jname].add(_c[jname])
-                        for k, v in hist3d.items():
-                            hneighbors3d[k].add((_c[v[0]], _c[v[1]], _c[v[2]]))
-                        for k, v in hist2d.items():
-                            hneighbors2d[k].add((_c[v[0]], _c[v[1]]))
-                        hneighbors.add(len(nb))
-
-            # create the graph
-            G = nx.Graph()
-            G.add_nodes_from(_nodes.values())
-            # add the non periodic connections
-            _connections = []
-            for n in _nodes.values():
-                _connections += [
-                    c for c in n.connections
-                    if c[0] < c[1] and not c.is_periodic()
-                ]
-            G.add_edges_from(_connections)
-            # identify the connected subgraphs (subclusters)
-            _connected = sorted(nx.connected_components(G),
-                                key=len,
-                                reverse=True)
-            _subclusters = [
-                MCluster.create(i, x) for i, x in enumerate(_connected)
+        for i, n in _nodes.items():
+            n.connections = [
+                Connection(n, _nodes[j], pbc=jp)
+                for j, jp in _connections[i]
             ]
-            for _c in _subclusters:
-                _c.update_molecules(atom_molecule)
-            _clusters = MCluster.defrag(_subclusters)
+        # free some memory
+        del _connections
+        del fields
 
-            for i, _cl in enumerate(_clusters):
-                MCluster.udpate_coordinates(_cl, box, rw, rw, atom_molecule,
-                                           molecule_atoms)
+        # update atom based neighbors histograms
+        ########################################
+        for k, v in _chk_grps_indxs.items():
+            for _indxs in v:
+                nb = set()
+                im = atom_molecule[_indxs[0]]
+                for _i in _indxs:
+                    if not atom_neighbors[_i] is None:
+                        nb.update(atom_neighbors[_i])
+                _c = Counter(map(lambda x: molecule_name[x], nb))
+                for res in _all_res[k]:
+                    _c[res] += 0
+                for jname in _c.keys():
+                    hist_neighbors[k][jname].add(_c[jname])
 
-                if _debug:
-                    if istep == 0:
-                        MCluster.writendx( fndx, i, _cl, molecule_atoms)
-    
-                # if vis and step % visfreq == 0:
-                #     # if True:
-                #     # MCluster.write(_cl, rw, fmt='xyz',
-                #     #     molecule_atoms=molecule_atoms, atom_element=atom_element,
-                #     #     fname="cluster%d_step%d.xyz"%(i,step), dirname=dirname)
-                #     MCluster.write(_cl,
-                #                   rw,
-                #                   fmt='gro',
-                #                   molecule_atoms=molecule_atoms,
-                #                   molecule_name=molecule_name,
-                #                   atom_name=atom_name,
-                #                   box=box,
-                #                   fname="cluster%d_step%d.gro" % (i, step),
-                #                   dirname=dirname+os.sep+"clusters")
-                # add calculated properties as cluster's attributes
-                _cl._infinit = _cl.is_infinit()
-                # _sqrg: square radious of gyration
-                # _b: asphericity
-                # _c: acylindricity
-                # _sqk: relative shape anisotropy
-                if hasends: MCluster.order( _cl, rw, atom_mass, molecule_atoms, molecule_name, neighbors, mol_ends)
-                MCluster.shape( _cl, rw, atom_mass, molecule_atoms)
-                if doprofiles:
-                    MCluster.profile(_cl, rw, box, profileid, profilemap, bprofiles, b2dprofiles, hprofiles, h2dprofiles, vprofiles)
-                _size = len(_cl.molecules)
-                # if not _cl._infinit:
-                #     if _cl._shape == 's':
-                #         hprop['sqrg_s'].add(_cl.sqrg)
-                #         for _mname in mol_ends:
-                #             hprop['sqee_%s_s' % _mname].add( _cl._msqee[ _mname])
-                #         hprop['qlocal_s'].add(_cl.qlocal)
-                #         hprop['ld_s'].add(_cl._ldensity[0])
-                #     elif _cl._shape == 'ec':
-                #         hprop['sqrg_ec'].add(_cl.sqrg)
-                #         for _mname in mol_ends:
-                #             hprop['sqee_%s_ec' % _mname].add( _cl._msqee[ _mname])
-                #         hprop['qlocal_ec'].add(_cl.qlocal)
-                #         hprop['ld_ec'].add(_cl._ldensity[0])
-                #         hprop['ldn_ec'].add(_cl._ldensity[2])
-                #         hprop['ldl_ec'].add(_cl._ldensity[3])
+        # update residue based neighbors histograms
+        ###########################################
+        if hasTotalHistograms:
+            for im, nb in enumerate(neighbors):
+                iname = molecule_name[im]
+                if molecule_selected[im]:
+                    _c = Counter(map(lambda x: molecule_name[x], nb))
+                    for res in __all_res:  # all residues should be present
+                        _c[res] += 0
+                    if nbhist:
+                        for jname in _c.keys():
+                            hist_neighbors[iname][jname].add(_c[jname])
+                    for k, v in hist3d.items():
+                        hneighbors3d[k].add((_c[v[0]], _c[v[1]], _c[v[2]]))
+                    for k, v in hist2d.items():
+                        hneighbors2d[k].add((_c[v[0]], _c[v[1]]))
+                    hneighbors.add(len(nb))
 
-                for _p in _bin:
-                    hprop[_p].add( vars(_cl)[_p])
-                for _p in phist2d:
-                    hprop2D[ _p].add( ( vars(_cl)[_p], _size))
+        # create the graph
+        G = nx.Graph()
+        G.add_nodes_from(_nodes.values())
+        # add the non periodic connections
+        _connections = []
+        for n in _nodes.values():
+            _connections += [
+                c for c in n.connections
+                if c[0] < c[1] and not c.is_periodic()
+            ]
+        G.add_edges_from(_connections)
+        # identify the connected subgraphs (subclusters)
+        _connected = sorted(nx.connected_components(G),
+                            key=len,
+                            reverse=True)
+        _subclusters = [
+            MCluster.create(i, x) for i, x in enumerate(_connected)
+        ]
+        for _c in _subclusters:
+            _c.update_molecules(atom_molecule)
+        _clusters = MCluster.defrag(_subclusters)
 
-            # analyse
-            if True:
-                _assemplies = [ _c.assembly_from_molecules(molecule_name, step) for _c in _clusters]
-                tracer.update_current(_assemplies, step)
-            #########
-                for i, (_as, _cl) in enumerate(zip(_assemplies,_clusters)):
-                    if vis and step % visfreq == 0:
-                        # if True:
-                        # MCluster.write(_cl, rw, fmt='xyz',
-                        #     molecule_atoms=molecule_atoms, atom_element=atom_element,
-                        #     fname="cluster%d_step%d.xyz"%(i,step), dirname=dirname)
-                        _i = _as.uid if hasattr(_as,'uid') else -i
-                        MCluster.write(_cl,
-                                    rw,
-                                    fmt='gro',
-                                    molecule_atoms=molecule_atoms,
-                                    molecule_name=molecule_name,
-                                    atom_name=atom_name,
-                                    box=box,
-                                    fname="cluster%d_step%d.gro" % (_i, step),
-                                    dirname=dirname+os.sep+"clusters")
+        for i, _cl in enumerate(_clusters):
+            MCluster.udpate_coordinates(_cl, box, rw, rw, atom_molecule,
+                                        molecule_atoms)
 
-            # if any( [_cl._infinit for _cl in _clusters ]):
-            if True:
-                if hasends: mollog.log(step, _clusters, mol_ends)
-                if hasends: orderlog.log(step, _clusters)
-                detailslog.log(step, _clusters)
-            log.log(step, _clusters)
+            if _debug:
+                if iframe == 0:
+                    MCluster.writendx( fndx, i, _cl, molecule_atoms)
 
-            # check if more that two molecules with the first residue name given exist in the cluster
-            connected = []
-            _rescount = defaultdict(int)
-            _first = molnames[0]
-            _clusterslen = []
-            for _cl in _clusters:
-                # _res = [ molecule_name[ atom_molecule[i]] for i in _cl ]
-                _res = [molecule_name[im] for im in _cl.molecules]
-                _clusterslen.append(len(_res))
-                if _res.count(_first) > 1:
-                    connected.append(_cl)
-                    for _r in _res:
-                        _rescount[_r] += 1
-            # LDP TODO: in order to reduce memory we should keep
-            # directly the length of the clusters needed for the
-            # final post process
-            # clusters.append( _clusters)
-            clsize.append(_clusterslen)
-            clresnum.append(_rescount)
-            # for cl in map( len, connected):
-            for cl in map(lambda x: len(x.molecules), connected):
-                hclsize.add(cl)
-            _clnumber = len(connected)
-            hclnumber.add(_clnumber)
-            clnumber.append(_clnumber)
+            # if vis and step % visfreq == 0:
+            #     # if True:
+            #     # MCluster.write(_cl, rw, fmt='xyz',
+            #     #     molecule_atoms=molecule_atoms, atom_element=atom_element,
+            #     #     fname="cluster%d_step%d.xyz"%(i,step), dirname=dirname)
+            #     MCluster.write(_cl,
+            #                   rw,
+            #                   fmt='gro',
+            #                   molecule_atoms=molecule_atoms,
+            #                   molecule_name=molecule_name,
+            #                   atom_name=atom_name,
+            #                   box=box,
+            #                   fname="cluster%d_step%d.gro" % (i, step),
+            #                   dirname=dirname+os.sep+"clusters")
+            # add calculated properties as cluster's attributes
+            _cl._infinit = _cl.is_infinit()
+            # _sqrg: square radious of gyration
+            # _b: asphericity
+            # _c: acylindricity
+            # _sqk: relative shape anisotropy
+            if hasends: MCluster.order( _cl, rw, atom_mass, molecule_atoms, molecule_name, neighbors, mol_ends)
+            MCluster.shape( _cl, rw, atom_mass, molecule_atoms)
+            if doprofiles:
+                MCluster.profile(_cl, rw, box, profileid, profilemap, bprofiles, b2dprofiles, hprofiles, h2dprofiles, vprofiles)
+            _size = len(_cl.molecules)
+            # if not _cl._infinit:
+            #     if _cl._shape == 's':
+            #         hprop['sqrg_s'].add(_cl.sqrg)
+            #         for _mname in mol_ends:
+            #             hprop['sqee_%s_s' % _mname].add( _cl._msqee[ _mname])
+            #         hprop['qlocal_s'].add(_cl.qlocal)
+            #         hprop['ld_s'].add(_cl._ldensity[0])
+            #     elif _cl._shape == 'ec':
+            #         hprop['sqrg_ec'].add(_cl.sqrg)
+            #         for _mname in mol_ends:
+            #             hprop['sqee_%s_ec' % _mname].add( _cl._msqee[ _mname])
+            #         hprop['qlocal_ec'].add(_cl.qlocal)
+            #         hprop['ld_ec'].add(_cl._ldensity[0])
+            #         hprop['ldn_ec'].add(_cl._ldensity[2])
+            #         hprop['ldl_ec'].add(_cl._ldensity[3])
 
-        else:
-            break
+            for _p in _bin:
+                hprop[_p].add( vars(_cl)[_p])
+            for _p in phist2d:
+                hprop2D[ _p].add( ( vars(_cl)[_p], _size))
+
+        # analyse
+        if True:
+            _assemplies = [ _c.assembly_from_molecules(molecule_name, step) for _c in _clusters]
+            tracer.update_current(_assemplies, step)
+        #########
+            for i, (_as, _cl) in enumerate(zip(_assemplies,_clusters)):
+                if vis and step % visfreq == 0:
+                    # if True:
+                    # MCluster.write(_cl, rw, fmt='xyz',
+                    #     molecule_atoms=molecule_atoms, atom_element=atom_element,
+                    #     fname="cluster%d_step%d.xyz"%(i,step), dirname=dirname)
+                    _i = _as.uid if hasattr(_as,'uid') else -i
+                    MCluster.write(_cl,
+                                rw,
+                                fmt='gro',
+                                molecule_atoms=molecule_atoms,
+                                molecule_name=molecule_name,
+                                atom_name=atom_name,
+                                box=box,
+                                fname="cluster%d_step%d.gro" % (_i, step),
+                                dirname=dirname+os.sep+"clusters")
+
+        # if any( [_cl._infinit for _cl in _clusters ]):
+        if True:
+            if hasends: mollog.log(step, _clusters, mol_ends)
+            if hasends: orderlog.log(step, _clusters)
+            detailslog.log(step, _clusters)
+        log.log(step, _clusters)
+
+        # check if more that two molecules with the first residue name given exist in the cluster
+        connected = []
+        _rescount = defaultdict(int)
+        _first = molnames[0]
+        _clusterslen = []
+        for _cl in _clusters:
+            # _res = [ molecule_name[ atom_molecule[i]] for i in _cl ]
+            _res = [molecule_name[im] for im in _cl.molecules]
+            _clusterslen.append(len(_res))
+            if _res.count(_first) > 1:
+                connected.append(_cl)
+                for _r in _res:
+                    _rescount[_r] += 1
+        # LDP TODO: in order to reduce memory we should keep
+        # directly the length of the clusters needed for the
+        # final post process
+        # clusters.append( _clusters)
+        clsize.append(_clusterslen)
+        clresnum.append(_rescount)
+        # for cl in map( len, connected):
+        for cl in map(lambda x: len(x.molecules), connected):
+            hclsize.add(cl)
+        _clnumber = len(connected)
+        hclnumber.add(_clnumber)
+        clnumber.append(_clnumber)
 
     # complete the statistics
     # nconfs = len( clsize) # number of processed configurations
@@ -671,21 +666,18 @@ def command():
     parser.add_argument('path', type=isfile, help=string)
 
     string = '''
-    start and processing form timestep n (inclusive). n is step based for lammps
-    and time based for gromacs. '''
-    parser.add_argument('-start', nargs=1, type=int, metavar='n', \
+    start and processing form time step STEP (inclusive). '''
+    parser.add_argument('-start', nargs=1, type=int, metavar='STEP', \
         default=[-1], help=string)
 
     string = '''
-    stop processing at timestep n (inclusive). n is step based for lammps and
-    time based for gromacs). '''
-    parser.add_argument('-end', nargs=1, type=int, metavar='n', \
+    stop processing at time step STEP (inclusive). '''
+    parser.add_argument('-end', nargs=1, type=int, metavar='STEP', \
         default=[sys.maxsize], help=string)
 
     string = '''
-    processing frequency (every dn timesteps, step based for lammps
-    and time based for gromacs). '''
-    parser.add_argument('-every', nargs=1, type=int, metavar='n', \
+    process every EVERY frames (process frequency).'''
+    parser.add_argument('-every', nargs=1, type=int, metavar='EVERY', \
         default=[1], help=string)
 
     string = '''

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from math import sqrt, cos, sin, radians, floor
+from math import sqrt, cos, sin, radians, floor, isclose
 import numpy as np
 from collections import defaultdict
 import networkx as nx
@@ -86,16 +86,16 @@ class SimulationBox():
         bv = [0.0, 0.0, 0.0]
         cv = [0.0, 0.0, 0.0]
         origin = [0.0, 0.0, 0.0]
-        alpha_ = radians(alpha)
-        beta_ = radians(beta)
-        gamma_ = radians(gamma)
+        calpha = 0. if isclose(alpha, 90.) else cos(radians(alpha))
+        cbeta = 0. if isclose(beta, 90.) else cos(radians(beta))
+        cgamma = 0. if isclose(gamma, 90.) else cos(radians(gamma))
 
         # construct the vectors
         av[0] = a
-        bv[0] = b * cos(gamma_)
+        bv[0] = b * cgamma
         bv[1] = sqrt(b * b-bv[0] * bv[0])
-        cv[0] = c * cos(beta_)
-        cv[1] = (b * c * cos(alpha_)-bv[0] * cv[0]) / bv[1]
+        cv[0] = c * cbeta
+        cv[1] = (b * c * calpha-bv[0] * cv[0]) / bv[1]
         cv[2] = sqrt(c * c-cv[0] * cv[0]-cv[1] * cv[1])
 
         self.set_from_vectors(origin, av, bv, cv)

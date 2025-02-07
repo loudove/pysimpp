@@ -21,6 +21,7 @@ def _command(): command()
 def shape(filename,
     start=-1,
     end=sys.maxsize,
+    every=1,
     molids=(),
     unwrap=True,
     camc=False):
@@ -66,7 +67,6 @@ def shape(filename,
     print('\n>> reading dump file(s) ...')
     steps = []
     boxes = []
-    iconf = -1
 
     # gyration tensor relevant histograms
     hsqrg = Histogram.free(0.25, 0.0, addref=False)
@@ -86,35 +86,35 @@ def shape(filename,
     f2 = open(reader.dir+os.sep+"descriptors.data", 'w')
     f2.write( "#{:^15s} {:^15s} {:^15s} {:^15s}\n".format("sqrg","asphericity","acylindricity","anisotropy") )
 
+    iframe = 0
     while( True):
         step, box, data = reader.read_next_frame()
         if step == None:
             break
         elif step < start:
             continue
+        elif not iframe % every == 0:
+            continue        
         elif step > end:
-            print(step)
             break
-        if box:
-            iconf += 1
-            steps.append( step)
-            boxes.append( box)
 
-            # update the topology as needed in the case of camc
-            if camc:
-                natch, chat, e1, e2 = reader.get_topology()
-                molecules = reader.get_atom_molecule() - 1
-                masses = reader.get_atom_mass()
-                atomselected = [ molecules[iat] in selected for iat in range(natoms)] if hasselected else ()
-            else:
-                selected = ()
-                atomselected = ()
+        iframe += 1
+        steps.append( step)
+        boxes.append( box)
 
-            r[:,0] = data['x']
-            r[:,1] = data['y']
-            r[:,2] = data['z']
+        # update the topology as needed in the case of camc
+        if camc:
+            natch, chat, e1, e2 = reader.get_topology()
+            molecules = reader.get_atom_molecule() - 1
+            masses = reader.get_atom_mass()
+            atomselected = [ molecules[iat] in selected for iat in range(natoms)] if hasselected else ()
         else:
-            break
+            selected = ()
+            atomselected = ()
+
+        r[:,0] = data['x']
+        r[:,1] = data['y']
+        r[:,2] = data['z']
 
         rp[:,:], rg[:,:], eigval[:,:], eigvec[:,:], ierr = gyration(r, masses, molecules, exclude)
         sqrg = []
@@ -201,11 +201,14 @@ The output files are (located at the simulation directory):
     parser.add_argument('path', default="."+os.sep,  \
                        help=string)
 
-    parser.add_argument('-start', nargs=1, type=int, metavar='n', default=[-1], \
-                       help='start processing form configuration START [inclusive]')
+    parser.add_argument('-start', nargs=1, type=int, metavar='START', default=[-1], \
+                       help='start processing form step START [inclusive]')
 
-    parser.add_argument('-end', nargs=1, type=int, metavar='n', default=[sys.maxsize], \
-                       help='stop processing at configuration END [inclusive]')
+    parser.add_argument('-end', nargs=1, type=int, metavar='END', default=[sys.maxsize], \
+                       help='stop processing at step END [inclusive]')
+
+    parser.add_argument('-every', nargs=1, type=int, metavar='EVERY', default=[1], \
+                       help='process every EVERY frames (process frequency)')
 
     parser.add_argument('-molecules', nargs=1, type=utils.argparse_moleculestype, default=[[]],  metavar='range', \
                        help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
@@ -223,6 +226,7 @@ The output files are (located at the simulation directory):
     print("path : ", args.path)
     print("start : ", args.start[0])
     print("end : ", "max" if args.end[0] == sys.maxsize else args.end[0])
+    print("every : ", args.every[0])
     string = " ".join( map(str, args.molecules[0]))
     print("molecules : %s" % ('-' if len(string)==0 else string ) )
     print("unwrap : %s \n" % ("True" if args.unwrap else "False"))
@@ -234,6 +238,7 @@ The output files are (located at the simulation directory):
     shape( args.path,
         start=args.start[0],
         end=args.end[0],
+        every=args.every[0],
         molids=args.molecules[0],
         unwrap=args.unwrap)
         # camc=args.camc)

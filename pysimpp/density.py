@@ -116,7 +116,6 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
     boxes = []
     profiles = {}
     profiles_entg = {}
-    iconf = -1
 
     dolocal = False
     if len( local) > 0:
@@ -127,68 +126,65 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
         l = [ 250.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0]
         nl = [ 10000, 10000, 10000, 5000, 5000, 2500.0]
 
+    iframe = 0
     while( True):
         step, box, data = reader.read_next_frame()
-        iconf += 1
         if step == None:
             break
-        elif not iconf % every == 0:
-            continue
         elif step < start:
             continue
+        elif not iframe % every == 0:
+            continue
         elif step > end:
-            print(step)
             break
-        if box:
 
-            if len(profiles) == 0:
-                for _d in _dims:
-                    origin = box.origin[_d]
-                    length = origin + (box.a,box.b,box.c)[_d]
-                    # nbins=round(length/bin)
-                    profiles[_d] = Histogram.fixed( origin, length, bin)
-                    if __hack:
-                        profiles_entg[_d] = Histogram.fixed( origin, length, bin)
-
-            steps.append( step)
-            boxes.append( box)
-
-            for k, v in dmap.items():
-                np.copyto(r[:, k] ,  data[v[0]])
-
-            if rmcom:
-                cmtotal, masstotal = fastcom_total( r, masses)
-                if len(boxes) == 1:
-                    cm0[:] = cmtotal
-                else:
-                    delta[:] = cmtotal-cm0
-                    r -= delta
-
-            # calculate center of masses and if regions
-            # set also the wraped coordinates to ensure
-            # the correct bining
-            if hasselected:
-                cm_ = fastcom( r, masses, molecule, nmolecules) if usecom else r
-                cm[:,:] = cm_[selected,:]
-            else:
-                cm[:,:] = fastcom( r, masses, molecule, nmolecules) if usecom else r
-
+        iframe += 1
+        if len(profiles) == 0:
             for _d in _dims:
-                profile = profiles[_d]
-                for _cm in cm:
-                    profile.add(_cm[_d])
+                origin = box.origin[_d]
+                length = origin + (box.a,box.b,box.c)[_d]
+                # nbins=round(length/bin)
+                profiles[_d] = Histogram.fixed( origin, length, bin)
                 if __hack:
-                    profile = profiles_entg[_d]
-                    for _cm in cm[np.where( data['type'] == 2)[0]]:
-                        profile.add(_cm[_d])
+                    profiles_entg[_d] = Histogram.fixed( origin, length, bin)
 
-            if dolocal:
-                for l_, nl_ in zip(l,nl):
-                    ld = fast_localdensity(cm, box.origin, box.a,  box.b, box.c, seed, l_, nl_)
-                    np.vectorize( hld[l_].add)( ld)
+        steps.append( step)
+        boxes.append( box)
 
+        for k, v in dmap.items():
+            np.copyto(r[:, k] ,  data[v[0]])
+
+        if rmcom:
+            cmtotal, masstotal = fastcom_total( r, masses)
+            if len(boxes) == 1:
+                cm0[:] = cmtotal
+            else:
+                delta[:] = cmtotal-cm0
+                r -= delta
+
+        # calculate center of masses and if regions
+        # set also the wraped coordinates to ensure
+        # the correct bining
+        if hasselected:
+            cm_ = fastcom( r, masses, molecule, nmolecules) if usecom else r
+            cm[:,:] = cm_[selected,:]
         else:
-            break
+            cm[:,:] = fastcom( r, masses, molecule, nmolecules) if usecom else r
+
+        for _d in _dims:
+            profile = profiles[_d]
+            for _cm in cm:
+                profile.add(_cm[_d])
+            if __hack:
+                profile = profiles_entg[_d]
+                for _cm in cm[np.where( data['type'] == 2)[0]]:
+                    profile.add(_cm[_d])
+
+        if dolocal:
+            for l_, nl_ in zip(l,nl):
+                ld = fast_localdensity(cm, box.origin, box.a,  box.b, box.c, seed, l_, nl_)
+                np.vectorize( hld[l_].add)( ld)
+
 
     for _d, profile in profiles.items():
         _dname = "%s%s"%("com_" if usecom else "", _dnames[ _d])
@@ -247,14 +243,14 @@ def command():
     parser.add_argument('-bin', nargs=1, type=float, metavar='bin', required=True, \
                        help='bin width in A')
 
-    parser.add_argument('-start', nargs=1, type=int, metavar='n', default=[-1], \
-                       help='start processing form configuration START [inclusive]')
+    parser.add_argument('-start', nargs=1, type=int, metavar='START', default=[-1], \
+                       help='start processing form step START [inclusive]')
 
-    parser.add_argument('-end', nargs=1, type=int, metavar='n', default=[sys.maxsize], \
-                       help='stop processing at configuration END [inclusive]')
+    parser.add_argument('-end', nargs=1, type=int, metavar='END', default=[sys.maxsize], \
+                       help='stop processing at step END [inclusive]')
 
-    parser.add_argument('-every', nargs=1, type=int, metavar='n', default=[1], \
-                       help='process every EVERY configuration')
+    parser.add_argument('-every', nargs=1, type=int, metavar='EVERY', default=[1], \
+                       help='process every EVERY frames (process frequency)')
 
     parser.add_argument('-molecules', nargs=1, type=argparse_moleculestype, default=[[]],  metavar='range', \
                        help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')

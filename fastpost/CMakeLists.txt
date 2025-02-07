@@ -55,7 +55,7 @@ find_package(Python3 COMPONENTS Interpreter)
 # check also: 
 # https://github.com/scikit-build/scikit-build/blob/master/skbuild/resources/cmake/FindF2PY.cmake
 #
-find_program ( F2PY_EXECUTABLE NAMES f2py${PYTHON_VERSION_MAJOR} f2py REQUIRED)
+find_program ( F2PY_EXECUTABLE NAMES f2py${Python3_VERSION_MAJOR} f2py-${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR} f2py${PYTHON_VERSION_MAJOR} f2py REQUIRED)
 message ( STATUS "Found f2py: ${F2PY_EXECUTABLE}")
 
 # create the list for f2py input
@@ -70,7 +70,7 @@ execute_process(
   OUTPUT_VARIABLE MODSUFFIX
   RESULT_VARIABLE MODSUFFIX_NOT_FOUND
   )
-STRING(STRIP ${MODSUFFIX} MODSUFFIX)
+STRING(STRIP "${MODSUFFIX}" MODSUFFIX)
 
 if(MODNAME_NOT_FOUND)
   message(FATAL_ERROR "python3 EXT_SUFFIX not found")
@@ -150,6 +150,9 @@ if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   
 else()
   # We are building as part of Main project
+  if ("${SKBUILD_PROJECT_NAME}" STREQUAL "")
+    set ( SKBUILD_PROJECT_NAME "${PROJECT_BINARY_DIR}/pysimpp" )
+  endif()
   install (FILES ${PROJECT_BINARY_DIR}/fastpost${MODSUFFIX} DESTINATION ${SKBUILD_PROJECT_NAME})
 
 endif()

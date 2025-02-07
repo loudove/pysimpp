@@ -9,7 +9,7 @@ from pysimpp.utils.utils import IsList, read_ndx
 from pysimpp.utils.statisticsutils import Histogram
 
 def _is_command(): return True
-def _short_description(): return 'Calculate orientation distribution (angle with z axis).'
+def _short_description(): return 'Calculate the distribution of bonds, angles, and dihedrals.'
 def _command(): command()
 
 # import scipy
@@ -53,21 +53,20 @@ def measure(filename, measurement, ndxfile, start, end, every, groups=[], doacf=
             h[k] = Histogram.free( _bin, 0.0, addref=False)
 
     # buffer function
-    nframes = 0
     r = np.empty(shape=(reader.natoms, 3), dtype=np.float32,order='C')
+    iframe = 0
     while (True):
         step, box, data = reader.read_next_frame()
-        nframes += 1
         if step is None:
             break
-        elif nframes < start:
+        elif step < start:
             continue
-        elif nframes > end:
+        elif not iframe % every == 0:
+            continue        
+        elif step > end:
             break
 
-        if not nframes % every == 0:
-            continue
-
+        iframe += 1
         np.copyto(r[:, 0], data['x'])
         np.copyto(r[:, 1], data['y'])
         np.copyto(r[:, 2], data['z'])
@@ -99,14 +98,14 @@ def command():
     parser.add_argument('-type',nargs=1, metavar='type', choices=['distanse', 'angle', 'dihedral'],
                         required=True, help=message)
 
-    parser.add_argument('-start', nargs=1, type=int, metavar='n', default=[-1], \
-                       help='start processing form frame n [inclusive].')
+    parser.add_argument('-start', nargs=1, type=int, metavar='START', default=[-1], \
+                       help='start processing form step START [inclusive]')
 
-    parser.add_argument('-end', nargs=1, type=int, metavar='n', default=[sys.maxsize], \
-                       help='stop processing at frame n [inclusive].')
+    parser.add_argument('-end', nargs=1, type=int, metavar='END', default=[sys.maxsize], \
+                       help='stop processing at step END [inclusive]')
 
-    parser.add_argument('-every', nargs=1, type=int, metavar='n', default=[1], \
-                       help='processing frequency (every n frames).')
+    parser.add_argument('-every', nargs=1, type=int, metavar='EVERY', default=[1], \
+                       help='process every EVERY frames (process frequency)')
 
     message='''
     a file with the gromacs style indexes for the bonded items to be considered.

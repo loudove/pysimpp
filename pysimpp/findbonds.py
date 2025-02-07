@@ -113,24 +113,23 @@ def findbonds(filename, fradii, scale, pairs, bin, start, end, every, dump=False
     if dump:
         fd = open(dirname+os.sep+basename+".bonds.dump_local", 'w')
 
-    frames = []
+    steps = []
     r = np.empty(shape=(natoms, 3), dtype=np.float32)  # coordinates
     print('>> reading dump file(s) ...')
+    iframe = 0
     while (True):
         step, box, data = reader.read_next_frame()
-
         if step is None:
             break
-
-        if step < start:
+        elif step < start:
             continue
+        elif not iframe % every == 0:
+            continue        
         elif step > end:
             break
 
-        frames.append(step)
-
-        if not step % every == 0:
-            continue
+        iframe += 1
+        steps.append(step)
 
         np.copyto(r[:, 0], data['x'])
         np.copyto(r[:, 1], data['y'])
@@ -162,7 +161,7 @@ def findbonds(filename, fradii, scale, pairs, bin, start, end, every, dump=False
                  ((pairmap[_t],)*3) for _t in _types])
     f = open(dirname+os.sep+basename+"_bonds.dat", 'w')
     lines = []
-    for step in frames:
+    for step in steps:
         line = "%-12s" % str(step)
         for _t in _types:
             line += " %-12d %-12g %-12g" % trj[_t][step]
@@ -192,14 +191,14 @@ def command():
              'should be present in the same directory (preferably a tpr file).'
     parser.add_argument('path', default="."+os.sep, help=string)
 
-    parser.add_argument('-start', nargs=1, type=int, metavar='n', default=[-1],
-                        help='start processing form configuration n [inclusive]')
+    parser.add_argument('-start', nargs=1, type=int, metavar='START', default=[-1],
+                        help='start processing form step START [inclusive]')
 
-    parser.add_argument('-end', nargs=1, type=int, metavar='n', default=[sys.maxsize],
-                        help='stop processing at configuration n [inclusive]')
+    parser.add_argument('-end', nargs=1, type=int, metavar='END', default=[sys.maxsize],
+                        help='stop processing at step END [inclusive]')
 
-    parser.add_argument('-every', nargs=1, type=int, metavar='n', default=[1],
-                        help='processing frequency (every n configurations)')
+    parser.add_argument('-every', nargs=1, type=int, metavar='EVERY', default=[1],
+                        help='process every EVERY frames (process frequency)')
 
     parser.add_argument('-bin', nargs=1, type=float, metavar='bin', default=[0.02],
                         help='bin length (Å) for the distributions')

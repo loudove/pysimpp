@@ -3,18 +3,14 @@
 import os
 import sys
 from collections import defaultdict
-from operator import add
-import pickle
 
 import numpy as np
-from scipy import stats
 
-from pysimpp.msd import MSDException, MSDDataUtility, _dimsbookkeep, _msd_fft3, _msd_fft3x
+from pysimpp.msd import MSDDataUtility, _dimsbookkeep, _msd_fft3
 import pysimpp.readers
-from pysimpp.utils.utils import isrange, islist, read_ndx, ispositive, argparse_moleculestype
-from pysimpp.utils.statisticsutils import Histogram
+from pysimpp.utils.utils import read_ndx, ispositive
 
-from pysimpp.fastpost import fasts1x, fastwrap, fastcom, fastcom_total
+from pysimpp.fastpost import fastcom, fastcom_total
 
 def _is_command(): return True
 def _short_description(): return 'Calculate segmental mean square displacement.'
@@ -33,19 +29,18 @@ def smsd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz
 
     usecom = False
 
-    # TODO check for gromacs: the provided trajectory is assumed allready unwrapped.
+    # TODO check for gromacs: the provided trajectory is assumed all-ready unwrapped.
     _unwrap = True
     reader.set_unwrap( _unwrap)
     attributes = 'id x y z type'
     reader.set_attributes( attributes)
 
     natoms = reader.natoms
-    masses = reader.get_atom_mass() # get atoms mass
-
+    # get molecular data and select molecules of interest
+    masses = reader.get_atom_mass()     # get atoms masses
     molecule = reader.get_atom_molecule() - 1   # atom molecule array (index @zero)
     nmolecules = molecule.max() + 1             # number of molecules
-    # TODO add this functionality in reader
-    mol_atoms = defaultdict( list)              # molecule atoms array
+    mol_atoms = defaultdict( list)              # molecule atoms array TODO add this functionality in reader
     for i, im in enumerate( molecule):
         mol_atoms[ im].append(i)
 
@@ -64,18 +59,18 @@ def smsd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz
         if len( _selected) == 0: # check for empty selection
             print('WARNING: selection was not found in %s' % _basename)
         else: # setup selection mask array and inform
-            _selected = np.array( _selected) - 1 # zero based indes
+            _selected = np.array( _selected) - 1 # zero based indexes
             selected = np.full((natoms,), False)
             selected[ _selected] = True
             nselected = np.count_nonzero(selected)
-            print("INFO: %d atoms were seleted" % nselected)
+            print("INFO: %d atoms were selected" % nselected)
             selection = True
 
     # if not selection: # select everything
     #     selected = np.full((natoms,), True)
     #     nselected = natoms
 
-    # set the segmens
+    # set the segments
     if not segmentsfile is None:
         _basename = os.path.basename( segmentsfile.name)
         _segments = read_ndx( segmentsfile)
@@ -121,7 +116,7 @@ def smsd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz
     reader.set_attributes( attributes)
 
     print('>> count configurations in dump file(s) ...')
-    nconfs = reader.count_frames( start, end) if  maxconfs == -1 else maxconfs
+    nconfs = reader.count_frames( start, end) // every if  maxconfs == -1 else maxconfs
 
     # allocate unwrapped coordinates
     n_ = nmolecules if usecom else nselected if selection else natoms
@@ -135,40 +130,37 @@ def smsd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz
     print('\n>> reading dump file(s) ...')
     steps = []
     boxes = []
-    iconf = -1
-    iconf_ = 0
+    iframe = 0
     while( True):
         step, box, data = reader.read_next_frame()
-        iconf_ += 1
         if step == None:
             break
-        elif not iconf_%every == 0:
-            continue
         elif step < start:
             continue
+        elif not iframe%every == 0:
+            continue
         elif step > end:
-            print(step)
             break
-        if box:
-            iconf += 1
-            steps.append( step)
-            boxes.append( box)
-            for k, v in dmap.items():
-                np.copyto( r[:, k] ,  data[v[0]])
 
-            if __rmcm:
-                cmtotal, masstotal = fastcom_total( r, masses)
-                if len(boxes) == 1:
-                    cm0[:] = cmtotal
-                else:
-                    delta[:] = cmtotal-cm0
-                    r -= delta
+        iframe += 1
 
-            # if needed calculate center of masses
-            cm[iconf,:,:] = fastcom( r, masses, molecule, nmolecules) if usecom else r[selected] if selection else r
+        iconf_ = len(steps)
+        steps.append( step)
+        boxes.append( box)
+        for k, v in dmap.items():
+            np.copyto( r[:, k] ,  data[v[0]])
 
-        else:
-            break
+        if __rmcm:
+            cmtotal, masstotal = fastcom_total( r, masses)
+            if len(boxes) == 1:
+                cm0[:] = cmtotal
+            else:
+                delta[:] = cmtotal-cm0
+                r -= delta
+
+        # if needed calculate center of masses
+        cm[iconf_,:,:] = fastcom( r, masses, molecule, nmolecules) if usecom else r[selected] if selection else r
+
 
     # number of configurations - resize if needed
     nconfs = len( steps)
@@ -177,16 +169,16 @@ def smsd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz
         print("to save some memory consider to use maxconfs = %d instead of %d" %( nconfs, _s[0]))
         cm = np.resize( cm, (nconfs, _s[1], _s[2]))
 
-    # get the timestep in ps and handle some cases
+    # get the time step in ps and handle some cases
     _dt = reader.timestep
     if _dt == 0.0:
         if dt == 0.0:
             dt = 1.0
-            print("INFO: the timestep is set to %.2f fs. You shoud use '-dt' option to provide it." % dt)
+            print("INFO: the time step is set to %.2f fs. You should use '-dt' option to provide it." % dt)
     else:
         if dt > 0.0:
-            print("INFO: the timestep is set to %.2f fs (provided with -dt option)." % dt)
-            print("      Nevertheless, a timestep of %.2f fs is found in the trajectory files." % _dt)
+            print("INFO: the time step is set to %.2f fs (provided with -dt option)." % dt)
+            print("      Nevertheless, a time step of %.2f fs is found in the trajectory files." % _dt)
         else:
             dt = _dt
     dt *= 1000.0 # TODO check for gromacs
@@ -228,25 +220,25 @@ def command():
                        help='produce the MSD for the given dimension(s)')
 
     parser.add_argument('-maxconfs', nargs=1, type=int, metavar='n', default=[-1], \
-                       help='pre-allocate memmory for the given number of cofigurations.')
+                       help='pre-allocate memory for the given number of configurations.')
 
-    parser.add_argument('-start', nargs=1, type=int, metavar='n', default=[-1], \
-                       help='start processing form configuration START [inclusive]')
+    parser.add_argument('-start', nargs=1, type=int, metavar='START', default=[-1], \
+                       help='start processing form step START [inclusive]')
 
     parser.add_argument('-end', nargs=1, type=int, metavar='n', default=[sys.maxsize], \
-                       help='stop processing at configuration END [inclusive]')
+                       help='stop processing at step END [inclusive]')
 
-    parser.add_argument('-every', nargs=1, type=int, metavar='n', default=[1], \
-                       help='process every EVERY configuration')
+    parser.add_argument('-every', nargs=1, type=int, metavar='EVERY', default=[1], \
+                       help='process every EVERY frames (process frequency)')
 
     def argdttype( string):
         val = ispositive( string, numbertype=float)
         if val is None:
-            msg = "wrong integration timestep (check: %s)" % string
+            msg = "wrong integration time step (check: %s)" % string
             raise argparse.ArgumentTypeError(msg)
         return val
     parser.add_argument('-dt', nargs=1, type=argdttype, default=[0.0], metavar='timestep', \
-                       help='integration timeste in ps')
+                       help='integration time step in ps')
 
     message='a file with the gromacs style indexes for the segments to be considered. ' +\
             'The segments should be of the same kind since the msd of their center of ' +\

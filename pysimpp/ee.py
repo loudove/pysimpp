@@ -85,6 +85,7 @@ def endtoend(filename,
     end2,
     dt=0.0,
     start=-1,
+    every=1,
     end=sys.maxsize,
     molids=(),
     whole=True,
@@ -153,7 +154,6 @@ def endtoend(filename,
     print('\n>> reading dump file(s) ...')
     steps = []
     boxes = []
-    iconf = -1
     eevectors = []
     sqrg = []
 
@@ -168,33 +168,34 @@ def endtoend(filename,
         hbndl = Histogram.free(_bins["bnd"], 0.0, addref=False)
         nrm_ = np.arange( nbndch_, 0, -1, dtype=float)
 
+    iframe = 0
     while (True):
         step, box, data = reader.read_next_frame()
         if step == None:
             break
         elif step < start:
             continue
+        elif not iframe % every == 0:
+            continue
         elif step > end:
-            print(step)
             break
-        if box:
-            iconf += 1
-            steps.append(step)
-            boxes.append(box)
-            # update the topology as needed in the case of camc
-            if camc:
-                natch, chat, e1_, e2_ = reader.get_topology()
-                e1 = np.array(e1_)[selected]
-                e2 = np.array(e2_)[selected]
-                e1p = e1+1
-                e2p = e2+1
-                molecules = reader.get_atom_molecule() - 1
-                masses = reader.get_atom_mass()
-            r[:, 0] = data['x']
-            r[:, 1] = data['y']
-            r[:, 2] = data['z']
-        else:
-            break
+
+        iframe += 1
+        steps.append(step)
+        boxes.append(box)
+    
+        # update the topology as needed in the case of camc
+        if camc:
+            natch, chat, e1_, e2_ = reader.get_topology()
+            e1 = np.array(e1_)[selected]
+            e2 = np.array(e2_)[selected]
+            e1p = e1+1
+            e2p = e2+1
+            molecules = reader.get_atom_molecule() - 1
+            masses = reader.get_atom_mass()
+        r[:, 0] = data['x']
+        r[:, 1] = data['y']
+        r[:, 2] = data['z']
 
         eev = r[e2] - r[e1]
         eevectors.append(eev)
@@ -354,11 +355,16 @@ If the "--lp" option is enabled:
 
     parser.add_argument('path', default="."+os.sep,  \
                        help=string)
-    parser.add_argument('-start', nargs=1, type=int, metavar='n', default=[-1], \
-                       help='start processing form configuration START [inclusive]')
-    parser.add_argument('-end', nargs=1, type=int, metavar='n', default=[sys.maxsize], \
-                       help='stop processing at configuration END [inclusive]')
 
+    parser.add_argument('-start', nargs=1, type=int, metavar='START', default=[-1], \
+                       help='start processing form step START [inclusive]')
+
+    parser.add_argument('-end', nargs=1, type=int, metavar='END', default=[sys.maxsize], \
+                       help='stop processing at step END [inclusive]')
+
+    parser.add_argument('-every', nargs=1, type=int, metavar='EVERY', default=[1], \
+                       help='process every EVERY frames (process frequency)')
+    
     def argdttype( string):
         val = utils.ispositive( string, numbertype=float)
         if val is None:
@@ -428,6 +434,7 @@ If the "--lp" option is enabled:
     print("dt (ps)   : ", args.dt[0])
     print("start     : ", args.start[0])
     print("end       : ", "max" if args.end[0] == sys.maxsize else args.end[0])
+    print("every : ", args.every[0])
     string = " ".join( map(str, args.molecules[0]))
     print("molecules : %s" % ('-' if len(string)==0 else string ) )
     print("whole     : %s" % ("True" if args.whole else "False"))
@@ -444,6 +451,7 @@ If the "--lp" option is enabled:
         dt=args.dt[0],
         start=args.start[0],
         end=args.end[0],
+        every=args.every[0],
         molids=args.molecules[0],
         whole=args.whole,
         bins=args.bins[0],

@@ -91,19 +91,19 @@ def dihedrals(filename, ndxfile, jnt, start, end, every):
     r = np.empty(shape=(natoms, 3),
                   dtype=np.float32)  # coordinates
     print('>> reading dump file(s) ...')
+    iframe = 0
     while (True):
         step, box, data = reader.read_next_frame()
         if step is None:
             break
         elif step < start:
             continue
+        elif not iframe % every == 0:
+            continue
         elif step > end:
             break
 
-        nframes += 1
-
-        if not step % every == 0:
-            continue
+        iframe += 1
 
         np.copyto(r[:, 0], data['x'])
         np.copyto(r[:, 1], data['y'])
@@ -116,6 +116,8 @@ def dihedrals(filename, ndxfile, jnt, start, end, every):
                 np.vectorize(h[k].add, signature='(n)->()')(_phi[d[k]])
             else:
                 np.vectorize(h[k].add)(_phi[d[k]])
+
+        nframes += 1
 
     for k in list(h.keys()):
         if k in jnt:
@@ -150,14 +152,14 @@ def command():
     parser.add_argument('-j', nargs=1, type=chktype, metavar='joint', default=[[]], \
                        help=message)
     
-    parser.add_argument('-start', nargs=1, type=int, metavar='n', default=[-1], \
-                       help='start processing form configuration n [inclusive]')
+    parser.add_argument('-start', nargs=1, type=int, metavar='START', default=[-1], \
+                       help='start processing form step START [inclusive]')
 
-    parser.add_argument('-end', nargs=1, type=int, metavar='n', default=[sys.maxsize], \
-                       help='stop processing at configuration n [inclusive]')
+    parser.add_argument('-end', nargs=1, type=int, metavar='END', default=[sys.maxsize], \
+                       help='stop processing at step END [inclusive]')
 
     parser.add_argument('-every', nargs=1, type=int, metavar='n', default=[1], \
-                       help='processing frequency (every n configurations)')
+                       help='process every EVERY frames (process frequency)')
 
     # parse the arguments
     args = parser.parse_args()
@@ -167,8 +169,8 @@ def command():
     print("joint ", ",".join( args.j[0]) if len(args.j[0]) > 0 else "-")
     print("path : ", args.path)
     print("start : ", args.start[0])
-    print("every : ", args.every[0])
     print("end : ", "max" if args.end[0] == sys.maxsize else args.end[0])
+    print("every : ", args.every[0])
     print()
 
     dihedrals( args.path, args.ndx[0], args.j[0], args.start[0], args.end[0], args.every[0])

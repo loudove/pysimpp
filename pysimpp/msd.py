@@ -224,11 +224,11 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
 
     natoms = reader.natoms
     # get molecular data and select molecules of interest
-    masses = reader.get_atom_mass()
-    molecule = reader.get_atom_molecule() - 1  # atom molecule array (index @zero)
-    nmolecules = molecule.max() + 1            # number of molecules
+    masses = reader.get_atom_mass()     # get atoms masses
+    molecule = reader.get_atom_molecule() - 1   # atom molecule array (index @zero)
+    nmolecules = molecule.max() + 1             # number of molecules
     # TODO add this functionality in reader
-    mol_atoms = defaultdict( list)             # molecule atoms array
+    mol_atoms = defaultdict( list)              # molecule atoms array
     for i, im in enumerate( molecule):
         mol_atoms[ im].append(i)
 
@@ -261,7 +261,7 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
     reader.set_attributes( attributes)
 
     print('>> count configurations in dump file(s) ...')
-    nconfs = reader.count_frames( start, end) if  maxconfs == -1 else maxconfs
+    nconfs = reader.count_frames( start, end) // every if  maxconfs == -1 else maxconfs
 
     # allocate wrapped and unwrapped molecules coordinates
     n_ = nselected if hasselected else nmolecules if usecom else natoms
@@ -276,52 +276,49 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
     print('\n>> reading dump file(s) ...')
     steps = []
     boxes = []
-    iconf = -1
-    iconf_ = 0
+    iframe = 0
     while( True):
         step, box, data = reader.read_next_frame()
-        iconf_ += 1
         if step == None:
             break
-        elif not iconf_%every == 0:
-            continue
         elif step < start:
             continue
+        elif not iframe%every == 0:
+            continue
         elif step > end:
-            print(step)
             break
-        if box:
-            iconf += 1
-            steps.append( step)
-            boxes.append( box)
-            for k, v in dmap.items():
-                np.copyto(r[:, k] ,  data[v[0]])
 
-            if __rmcm:
-                cmtotal, masstotal = fastcom_total( r, masses)
-                if len(boxes) == 1:
-                    cm0[:] = cmtotal
-                else:
-                    delta[:] = cmtotal-cm0
-                    r -= delta
+        iframe += 1
 
-            # calculate center of masses and if regions
-            # set also the wraped coordinates to ensure
-            # the correct bining
-            if hasselected:
-                cm_ = fastcom( r, masses, molecule, nmolecules) if usecom else r
-                cm[iconf,:,:] = cm_[selected,:]
-                if hasregion:
-                    # LDP TODO check the API of fastwarp
-                    cmw_ = fastwrap( cm_.transpose(), box.origin, box.va, box.vb, box.vc)
-                    cmw[iconf,:,:] = cmw_[:,selected].transpose()
+        iframe_ = len(steps)
+        steps.append( step)
+        boxes.append( box)
+        for k, v in dmap.items():
+            np.copyto(r[:, k] ,  data[v[0]])
+
+        if __rmcm:
+            cmtotal, masstotal = fastcom_total( r, masses)
+            if len(boxes) == 1:
+                cm0[:] = cmtotal
             else:
-                cm[iconf,:,:] = fastcom( r, masses, molecule, nmolecules) if usecom else r
-                if hasregion:
-                    cmw_ = fastwrap( cm[iconf,:,:].transpose(), box.origin, box.va, box.vb, box.vc)
-                    cmw[iconf,:,:] = cmw_.transpose()
+                delta[:] = cmtotal-cm0
+                r -= delta
+
+        # calculate center of masses and if regions
+        # set also the wraped coordinates to ensure
+        # the correct bining
+        if hasselected:
+            cm_ = fastcom( r, masses, molecule, nmolecules) if usecom else r
+            cm[iframe_,:,:] = cm_[selected,:]
+            if hasregion:
+                # LDP TODO check the API of fastwarp
+                cmw_ = fastwrap( cm_.transpose(), box.origin, box.va, box.vb, box.vc)
+                cmw[iframe_,:,:] = cmw_[:,selected].transpose()
         else:
-            break
+            cm[iframe_,:,:] = fastcom( r, masses, molecule, nmolecules) if usecom else r
+            if hasregion:
+                cmw_ = fastwrap( cm[iframe_,:,:].transpose(), box.origin, box.va, box.vb, box.vc)
+                cmw[iframe_,:,:] = cmw_.transpose()
 
     # number of configurations - resize if needed
     nconfs = len( steps)
@@ -897,14 +894,14 @@ def command():
     parser.add_argument('-maxconfs', nargs=1, type=int, metavar='n', default=[-1], \
                        help='pre-allocate memmory for the given number of cofigurations.')
 
-    parser.add_argument('-start', nargs=1, type=int, metavar='n', default=[-1], \
-                       help='start processing form configuration START [inclusive]')
+    parser.add_argument('-start', nargs=1, type=int, metavar='START', default=[-1], \
+                       help='start processing form step START [inclusive]')
 
-    parser.add_argument('-end', nargs=1, type=int, metavar='n', default=[sys.maxsize], \
-                       help='stop processing at configuration END [inclusive]')
+    parser.add_argument('-end', nargs=1, type=int, metavar='END', default=[sys.maxsize], \
+                       help='stop processing at step END [inclusive]')
 
-    parser.add_argument('-every', nargs=1, type=int, metavar='n', default=[1], \
-                       help='process every EVERY configuration')
+    parser.add_argument('-every', nargs=1, type=int, metavar='EVERY', default=[1], \
+                       help='process every EVERY frames (process frequency)')
 
     def argdttype( string):
         val = ispositive( string, numbertype=float)
