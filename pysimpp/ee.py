@@ -76,7 +76,7 @@ def __acf(t, data, fname):
     acf=np.array(acf).mean(axis=0).transpose()
 
     f=open(fname,'w')
-    t0 - t[0]
+    t0 = t[0]
     for x1, x2 in np.vstack([t, acf]).T:
         f.write( "%.3f %.6f\n" % (x1-t0, x2))
     f.close()
