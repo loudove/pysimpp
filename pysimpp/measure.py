@@ -33,9 +33,9 @@ def measure(filename, measurement, ndxfile, start, end, every, groups=[], doacf=
     basename = reader.basename
 
     # setup measurement type stuff
-    _multi={'distanse':2, 'angle':3, 'dihedral':4}[measurement]
-    _func={'distanse':fastbonds, 'angle':fastangles, 'dihedral':fastdihedrals}[measurement]
-    _bin={'distanse':0.05, 'angle':2.0*__deg2rad, 'dihedral':2.0*__deg2rad}[measurement]
+    _multi={'distance':2, 'angle':3, 'dihedral':4}[measurement]
+    _func={'distance':fastbonds, 'angle':fastangles, 'dihedral':fastdihedrals}[measurement]
+    _bin={'distance':0.05, 'angle':2.0*__deg2rad, 'dihedral':2.0*__deg2rad}[measurement]
 
     # read the index file
     ndxs = read_ndx(ndxfile)
@@ -95,7 +95,7 @@ def command():
     type of the measurement. The number of indexes for each group in the index file should
     be multiple of 2, 3, and 4 for "distance", "angle" and "dihedral" measurement type
     respectively. '''
-    parser.add_argument('-type',nargs=1, metavar='type', choices=['distanse', 'angle', 'dihedral'],
+    parser.add_argument('-type',nargs=1, metavar='type', choices=['distance', 'angle', 'dihedral'],
                         required=True, help=message)
 
     parser.add_argument('-start', nargs=1, type=int, metavar='START', default=[-1], \

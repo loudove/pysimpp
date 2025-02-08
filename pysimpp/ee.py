@@ -76,8 +76,9 @@ def __acf(t, data, fname):
     acf=np.array(acf).mean(axis=0).transpose()
 
     f=open(fname,'w')
+    t0 - t[0]
     for x1, x2 in np.vstack([t, acf]).T:
-        f.write( "%.3f %.6f\n" % (x1, x2))
+        f.write( "%.3f %.6f\n" % (x1-t0, x2))
     f.close()
 
 def endtoend(filename,
@@ -103,10 +104,8 @@ def endtoend(filename,
             print("ERROR: incompatible first/last atoms range.")
             return
 
-    # update defaualt bins
-    _bins = defaultdict( lambda: 1.0,
-        { "sqree":100.0, "msqree":100.0, "ree":2.0, "mree":2.0,
-          "sqrg":20.0, "msqrg":20.0, "rg":1.0, "mrg":1.0, "pl":1.0,"bnd":0.2})
+    # update the bins for the histograms
+    _bins = {"pl":1.0,"bnd":0.2}
     for k, v in bins.items(): _bins[k] = v[0]
 
     # create the reader. for the moment lammps, gromacs and camc (polybead) are supported.
@@ -143,7 +142,7 @@ def endtoend(filename,
     r = np.zeros((natoms, 3), dtype=np.float64)  # whole
     exclude = np.zeros((nmolecules), dtype=np.bool_)  # all false
     cm = np.zeros((nmolecules, 3), dtype=np.float64)  # center of mass
-    sqrg_ = np.zeros((nmolecules), dtype=np.float64)  # gyration tensors
+    # sqrg_ = np.zeros((nmolecules), dtype=np.float64)  # gyration tensors
 
     if hasselected:
         exclude[:] = True
@@ -223,9 +222,6 @@ def endtoend(filename,
                 s_/=nrm_
                 bndacf.append(s_)
 
-    # number of configurations - resize if needed
-    nconfs = len(steps)
-
     # create time array
     _dt = reader.timestep
     if _dt == 0.0:
@@ -241,48 +237,54 @@ def endtoend(filename,
     dt /= 1000.0 # form ps to ns
     time = np.array(steps, dtype=float) * dt
 
+    # precalculate quantities ot check the bins
+    def setbin(a, name, n=20):
+        if name in _bins:
+            return _bins[name]
+        else:
+            bin = 2.5 * a.std() / n
+            return np.round(bin,2) if bin > 1. else bin
+
+    sqeev = np.array([ (eev_*eev_).sum(axis=1) for eev_ in eevectors ])
+    msqeev = np.mean(sqeev, axis=1) # mean square end-to-end vector
+    leev = np.sqrt(sqeev)   # end-to-end vector length
+    mleev = np.mean(leev, axis=1) # mean end-to-end vector length
+    sqrg = np.array(sqrg) # square radius of gyration
+    msqrg = np.mean(sqrg, axis=1) # mean square radius of gyration
+    rg = np.sqrt(sqrg) # radius of gyration
+    mrg = np.sqrt(msqrg) # mean radius of gyration
+
     # calculate the mean square end-to-end vector
-    hsqree = Histogram.free(_bins["sqree"], 0.0, addref=False)
-    hree = Histogram.free(_bins["ree"], 0.0, addref=False)
-    hmsqree = Histogram.free(_bins["msqree"], 0.0, addref=False)
-    hmree = Histogram.free(_bins["mree"], 0.0, addref=False)
+    hsqree = Histogram.free(setbin(sqeev,"sqree"), 0.0, addref=False)
+    np.vectorize(hsqree.add)(sqeev.flat)
+    hmsqree = Histogram.free(setbin(msqeev,"msqree"), 0.0, addref=False)
+    np.vectorize(hmsqree.add)(msqeev)
+    hree = Histogram.free(setbin(leev,"ree"), 0.0, addref=False)
+    np.vectorize(hree.add)(leev.flat)
+    hmree = Histogram.free(setbin(mleev,"mree"), 0.0, addref=False)
+    np.vectorize(hmree.add)(mleev)
+
     # and the mean square radius of gyration
-    msqrg = []
-    hsqrg = Histogram.free(_bins["sqrg"], 0.0, addref=False)
-    hrg = Histogram.free(_bins["rg"], 0.0, addref=False)
-    hmsqrg = Histogram.free(_bins["msqrg"], 0.0, addref=False)
-    hmrg = Histogram.free(_bins["mrg"], 0.0, addref=False)
+    hsqrg = Histogram.free(setbin(sqrg,"sqrg"), 0.0, addref=False)
+    np.vectorize(hsqrg.add)(sqrg.flat)
+    hmsqrg = Histogram.free(setbin(msqrg,"msqrg"), 0.0, addref=False)
+    np.vectorize(hmsqrg.add)(msqrg)
+    hrg = Histogram.free(setbin(rg,"rg"), 0.0, addref=False)
+    np.vectorize(hrg.add)(rg.flat)
+    hmrg = Histogram.free(setbin(mrg,"mrg"), 0.0, addref=False)    
+    np.vectorize(hmrg.add)(mrg)
+
+    # output time series data
     f1 = open(reader.dir+os.sep+"ree.data","w")
     f1.write("# time[ns]  msqree[Å²] sqrt(msqree[Å]\n")
     f2 = open(reader.dir+os.sep+"rg.data","w")
     f2.write("# time[ns]  msqree[Å²] sqrt(msqrg)[Å]\n")
-    for t, eev, sqrg_ in zip(time, eevectors, sqrg):
-        # collect end-to-end vector
-        eev_ = np.array(eev)
-        sqeev_ = (eev_*eev_).sum(axis=1)
-        leev_ = np.sqrt( sqeev_)
-        for sqv, v in zip(sqeev_,leev_):
-            hsqree.add( sqv)
-            hree.add( v)
-        msqv = np.mean(sqeev_)
-        hmsqree.add( msqv)
-        #mv = np.sqrt(msqv)
-        mv = np.mean(leev_)
-        hmree.add( mv)
-        f1.write("%f %f %f\n" % (t, msqv, mv))
-        # collect radious of gyration
-        for val in sqrg_:
-            hsqrg.add( val)
-            hrg.add( np.sqrt(val))
-        msqrg_ = sqrg_.mean()
-        msqrg.append( msqrg_)
-        hmsqrg.add( msqrg_)
-        mrg_ = np.sqrt(msqrg_)
-        hmrg.add( mrg_)
+    for t, msqeev_, mleev_, msqrg_, mrg_ in zip(time, msqeev, mleev, msqrg, mrg):
+        f1.write("%f %f %f\n" % (t, msqeev_, mleev_))
         f2.write("%f %f %f\n" % (t, msqrg_, mrg_))
-
     f1.close()
     f2.close()
+
     # output end-to-end data
     hsqree.write(reader.dir+os.sep+"sqree_hist.data", fmt="%f %g", header="# %s"%str(hsqree.variable))
     hree.write(reader.dir+os.sep+"ree_hist.data", header="# %s"%str(hree.variable))
@@ -373,7 +375,7 @@ If the "--lp" option is enabled:
         return val
 
     parser.add_argument('-dt', nargs=1, type=argdttype, default=[0.0], metavar='timestep', \
-                       help='integration timeste in ps')
+                       help='integration time step in ps')
 
     def argends(string):
         ''' check the "-end1" and "-end2" option arguments. '''
@@ -399,14 +401,14 @@ If the "--lp" option is enabled:
     string = '''
     provide the bins length for the histograms to be calculated. The following
     histograms are supported:
-      - sqree : square end-to-end vector (default 100.0 Å²)
-      - msqree : mean square end-to-end (default 100.0 Å²)
-      - ree : end-to-end length (default 2.0 Å)
-      - mree : mean end-to-end length (default 2.0 Å)
-      - sqrg : square radius of gyration (default 20.0 Å)
-      - msqrg : mean square radius of gyration (default 20.0 Å)
-      - rg : radius of gyration (default 1.0 Å)
-      - mrg : mean radius of gyration (default 1.0 Å)
+      - sqree : square end-to-end vector
+      - msqree : mean square end-to-end
+      - ree : end-to-end length
+      - mree : mean end-to-end length
+      - sqrg : square radius of gyration
+      - msqrg : mean square radius of gyration
+      - rg : radius of gyration
+      - mrg : mean radius of gyration
     For example, with argument "ree:2.5@sqree:50", the bin length of the
     histogram for the end-to-end distance is set to 2.0 Å and for the square
     end-to-end distance to 50 Å².
