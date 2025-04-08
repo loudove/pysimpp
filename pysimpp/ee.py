@@ -10,6 +10,7 @@ from collections import defaultdict
 from pysimpp.utils.statisticsutils import Histogram
 import pysimpp.utils.utils as utils
 import pysimpp.readers
+# from pysimpp.msd import _FFT1D
 from pysimpp.fastpost import fastrg
 
 __debug = False
@@ -20,20 +21,7 @@ def _short_description(): return 'Calculate end-to-end distances and stuff.'
 
 def _command(): command()
 
-def _FFT1D(x, normalize=False):
-    ''' ACF using FFT. '''
-    N=len(x)
-    F = np.fft.fft(x, n=2*N)      # 2*N because of zero-padding
-    PSD = F * F.conjugate()
-    res = np.fft.ifft(PSD)
-    res= (res[:N]).real           # now we have the autocorrelation in convention B
-    if normalize:
-        n=N*np.ones(N)-np.arange(0,N) # divide res(m) by (N-m)
-        # n=np.arange(N, 0, -1)
-        res = res/n
-    return res                    # this is the autocorrelation in convention A
-
-def __acf(t, data, fname):
+def _acf(t, data, fname):
 
     N = len(data)
     n = len(data[0])
@@ -297,7 +285,7 @@ def endtoend(filename,
     hmrg.write(reader.dir+os.sep+"mrg_hist.data", header="# %s"%str(hmrg.variable))
 
     # mean square end-to-end vector autocorrelation
-    __acf(time, eevectors, reader.dir+os.sep+"ree_acf.data")
+    _acf(time, eevectors, reader.dir+os.sep+"ree_acf.data")
 
     if persistence:
         hlp.write(reader.dir+os.sep+"lp_hist.data", header="# %s"%str(hlp.variable))

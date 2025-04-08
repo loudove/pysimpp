@@ -13,7 +13,7 @@ from scipy import stats
 import pysimpp.readers
 from pysimpp.utils.utils import IsListOfList, argparse_moleculestype
 from pysimpp.utils.statisticsutils import Histogram
-from pysimpp.fastpost import fastunwrapv, fastcom, fastcom_total, fast_localdensity
+from pysimpp.fastpost import fastcom, fastcom_total, fast_localdensity
 
 
 __debug = False
@@ -123,8 +123,6 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
         seed = np.array((43924342, 77928374, 46278346, 45329834, 6432847, 23984,9384392, 234198),dtype=np.int32)
         hld = defaultdict(lambda: Histogram.free(4.0, 0.0, addref=False))
         l, nl = zip(*local)
-        l = [ 250.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0]
-        nl = [ 10000, 10000, 10000, 5000, 5000, 2500.0]
 
     iframe = 0
     while( True):
@@ -198,7 +196,7 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
 
     print()
 
-    # print locan density and stuff
+    # print local density and stuff
     if dolocal:
         f=open(reader.dir+os.sep+"ld.data",'w')
         header = "box[nm]         " + \
@@ -212,7 +210,7 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
             mean = h.variable.mean()
             std = h.variable.std()
             vol = l_**3 * 1.e-30
-            k =  std**2 * vol / __kb / __T / mean**2 / 0.00001
+            k =  std**2 * vol / __kb / __T / mean**2 * 1.e5
             f.write( " %-16g %-16g %-16g %-16g\n"%(l_/10.0, mean, std, k))
         f.close()
 
@@ -237,11 +235,11 @@ def command():
                        help=string)
 
     parser.add_argument('-dim', nargs=1, choices=[ 'x', 'y', 'z', 'xy', 'xz', 'yz', 'xyz'], \
-                       metavar='dim', default=['z'], \
+                       metavar='dim', required=True,  \
                        help='produce the density for the given dimension(s)')
 
     parser.add_argument('-bin', nargs=1, type=float, metavar='bin', required=True, \
-                       help='bin width in A')
+                       help='bin width in Å')
 
     parser.add_argument('-start', nargs=1, type=int, metavar='START', default=[-1], \
                        help='start processing form step START [inclusive]')
@@ -268,11 +266,11 @@ def command():
                 raise argparse.ArgumentTypeError(msg)
         return lst
     string = '''
-    The length of the cubic box and the number of trials to be used for the
-    calculation of the local density. A list of pairs (length:trials) should
-    be provided e.g. "25.0,2000:50.,1000".
+    The length of the cubic box (in Å) and the number of trials to be used 
+    for calculating of the local density. A list of pairs (length:trials)
+    should be provided e.g. "25.0,2000:50.,1000".
     '''
-    parser.add_argument('-local', nargs=1, type=arglocal, metavar='local density', default=[()], \
+    parser.add_argument('-local', nargs=1, type=arglocal, metavar='<local density>', default=[()], \
                        help=string)
 
     parser.add_argument('--no-wrap', dest='dowrap', default=True, action='store_false', \
@@ -281,6 +279,8 @@ def command():
     parser.add_argument('--no-com', dest='usecom', default=True, action='store_false', \
                        help="calculate the distributions using atoms rather that molecules' centers of mass")
 
+    parser.add_argument('-temp', nargs=1, type=float, metavar='temperature', required=True,
+                        help='the temperature in K')
     # parse the arguments
     args = parser.parse_args()
 
@@ -290,6 +290,7 @@ def command():
     print("end   : ", args.end[0])
     print("every : ", args.every[0])
     print("dim   : ", args.dim[0])
+    print("temperature (K) : ", args.temp[0])
     print("local : ", args.local[0])
     print("wrap  : %s" % ("True" if args.dowrap else "False"))
     print("com   : %s" % ("True" if args.usecom else "False"))

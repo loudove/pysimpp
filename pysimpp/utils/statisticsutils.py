@@ -143,7 +143,7 @@ class Binning():
         self.h[n].set( value, m)
 
     def addat(self, n, value=1.0, m=1):
-        ''' Add a value in the histogram at the specific bin with multiplicity m.. '''
+        ''' Add a value in the histogram at the specific bin with multiplicity m. '''
         if self.type == -1: return
         self.variable.set(value)
         if self.type == Histogram.FIXED:
