@@ -11,7 +11,7 @@ import numpy as np
 from scipy import stats
 
 import pysimpp.readers
-from pysimpp.utils.utils import IsListOfList, argparse_moleculestype
+from pysimpp.utils.utils import IsListOfList, ispositive, argparse_moleculestype
 from pysimpp.utils.statisticsutils import Histogram
 from pysimpp.fastpost import fastcom, fastcom_total, fast_localdensity
 
@@ -19,7 +19,6 @@ from pysimpp.fastpost import fastcom, fastcom_total, fast_localdensity
 __debug = False
 
 __kb = 1.380649e-23 # J/K
-__T = 300. # K
 __hack = False
 
 def _is_command(): return True
@@ -53,7 +52,7 @@ def _dimsbookkeep( dimensions, unwrap=True):
     return attributes, dmap, dmapinv
 
 # @profile
-def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z'], molids=(), local=(), dowrap=True, usecom=True):
+def density( filename, bin, temp, start=-1, end=sys.maxsize, every=1, dimensions=['z'], molids=(), local=(), dowrap=True, usecom=True):
 
     # create the reader
     reader = pysimpp.readers.create(filename)
@@ -210,7 +209,7 @@ def density( filename, bin, start=-1, end=sys.maxsize, every=1, dimensions=['z']
             mean = h.variable.mean()
             std = h.variable.std()
             vol = l_**3 * 1.e-30
-            k =  std**2 * vol / __kb / __T / mean**2 * 1.e5
+            k =  std**2 * vol / __kb / temp / mean**2 * 1.e5
             f.write( " %-16g %-16g %-16g %-16g\n"%(l_/10.0, mean, std, k))
         f.close()
 
@@ -279,10 +278,25 @@ def command():
     parser.add_argument('--no-com', dest='usecom', default=True, action='store_false', \
                        help="calculate the distributions using atoms rather that molecules' centers of mass")
 
-    parser.add_argument('-temp', nargs=1, type=float, metavar='temperature', required=True,
+    def argdttype( string):
+        val = ispositive( string, numbertype=float)
+        if val is None:
+            msg = "wrong temperature (check: %s)" % string
+            raise argparse.ArgumentTypeError(msg)
+        return val
+    parser.add_argument('-t', nargs=1, type=argdttype, metavar='temperature', \
                         help='the temperature in K')
     # parse the arguments
     args = parser.parse_args()
+
+    # temperature is required only in local density calculations
+    if len(args.local[0]) > 0:
+        if args.t is None:
+            parser.error("The temperature is required (see the -t argument) to calculate the compressibility through the local density calculation (set with -local option)")
+        else:
+            temp = args.t[0]
+    else:
+        temp = 0.
 
     print("INPUT")
     print("path  : ", args.path)
@@ -290,7 +304,7 @@ def command():
     print("end   : ", args.end[0])
     print("every : ", args.every[0])
     print("dim   : ", args.dim[0])
-    print("temperature (K) : ", args.temp[0])
+    print("temperature (K) : ", temp)
     print("local : ", args.local[0])
     print("wrap  : %s" % ("True" if args.dowrap else "False"))
     print("com   : %s" % ("True" if args.usecom else "False"))
@@ -301,7 +315,7 @@ def command():
     print()
 
     _dims = [_d for _d in args.dim[0]]
-    density( args.path, args.bin[0], start=args.start[0], end=args.end[0], every=args.every[0], \
+    density( args.path, args.bin[0], temp, start=args.start[0], end=args.end[0], every=args.every[0], \
         dimensions=_dims, molids=args.molecules[0], local=args.local[0], dowrap=args.dowrap, usecom=args.usecom)
 
 if __name__ == '__main__':
