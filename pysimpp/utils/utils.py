@@ -114,7 +114,7 @@ class chk_number(object):
         val = ispositive(string, numbertype=self.numbertype) if self.positive else isnumber(
             string, numbertype=self.numbertype)
         if val is None:
-            msg = "wrong integration timestep (check: %s)" % string
+            msg = "%s (check: %s)" % (self.message, string)
             raise ArgumentTypeError(msg)
         return [ val ]
     

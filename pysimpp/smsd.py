@@ -8,7 +8,7 @@ import numpy as np
 
 from pysimpp.msd import MSDDataUtility, _dimsbookkeep, _msd_fft3
 import pysimpp.readers
-from pysimpp.utils.utils import read_ndx, ispositive
+from pysimpp.utils.utils import read_ndx, chk_number
 
 from pysimpp.fastpost import fastcom, fastcom_total
 
@@ -231,12 +231,7 @@ def command():
     parser.add_argument('-every', nargs=1, type=int, metavar='EVERY', default=[1], \
                        help='process every EVERY frames (process frequency)')
 
-    def argdttype( string):
-        val = ispositive( string, numbertype=float)
-        if val is None:
-            msg = "wrong integration time step (check: %s)" % string
-            raise argparse.ArgumentTypeError(msg)
-        return val
+    argdttype = chk_number("wrong integration time step",numbertype=float, positive=True)
     parser.add_argument('-dt', nargs=1, type=argdttype, default=[0.0], metavar='timestep', \
                        help='integration time step in ps')
 

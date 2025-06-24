@@ -11,7 +11,7 @@ import numpy as np
 from scipy import stats
 
 import pysimpp.readers
-from pysimpp.utils.utils import IsListOfList, ispositive, argparse_moleculestype
+from pysimpp.utils.utils import IsListOfList, chk_number, argparse_moleculestype
 from pysimpp.utils.statisticsutils import Histogram
 from pysimpp.fastpost import fastcom, fastcom_total, fast_localdensity
 
@@ -278,13 +278,8 @@ def command():
     parser.add_argument('--no-com', dest='usecom', default=True, action='store_false', \
                        help="calculate the distributions using atoms rather that molecules' centers of mass")
 
-    def argdttype( string):
-        val = ispositive( string, numbertype=float)
-        if val is None:
-            msg = "wrong temperature (check: %s)" % string
-            raise argparse.ArgumentTypeError(msg)
-        return val
-    parser.add_argument('-t', nargs=1, type=argdttype, metavar='temperature', \
+    argttype = chk_number("wrong temperature",numbertype=float, positive=True)
+    parser.add_argument('-t', nargs=1, type=argttype, metavar='temperature', \
                         help='the temperature in K')
     # parse the arguments
     args = parser.parse_args()

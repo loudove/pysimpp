@@ -7,6 +7,7 @@ from collections import defaultdict
 import pysimpp.readers
 from pysimpp.fastpost import fastbonds # pylint: disable=no-name-in-module
 from pysimpp.utils.statisticsutils import Histogram
+from pysimpp.utils.utils import chk_number
 
 def _is_command(): return True
 def _short_description(): return 'Calculate bond lengths distribution and time evolution or the mean value.'
@@ -17,7 +18,7 @@ def _command(): command()
 # from mpl_toolkits.mplot3d import Axes3D
 # import matplotlib.pyplot as plt
 
-def bonds(filename, bin, start, end, every):
+def bonds(filename, bin, start, end, every, dt):
 
     # check the input file
     reader = pysimpp.readers.create( filename)
@@ -87,9 +88,9 @@ def bonds(filename, bin, start, end, every):
 
     # dump time evolution
     _types = sorted( trj.keys())
-    header = "# %-12s" % 'frame' + " ".join( [ "mean_t%-6s std_t%-7s" % ((str(_t),)*2) for _t in _types])
+    header = "# %-12s" % ('time(ps)' if dt != 1 else 'frame',) + " ".join( [ "mean_t%-6s std_t%-7s" % ((str(_t),)*2) for _t in _types])
     f = open( dirname+os.sep+basename+"_bonds.dat", 'w')
-    lines = [ "%-12s" % str(x) for x in steps]
+    lines = [ "%-12s" % str(x*dt) for x in steps]
     for _t in _types:
         for i, _v in enumerate(trj[_t]):
             lines[i] += " %-12g %-12g" % _v
@@ -125,6 +126,9 @@ def command():
     parser.add_argument('-every', nargs=1, type=int, metavar='EVERY', default=[1], \
                        help='process every EVERY frames (process frequency)')
 
+    argdttype = chk_number("wrong integration time step",numbertype=float, positive=True)
+    parser.add_argument('-dt', nargs=1, type=argdttype, default=[1.0], metavar='timestep', \
+                       help='integration time step in ps')
     # parse the arguments
     args = parser.parse_args()
 
@@ -134,8 +138,9 @@ def command():
     print("start : ", args.start[0])
     print("every : ", args.every[0])
     print("end : ", "max" if args.end[0] == sys.maxsize else args.end[0])
+    print("dt (ps)   : ", args.dt[0])
 
-    bonds( args.path, args.bin[0], args.start[0], args.end[0], args.every[0])
+    bonds( args.path, args.bin[0], args.start[0], args.end[0], args.every[0], args.dt[0])
 
 if __name__ == '__main__':
     command()

@@ -355,13 +355,7 @@ If the "--lp" option is enabled:
     parser.add_argument('-every', nargs=1, type=int, metavar='EVERY', default=[1], \
                        help='process every EVERY frames (process frequency)')
     
-    def argdttype( string):
-        val = utils.ispositive( string, numbertype=float)
-        if val is None:
-            msg = "wrong integration timestep (check: %s)" % string
-            raise argparse.ArgumentTypeError(msg)
-        return val
-
+    argdttype = utils.chk_number("wrong integration time step",numbertype=float, positive=True)
     parser.add_argument('-dt', nargs=1, type=argdttype, default=[0.0], metavar='timestep', \
                        help='integration time step in ps')
 

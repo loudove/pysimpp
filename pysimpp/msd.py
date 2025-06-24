@@ -10,7 +10,7 @@ import numpy as np
 from scipy import stats
 
 import pysimpp.readers
-from pysimpp.utils.utils import isrange, islist, read_ndx, ispositive, argparse_moleculestype
+from pysimpp.utils.utils import islist, read_ndx, chk_number, argparse_moleculestype
 from pysimpp.utils.statisticsutils import Histogram
 
 from pysimpp.fastpost import fasts1x, fastwrap, fastcom, fastcom_total
@@ -903,12 +903,7 @@ def command():
     parser.add_argument('-every', nargs=1, type=int, metavar='EVERY', default=[1], \
                        help='process every EVERY frames (process frequency)')
 
-    def argdttype( string):
-        val = ispositive( string, numbertype=float)
-        if val is None:
-            msg = "wrong integration timestep (check: %s)" % string
-            raise argparse.ArgumentTypeError(msg)
-        return val
+    argdttype = chk_number("wrong integration time step",numbertype=float, positive=True)
     parser.add_argument('-dt', nargs=1, type=argdttype, default=[0.0], metavar='timestep', \
                        help='integration timeste in ps')
 

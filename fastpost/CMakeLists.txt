@@ -65,8 +65,7 @@ endforeach()
 
 # find module name
 execute_process( 
-  # COMMAND ${PYTHON_EXECUTABLE} -c "from distutils.sysconfig import get_config_var; print(get_config_var('EXT_SUFFIX'))"
-  COMMAND ${Python3_EXECUTABLE} -c "from distutils.sysconfig import get_config_var; print(get_config_var('EXT_SUFFIX'))"
+  COMMAND ${Python3_EXECUTABLE} -c "from sysconfig import get_config_var; print(get_config_var('EXT_SUFFIX'))"
   OUTPUT_VARIABLE MODSUFFIX
   RESULT_VARIABLE MODSUFFIX_NOT_FOUND
   )
