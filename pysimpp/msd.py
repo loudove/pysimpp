@@ -276,9 +276,11 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
     print('\n>> reading dump file(s) ...')
     steps = []
     boxes = []
-    iframe = 0
+    iframe = -1
     while( True):
         step, box, data = reader.read_next_frame()
+        iframe += 1
+
         if step == None:
             break
         elif step < start:
@@ -287,8 +289,6 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
             continue
         elif step > end:
             break
-
-        iframe += 1
 
         iframe_ = len(steps)
         steps.append( step)

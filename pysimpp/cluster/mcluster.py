@@ -306,9 +306,11 @@ def clusters(filename,
     print('>> reading dump file(s) ...')
     if _debug:
         fndx = open(dirname + os.sep + "assemblies.ndx",'w')
-    iframe = 0
+    iframe = -1
     while (True):
         step, box, data = reader.read_next_frame()
+        iframe+=1
+
         if step is None:
             break
         elif step < start:
@@ -318,7 +320,6 @@ def clusters(filename,
         elif step > end:
             break
 
-        iframe+=1
         steps.append(step)
         boxes.append(box)
         

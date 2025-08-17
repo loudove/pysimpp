@@ -50,12 +50,12 @@ set_property ( TARGET fastcore PROPERTY POSITION_INDEPENDENT_CODE ON)
 # build python module (use -DPYTHON_EXECUTABLE to force a specific interpreter)
 # find_package ( PythonInterp 3.6 REQUIRED)
 # find_package ( PythonLibs 3.6 REQUIRED)
-find_package(Python3 COMPONENTS Interpreter)
+find_package(Python3 COMPONENTS Interpreter NumPy)
 
 # check also: 
 # https://github.com/scikit-build/scikit-build/blob/master/skbuild/resources/cmake/FindF2PY.cmake
 #
-find_program ( F2PY_EXECUTABLE NAMES f2py${Python3_VERSION_MAJOR} f2py-${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR} f2py${PYTHON_VERSION_MAJOR} f2py REQUIRED)
+find_program ( F2PY_EXECUTABLE NAMES f2py${Python3_VERSION_MAJOR} f2py-${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR} f2py REQUIRED)
 message ( STATUS "Found f2py: ${F2PY_EXECUTABLE}")
 
 # create the list for f2py input

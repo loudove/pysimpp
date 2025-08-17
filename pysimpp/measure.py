@@ -54,9 +54,11 @@ def measure(filename, measurement, ndxfile, start, end, every, groups=[], doacf=
 
     # buffer function
     r = np.empty(shape=(reader.natoms, 3), dtype=np.float32,order='C')
-    iframe = 0
+    iframe = -1
     while (True):
         step, box, data = reader.read_next_frame()
+        iframe += 1
+
         if step is None:
             break
         elif step < start:
@@ -66,7 +68,6 @@ def measure(filename, measurement, ndxfile, start, end, every, groups=[], doacf=
         elif step > end:
             break
 
-        iframe += 1
         np.copyto(r[:, 0], data['x'])
         np.copyto(r[:, 1], data['y'])
         np.copyto(r[:, 2], data['z'])

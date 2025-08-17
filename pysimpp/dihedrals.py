@@ -91,9 +91,10 @@ def dihedrals(filename, ndxfile, jnt, start, end, every):
     r = np.empty(shape=(natoms, 3),
                   dtype=np.float32)  # coordinates
     print('>> reading dump file(s) ...')
-    iframe = 0
+    iframe = -1
     while (True):
         step, box, data = reader.read_next_frame()
+        iframe += 1
         if step is None:
             break
         elif step < start:
@@ -102,8 +103,6 @@ def dihedrals(filename, ndxfile, jnt, start, end, every):
             continue
         elif step > end:
             break
-
-        iframe += 1
 
         np.copyto(r[:, 0], data['x'])
         np.copyto(r[:, 1], data['y'])
@@ -158,7 +157,7 @@ def command():
     parser.add_argument('-end', nargs=1, type=int, metavar='END', default=[sys.maxsize], \
                        help='stop processing at step END [inclusive]')
 
-    parser.add_argument('-every', nargs=1, type=int, metavar='n', default=[1], \
+    parser.add_argument('-every', nargs=1, type=int, metavar='EVERY', default=[1], \
                        help='process every EVERY frames (process frequency)')
 
     # parse the arguments

@@ -155,9 +155,11 @@ def endtoend(filename,
         hbndl = Histogram.free(_bins["bnd"], 0.0, addref=False)
         nrm_ = np.arange( nbndch_, 0, -1, dtype=float)
 
-    iframe = 0
+    iframe = -1
     while (True):
         step, box, data = reader.read_next_frame()
+        iframe += 1
+
         if step == None:
             break
         elif step < start:
@@ -167,7 +169,6 @@ def endtoend(filename,
         elif step > end:
             break
 
-        iframe += 1
         steps.append(step)
         boxes.append(box)
     

@@ -116,9 +116,11 @@ def findbonds(filename, fradii, scale, pairs, bin, start, end, every, dump=False
     steps = []
     r = np.empty(shape=(natoms, 3), dtype=np.float32)  # coordinates
     print('>> reading dump file(s) ...')
-    iframe = 0
+    iframe = -1
     while (True):
         step, box, data = reader.read_next_frame()
+        iframe += 1
+
         if step is None:
             break
         elif step < start:
@@ -128,7 +130,6 @@ def findbonds(filename, fradii, scale, pairs, bin, start, end, every, dump=False
         elif step > end:
             break
 
-        iframe += 1
         steps.append(step)
 
         np.copyto(r[:, 0], data['x'])

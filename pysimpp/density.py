@@ -123,9 +123,11 @@ def density( filename, bin, temp, start=-1, end=sys.maxsize, every=1, dimensions
         hld = defaultdict(lambda: Histogram.free(4.0, 0.0, addref=False))
         l, nl = zip(*local)
 
-    iframe = 0
+    iframe = -1
     while( True):
         step, box, data = reader.read_next_frame()
+        iframe += 1
+
         if step == None:
             break
         elif step < start:
@@ -135,7 +137,6 @@ def density( filename, bin, temp, start=-1, end=sys.maxsize, every=1, dimensions
         elif step > end:
             break
 
-        iframe += 1
         if len(profiles) == 0:
             for _d in _dims:
                 origin = box.origin[_d]

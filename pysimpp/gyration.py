@@ -86,9 +86,11 @@ def shape(filename,
     f2 = open(reader.dir+os.sep+"descriptors.data", 'w')
     f2.write( "#{:^15s} {:^15s} {:^15s} {:^15s}\n".format("sqrg","asphericity","acylindricity","anisotropy") )
 
-    iframe = 0
+    iframe = -1
     while( True):
         step, box, data = reader.read_next_frame()
+        iframe += 1
+
         if step == None:
             break
         elif step < start:
@@ -98,7 +100,6 @@ def shape(filename,
         elif step > end:
             break
 
-        iframe += 1
         steps.append( step)
         boxes.append( box)
 

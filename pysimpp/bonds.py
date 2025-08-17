@@ -49,7 +49,7 @@ def bonds(filename, bin, start, end, every, dt):
     steps = []
     r = np.empty(shape=(natoms, 3), dtype=np.float32)  # coordinates
     print('>> reading dump file(s) ...')
-    iframe = 0
+    iframe = -1
     while (True):
         step, box, data = reader.read_next_frame()
 
@@ -63,6 +63,8 @@ def bonds(filename, bin, start, end, every, dt):
             bond_type = bonds_data['type']
             bond_types = np.unique( bond_type)
 
+        iframe += 1
+
         if step < start:
             continue
         elif not iframe % every == 0:
@@ -70,7 +72,6 @@ def bonds(filename, bin, start, end, every, dt):
         elif step > end:
             break
 
-        iframe += 1
         steps.append( step)
 
         np.copyto(r[:, 0], data['x'])
