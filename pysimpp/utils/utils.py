@@ -110,13 +110,14 @@ class chk_number(object):
 
     def __call__(self, string):
         ''' Check if the string is a number that conforms with the specifications. '''
-        if len(string) == 0: return []
-        val = ispositive(string, numbertype=self.numbertype) if self.positive else isnumber(
-            string, numbertype=self.numbertype)
+        val = None
+        if len(string) > 0:
+            val = ispositive(string, numbertype=self.numbertype) if self.positive else isnumber(
+                string, numbertype=self.numbertype)
         if val is None:
             msg = "%s (check: %s)" % (self.message, string)
             raise ArgumentTypeError(msg)
-        return [ val ]
+        return val
     
         if len(value) == 0: return []
         try:

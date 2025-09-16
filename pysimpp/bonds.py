@@ -78,7 +78,6 @@ def bonds(filename, bin, start, end, every, dt):
         np.copyto(r[:, 1], data['y'])
         np.copyto(r[:, 2], data['z'])
 
-        b = r[bonds[:,1]] - r[bonds[:,0]]
         bl = fastbonds( r.T, box.va, box.vb, box.vc, bonds.T)
         for _t in bond_types:
             _b = bl[bond_type == _t]

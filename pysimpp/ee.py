@@ -275,22 +275,22 @@ def endtoend(filename,
     f2.close()
 
     # output end-to-end data
-    hsqree.write(reader.dir+os.sep+"sqree_hist.data", fmt="%f %g", header="# %s"%str(hsqree.variable))
-    hree.write(reader.dir+os.sep+"ree_hist.data", header="# %s"%str(hree.variable))
-    hmsqree.write(reader.dir+os.sep+"msqree_hist.data", header="# %s"%str(hmsqree.variable))
-    hmree.write(reader.dir+os.sep+"mree_hist.data", header="# %s"%str(hmree.variable))
+    hsqree.write(reader.dir+os.sep+"sqree_hist.data", fmt="%f %g")
+    hree.write(reader.dir+os.sep+"ree_hist.data")
+    hmsqree.write(reader.dir+os.sep+"msqree_hist.data")
+    hmree.write(reader.dir+os.sep+"mree_hist.data")
     # output radious of gyration data
-    hsqrg.write(reader.dir+os.sep+"sqrg_hist.data", fmt="%f %g", header="# %s"%str(hsqrg.variable))
-    hrg.write(reader.dir+os.sep+"rg_hist.data", header="# %s"%str(hrg.variable))
-    hmsqrg.write(reader.dir+os.sep+"msqrg_hist.data", header="# %s"%str(hmsqrg.variable))
-    hmrg.write(reader.dir+os.sep+"mrg_hist.data", header="# %s"%str(hmrg.variable))
+    hsqrg.write(reader.dir+os.sep+"sqrg_hist.data", fmt="%f %g")
+    hrg.write(reader.dir+os.sep+"rg_hist.data")
+    hmsqrg.write(reader.dir+os.sep+"msqrg_hist.data")
+    hmrg.write(reader.dir+os.sep+"mrg_hist.data")
 
     # mean square end-to-end vector autocorrelation
     _acf(time, eevectors, reader.dir+os.sep+"ree_acf.data")
 
     if persistence:
-        hlp.write(reader.dir+os.sep+"lp_hist.data", header="# %s"%str(hlp.variable))
-        hbndl.write(reader.dir+os.sep+"bndl_hist.data", header="# %s"%str(hbndl.variable))
+        hlp.write(reader.dir+os.sep+"lp_hist.data")
+        hbndl.write(reader.dir+os.sep+"bndl_hist.data")
 
         # flory flory definition (bond dependent)
         f=open(reader.dir+os.sep+"lp_bnd.data",'w')

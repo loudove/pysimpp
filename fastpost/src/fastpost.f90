@@ -269,7 +269,8 @@ subroutine fastwhole(n, rw, molecule, nbonds, bonds, a, b, c, r)
         ! track the fragments in the molecule
         ntrack= 0  ! initialize
         track = -1 ! (traks counting starts from zero)
-        do while ( any(track(0:molnat(im)-1) .eq. -1) ) ! do while every atom is assigned to a track/fragment
+        ! do while every atom is assigned to a track/fragment
+        do while ( any(track(0:molnat(im)-1) .eq. -1) ) 
             ! find the first atom of the current track/fragment
             nbuff = 0 !initialize
             do ii = 0, molnat(im)-1
@@ -2453,6 +2454,13 @@ subroutine fast_localdensity(n, r, v0, a, b, c, nseed, seed, l, m, densities)
             endif
         enddo
 
+        !>       left(origin)       right(left)
+        !        0. <-------------> L
+        !        |                  |
+        !        |      x0<---->x1  | (case 1)
+        !        |                  |
+        !        |--->x2       x0<--| (case 2)
+        !        |                  |
         do j = 0, n-1
             rs = r( j, :) - v0
             do k = 0, 2

@@ -272,7 +272,7 @@ class LammpsDump():
         return attribute.strip() in self.attributes
 
     def open(self):
-        ''' Open the first dumpm file to start reading. '''
+        ''' Open the first dump file to start reading. '''
         self.file = next(self._next_file)
         if not os.path.isfile( self.file):
             msg = '%s file not found.'%self.file

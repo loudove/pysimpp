@@ -35,14 +35,14 @@ class Variable():
     def reset(self):
         ''' Reset the variable. '''
         self._current = 0.0               # current value
-        self._min = sys.float_info.max    # miminmum value
-        self._max = -sys.float_info.max    # maximum value
+        self._min = sys.float_info.max    # minimum value
+        self._max = -sys.float_info.max   # maximum value
         self._n = 0.0                     # number of values
         self._sum = 0.0                   # sum of values
         self._sumsq = 0.0                 # sum of values squares
 
     def set(self, value, m=1):
-        ''' Set the current value with multiplicity m and udpate the info.'''
+        ''' Set the current value with multiplicity m and update the info.'''
         self._current = value
         if (value < self._min):
             self._min = value
@@ -80,7 +80,7 @@ class Variable():
 
     def __str__(self):
         ''' Return str(self). '''
-        return "[ mean=%g, std=%g, min=%g, max=%g ]" % (self.mean(), self.std(), self.min(), self.max())
+        return "[ mean=%g, std=%g, min=%g, max=%g, #=%d ]" % (self.mean(), self.std(), self.min(), self.max(), self._n)
 
 class HistogramException(Exception): ...
 
@@ -407,7 +407,7 @@ class Histogram():
                 f = 1.0 / s / self.d
                 for k in list(self.h.keys()):  self.h[k] *= f
 
-    def write( self, filename, header="", normalize=True, fmt="%f  %f"):
+    def write( self, filename, header="auto", normalize=True, fmt="%f  %f"):
         ''' Write histogram data to the file filename. If normalize is
             true the data will be normalized first. '''
         if self.type == Histogram.FREE and len( self.h) == 0:
@@ -416,6 +416,8 @@ class Histogram():
         if normalize:
             self.normalize()
         _x, _y = self.data()
+        if header == "auto":
+            header = "# %s" % str(self.variable)
         if len(header) > 0:
             f.write("%s\n" % header)
         _fmt=fmt+"\n"
