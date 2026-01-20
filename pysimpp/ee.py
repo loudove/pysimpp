@@ -267,7 +267,7 @@ def endtoend(filename,
     f1 = open(reader.dir+os.sep+"ree.data","w")
     f1.write("# time[ns]  msqree[Å²] sqrt(msqree[Å]\n")
     f2 = open(reader.dir+os.sep+"rg.data","w")
-    f2.write("# time[ns]  msqree[Å²] sqrt(msqrg)[Å]\n")
+    f2.write("# time[ns]  msqrg[Å²] sqrt(msqrg)[Å]\n")
     for t, msqeev_, mleev_, msqrg_, mrg_ in zip(time, msqeev, mleev, msqrg, mrg):
         f1.write("%f %f %f\n" % (t, msqeev_, mleev_))
         f2.write("%f %f %f\n" % (t, msqrg_, mrg_))
@@ -374,7 +374,7 @@ If the "--lp" option is enabled:
                        help='range (start:end:step) of atoms to be used as molecules last atom')
 
     parser.add_argument('-molecules', nargs=1, type=utils.argparse_moleculestype, default=[[]],  metavar='range', \
-                       help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
+                       help='molecules to be used. A list with comma separated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
 
     parser.add_argument('--no-whole', dest='whole', default=True, action='store_false', \
                        help="do not make molecules whole sine they are already in the trajectories.")

@@ -212,7 +212,7 @@ The output files are (located at the simulation directory):
                        help='process every EVERY frames (process frequency)')
 
     parser.add_argument('-molecules', nargs=1, type=utils.argparse_moleculestype, default=[[]],  metavar='range', \
-                       help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
+                       help='molecules to be used. A list with comma separated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
 
     parser.add_argument('--no-unwrap', dest='unwrap', default=True, action='store_false', \
                        help="do not unwrap molecules sine the provided trajectories provide unwrapped coordinates.")

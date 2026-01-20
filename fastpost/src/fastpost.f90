@@ -996,6 +996,32 @@ subroutine fastwrap(n, r, v0, va, vb, vc, rw)
 
 end subroutine fastwrap
 
+!> Accelerate atoms jump check between consecutive frames
+subroutine fastcheckjumps(n, rp, r, ro, v0, va, vb, vc)
+
+    use domain3d
+
+    implicit none
+
+    integer, intent(in) :: n                          !< # of atoms
+    real*8, dimension( 0:2, 0:n-1), intent(in) :: rp  !< atoms coordinates in the previous frame
+    real*8, dimension( 0:2, 0:n-1), intent(in) :: r   !< atoms coordinates in the current frame
+    real*8, dimension( 0:2, 0:n-1), intent(out) :: ro  !< corrected atoms coordinates in the current frame
+    real*8, dimension( 0:2), intent(in) :: v0         !< box origin
+    real*8, dimension( 0:2), intent(in) :: va, vb, vc !< box spaning vectors
+
+    integer :: i
+    type(SimulationBox) :: box
+
+    call box%initialize( v0, va, vb, vc, .true.)
+    ro(:,:) = r(:,:) - rp(:,:)
+    do i = 0, n-1
+        call box%minImgTo(ro(:,i))
+        ro(:,i) = rp(:,i) + ro(:,i)
+    enddo
+
+end subroutine
+
 !> Accelerate coordinateas unwrapping for a polyethylene model
 !> (only ortho boxes are supported for now)
 subroutine pefastunwrap(n, rw, nch, maxnatch, natch, chat , a, b, c, r)
@@ -1037,10 +1063,13 @@ subroutine pefastunwrap(n, rw, nch, maxnatch, natch, chat , a, b, c, r)
 
 end subroutine pefastunwrap
 
-!> Accelerate coordinateas unwrapping and adding the missing hydrogens
-!> in the UA representation of polyethylene model
+!> Accelerate coordinateas unwrapping and adding the missing hydrogens in
+!> the UA representation of polyethylene model. If excluded is provided,
+!> hydrogens will not by handled for the excluded atoms. In this way other
+!> polymer models can be constructred, e.g., PEO UA model where the oxygen 
+!> atoms are exluded will results in the the AA analog.
 !> (only ortho boxes are supported for now)
-subroutine pefastaddhydrogens(n, rw, nch, maxnatch, natch, chat , a, b, c, len, theta, r)
+subroutine pefastaddhydrogens(n, rw, nch, maxnatch, natch, chat , excluded, a, b, c, len, theta, r)
 
     use vector3d
 
@@ -1053,6 +1082,8 @@ subroutine pefastaddhydrogens(n, rw, nch, maxnatch, natch, chat , a, b, c, len, 
     integer, dimension(0:nch-1), intent(in) :: natch
     !> atoms for each chain
     integer, dimension(0:nch-1, 0:maxnatch-1), intent(in) :: chat
+    !> atoms to be excluded
+    logical, dimension(0:n-1), intent(in) :: excluded
     !> box spanning vectors
     real(8), dimension(0:2), intent(in) :: a, b, c
     !> C-H bond length
@@ -1081,33 +1112,48 @@ subroutine pefastaddhydrogens(n, rw, nch, maxnatch, natch, chat , a, b, c, len, 
         ! the index of the first atom of the chain in all atoms represenetaion
         cnt = sum( natch(0:ich-1)) * 3 + ich * 2
         i = chat(ich,0)
-        j = chat(ich,1)
-        k = chat(ich,2)
-        !> find the position of the first hydrogen
-        p = build_dihedral( ru(k,:), ru(j,:), ru(i,:), len, theta, 0.d0)
-        !> add carbon and hydrogens of the first methylene
-        r(cnt,:) = p
-        r(cnt+1,:) = ru(i,:)
-        call build_tetrahedral(p, ru(i,:), ru(j,:), len, theta, r(cnt+2,:), r(cnt+3,:))
-        cnt = cnt + 4
+        if ( excluded(i) ) then
+            r(cnt,:) = ru(i,:)
+            cnt = cnt + 1        
+        else
+            j = chat(ich,1)
+            k = chat(ich,2)
+            !> find the position of the first hydrogen
+            p = build_dihedral( ru(k,:), ru(j,:), ru(i,:), len, theta, 0.d0)
+            !> add carbon and hydrogens of the first methylene
+            r(cnt,:) = p
+            r(cnt+1,:) = ru(i,:)
+            call build_tetrahedral(p, ru(i,:), ru(j,:), len, theta, r(cnt+2,:), r(cnt+3,:))
+            cnt = cnt + 4
+        endif
         !> add the carbon and hydrogens of the inner methylenes
         do iat = 1, natch(ich)-2
-            i = chat(ich,iat-1)
             j = chat(ich,iat)
-            k = chat(ich,iat+1)
-            r(cnt,:) = ru(j,:)
-            call build_tetrahedral(ru(i,:), ru(j,:), ru(k,:), len, theta, r(cnt+1,:), r(cnt+2,:))
-            cnt = cnt + 3
+            if ( excluded(j) ) then
+                r(cnt,:) = ru(j,:)
+                cnt = cnt + 1        
+            else            
+                i = chat(ich,iat-1)
+                k = chat(ich,iat+1)
+                r(cnt,:) = ru(j,:)
+                call build_tetrahedral(ru(i,:), ru(j,:), ru(k,:), len, theta, r(cnt+1,:), r(cnt+2,:))
+                cnt = cnt + 3
+            endif
         enddo
         !> find the position of the last hydrogen
-        i = chat(ich,natch(ich)-3)
-        j = chat(ich,natch(ich)-2)
         k = chat(ich,natch(ich)-1)
-        p = build_dihedral( ru(i,:), ru(j,:), ru(k,:), len, theta, 0.d0)
-        !> add the carbon and the hydrogens of the last methylene
-        r(cnt,:) = ru(k,:)
-        call build_tetrahedral(ru(j,:), ru(k,:), p, len, theta, r(cnt+1,:), r(cnt+2,:))
-        r(cnt+3,:) = p
+        if ( excluded(k) ) then
+            r(cnt,:) = ru(k,:)
+            cnt = cnt + 1
+        else
+            j = chat(ich,natch(ich)-2)
+            i = chat(ich,natch(ich)-3)
+            p = build_dihedral( ru(i,:), ru(j,:), ru(k,:), len, theta, 0.d0)
+            !> add the carbon and the hydrogens of the last methylene
+            r(cnt,:) = ru(k,:)
+            call build_tetrahedral(ru(j,:), ru(k,:), p, len, theta, r(cnt+1,:), r(cnt+2,:))
+            r(cnt+3,:) = p
+        endif
     end do
     !$omp end parallel do
 

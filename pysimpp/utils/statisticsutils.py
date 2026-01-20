@@ -71,7 +71,7 @@ class Variable():
 
     def std(self):
         ''' Get the standard deviation. '''
-        if self._n < 2: return -1.0
+        if self._n < 2: return 0.0
         s = self._sumsq / (self._n-1.0)
         m = self._sum / self._n
         m_ = self._sum / (self._n-1.0)
@@ -94,7 +94,7 @@ class Binning():
         ''' Initialize the histogram. '''
         self.type = -1                # histogram type 1: fixed, 2:free
         self.n = 0.0                  # number of bin values in the histogram
-        self.d = 0                    # bining
+        self.d = 0                    # binning
         self.min = sys.float_info.max # min value in fixed, reference value in free
         self.max = -sys.float_info.max # max value in fixed
         self.range = 0.0              # range = max - min
@@ -150,8 +150,21 @@ class Binning():
             if (n < 0 or n > self.n): raise HistogramException("value out of range")
         self.h[n].set( value, m)
 
+    @classmethod
+    def compatibility(this, other):
+        ''' Returns True if this histogram is compatible with
+            the other, and False otherwise. 
+        '''
+        if not this.type == other.type:
+            return False
+        if this.type == Histogram.FIXED:
+            return (this.min, this.max, this.d) == (other.min, other.max, other.d) 
+        else:
+            return (this.d, this.ref) == (other.d, other.ref)
+
+
     def add_histogram(self, other, options):
-        ''' Add the given histogram . The options dict contains
+        ''' Add the given histogram. The options dict contains
             the keys defining the addition details. Currently
             works only for free type histograms.
         '''
@@ -215,7 +228,7 @@ class Binning():
         x = None
         y = None
         std = None
-        if not _h == None:
+        if not _h is None:
             # TODO: fix the output range          
             if self.type == Histogram.FIXED:
                 x = np.zeros(self.n-1, dtype=np.float32)
@@ -304,7 +317,7 @@ class Histogram():
 
     def cumulate(self):
         if self.type == Histogram.FIXED:
-            if self.ch == None: self.ch = np.zeros(self.h.size, dtype=np.float32)
+            if self.ch is None: self.ch = np.zeros(self.h.size, dtype=np.float32)
             self.ch[:] += self.h
         elif self.type == Histogram.FREE:
             if not self.ch: self.ch = defaultdict(lambda: 0.0)
@@ -354,7 +367,7 @@ class Histogram():
     def data(self, cumulative=False):
         ''' Get histogram data. '''
         _h = None
-        if cumulative and not self.ch == None:
+        if cumulative and not self.ch is None:
             _h = self.ch
         else:
             _h = self.h
@@ -388,7 +401,7 @@ class Histogram():
     def normalize(self, cumulative=False):
         ''' Normalize the histogram. '''
         if cumulative:
-            if self.ch == None: return
+            if self.ch is None: return
             if self.type == Histogram.FIXED:
                 self.ch[:] /= self.nch
             elif self.type == Histogram.FREE:
@@ -442,7 +455,7 @@ class Histogram2D():
     def __init__(self, d, ref, addref=True):
         ''' Initialize the histogram. '''
         self.n = np.array((0, 0))        # number of bin values
-        self.d = np.array((0.0, 0.0))    # bining
+        self.d = np.array((0.0, 0.0))    # binning
         self.min = np.array((0.0, 0.0))  # reference values
         self.range = np.array((0.0, 0.0))# range = max - min
         self.h = defaultdict(lambda: defaultdict(float)) # histogram data
@@ -638,7 +651,6 @@ class Histogram2D():
                     f.write("\n")
         f.close()
 
-
     def normalize(self):
         ''' Normalize the histogram. '''
         s = 0.0
@@ -709,7 +721,7 @@ class Histogram3D():
         else:
             self._write(fname, include)
 
-    def  _write_cube(self, fname, include=True):
+    def _write_cube(self, fname, include=True):
         ''' Write histogram data in cube format. '''
         hd = 0.5 * self.d
         i = self.bin_range()

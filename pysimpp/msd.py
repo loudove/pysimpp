@@ -13,14 +13,13 @@ import pysimpp.readers
 from pysimpp.utils.utils import islist, read_ndx, chk_number, argparse_moleculestype
 from pysimpp.utils.statisticsutils import Histogram
 
-from pysimpp.fastpost import fasts1x, fastwrap, fastcom, fastcom_total
+from pysimpp.fastpost import fasts1x, fastwrap, fastcom, fastcom_total, fastcheckjumps
 
 def _is_command(): return True
 def _short_description(): return 'Calculate mean square displacement.'
 def _command(): command()
 
 __debug = False
-__rmcm = True
 
 class MSDException(Exception):
     ''' Implements MSDException custom exception. '''
@@ -206,7 +205,7 @@ def _dimsbookkeep( dimensions, unwrap=True):
     return attributes, dmap, dmapinv
 
 # @profile
-def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'], region=(), molids=(), maxconfs=-1, ndxfile=None):
+def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'], rmcm=True, rmjump=True, region=(), molids=(), maxconfs=-1, ndxfile=None):
 
     # check the input file
     reader = pysimpp.readers.create(filename)
@@ -267,7 +266,9 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
     n_ = nselected if hasselected else nmolecules if usecom else natoms
     cmw = np.zeros( (nconfs, n_, ndims), dtype=np.float32) # wrapped
     cm = np.zeros( (nconfs, n_, ndims), dtype=np.float32)
-    r = np.empty( shape=(natoms,ndims), dtype=np.float32)      # unwrapped coordinates
+    r = np.empty( shape=(natoms, ndims), dtype=np.float32) # unwrapped coordinates
+    if rmjump: # previous frame coordinates (account for jumps due to PBC)
+        rp = np.empty( shape=(natoms, ndims), dtype=np.float32) 
     # initial system center of mass
     cm0 = np.zeros((3),dtype=np.float32)
     # vector for com move removal
@@ -296,9 +297,16 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
         for k, v in dmap.items():
             np.copyto(r[:, k] ,  data[v[0]])
 
-        if __rmcm:
+        first = len(boxes) == 1
+        # check and correct for jumps due to PBC
+        if rmjump:
+            if not first:
+                r[:,:] = fastcheckjumps(rp.transpose(), r.transpose(), box.origin, box.va, box.vb, box.vc).transpose()
+            rp[:,:] = r[:,:]
+
+        if rmcm:
             cmtotal, masstotal = fastcom_total( r, masses)
-            if len(boxes) == 1:
+            if first == 1:
                 cm0[:] = cmtotal
             else:
                 delta[:] = cmtotal-cm0
@@ -340,7 +348,7 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
             print("      Nevertheless, a timestep of %.2f fs is found in the trajectory files." % _dt)
         else:
             dt = _dt
-    dt *= 1000.0 # TODO check for gromacs
+    dt *= 1000.0 # convert to fs (TODO check for gromacs)
     dt *= every
 
     print('\n>> calculate msds(s) ...')
@@ -908,7 +916,7 @@ def command():
                        help='integration timeste in ps')
 
     parser.add_argument('-molecules', nargs=1, type=argparse_moleculestype, default=[[]],  metavar='range', \
-                       help='molecules to be used. A list with comma seperated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
+                       help='molecules to be used. A list with comma separated id ranges should be provided e.g. "1,2,3" or "1:10,20,30:100"')
 
     def argslabtype( string):
         ''' check the "-slab" option arguments. '''
@@ -938,7 +946,11 @@ def command():
     parser.add_argument('-slab', nargs=1, type=argslabtype, default=[[]], metavar='slab', \
                        help=string)
 
-    parser.add_argument('-gmxfit', dest='gmxfit', action='store_true',help="use gromacs approach for fitting msd(t) curve.")
+    parser.add_argument('--no-rmcom', dest='normcom', default=False, action='store_true', \
+                        help="do not remove system's center of mass.")
+    
+    parser.add_argument('--no-rmjump', dest='normjump', default=False, action='store_true', \
+                        help="do not remove atoms jump due to periodic boundary conditions.")    
 
     string = 'the file with the molecular indexes (starting from 1) to consideted in the calculation of the msd. ' + \
         'The file should conform with gromacs format. All the groups found in the file will be considered.'
@@ -949,7 +961,7 @@ def command():
 
     print("INPUT")
     print("path : ", args.path)
-    print("dt (ps): ", args.dt[0])
+    print("dt (ps) : ", args.dt[0])
     print("start : ", args.start[0])
     print("end : ", "max" if args.end[0] == sys.maxsize else args.end[0])
     print("every : ", args.every[0])
@@ -958,11 +970,14 @@ def command():
     string = " ".join( map(str, args.molecules[0]))
     print("molecules : %s" % ('-' if len(string)==0 else string ) )
     print("ndx : ", "-" if args.ndx[0] is None else args.ndx[0].name)
+    print("rmcom : %s" % ("True" if not args.normcom else "False"))
+    print("jump : %s" % ("True" if not args.normjump else "False"))
+
 
     if __debug:
         print(args.molecules[0])
     msd( args.path, dt=args.dt[0], start=args.start[0], end=args.end[0], every=args.every[0], dimensions=args.dim[0], \
-         region=args.slab[0], molids=args.molecules[0], maxconfs=args.maxconfs[0], ndxfile=args.ndx[0])
+         rmcm=(not args.normcom), rmjump=(not args.normjump), region=args.slab[0], molids=args.molecules[0], maxconfs=args.maxconfs[0], ndxfile=args.ndx[0])
 
 if __name__ == '__main__':
     command()

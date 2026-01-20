@@ -704,7 +704,7 @@ def command():
 
     chktype = IsList("wrong residue names range (check: %s)",itemtype=str,positive=True)
     string = '''
-    types/names of clusters' constituent species. A comma seperated list with the names of
+    types/names of clusters' constituent species. A comma separated list with the names of
     the molecules e.g. "Na,Cl" '''
     group.add_argument('-molnames', nargs=1, type=chktype, default=[[]], \
         metavar='<species\' list>', help=string)

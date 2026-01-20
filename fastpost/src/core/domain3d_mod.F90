@@ -167,7 +167,7 @@ module domain3d
       return
     end function m_MinimumImage
 
-    subroutine m_MinimumImageTo(this, v)
+    pure subroutine m_MinimumImageTo(this, v)
         use vector3d, only : dot
         class(SimulationBox), intent(in) :: this
         real(8), dimension(3), intent(inout) :: v

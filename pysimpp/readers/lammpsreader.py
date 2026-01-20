@@ -758,20 +758,23 @@ class LammpsReader(abcReader):
         if lines is None:
             msg = "%s file in not accesible" % self.datafile
             raise LammpsReaderException(msg)
-        elif not lines[0].startswith("LAMMPS data file"):
+        elif not "LAMMPS data file" in lines[0]:
             msg = "%s file header is invalid." % self.datafile
             raise LammpsReaderException(msg)
 
         # check and, if neccessary, set atom style from lammps input script
         # currently only styles in _supportedAtomStyles are supported
         if atomstyle is None:
-            atomstyle = self.options['atom_style']
+            if 'atom_style' in blocks:
+                atomstyle = blocks['atom_style']
+            else:
+                atomstyle = 'atomic' if len(blocks['Atoms'].split()) == 5 else self.options['atom_style']
         if len(atomstyle) == 0: atomstyle='full'
         it = 2 if atomstyle in ('angle', 'bond', 'full', 'line', 'molecular', 'tri') else 0 if atomstyle == 'charge' else 1
         im = 2 if atomstyle == 'template' else 1
         iq = 2 if atomstyle in ('dipole', 'electron') else 1 if atomstyle == 'charge' else 3
         read_charge = atomstyle in ('dipole', 'electron', 'full', 'charge')
-        read_molecule = atomstyle in  ('angle', 'bond', 'full', 'line', 'molecular', 'template', 'tri')
+        read_molecule = atomstyle in  ('atomic','angle', 'bond', 'full', 'line', 'molecular', 'template', 'tri')
 
         # parse box block:
         #  [ (lx, xlo, xhi), (ly, ylo, yhi), (lz, zlo, zhi), (xy, xz, yz)]
@@ -829,7 +832,7 @@ class LammpsReader(abcReader):
         _image = self.data['image'] = np.zeros((natoms,3), dtype=int)
         # for all styles the last record will be either a coordinate (float)
         # or an image (int).
-        _lines = blocks[  'Atoms']
+        _lines = blocks[ 'Atoms']
         # check for images (assume that comments have been removed and therefore
         # the first line in not a comment line starting with #)
         if len(_lines)>1:
@@ -1473,11 +1476,14 @@ class LammpsReader(abcReader):
                         found = True
                         break
                 if not found:
-                    _line = line.split("#")[0].strip() # remove comments
+                    tk = line.split("#") # split comments if present
+                    _line = tk[0].strip()
                     if any(tuple(_line.endswith(s) for s in ("xhi", "yhi", "zhi", "yz") )):
                         blocks["box"].append(line)
                     elif _line in LammpsReader._blk_names:
                         blk = blocks[_line]
+                        if _line == 'Atoms' and len(tk) > 1:
+                            blocks['atom_style'] = tk[1].strip()
                     elif " Coeffs" in _line:
                         blk = blocks[_line]
                     else:

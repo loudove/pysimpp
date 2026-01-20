@@ -110,21 +110,21 @@ contains
     end subroutine m_debug_env
 
     !> return the square length
-    real(8) function m_square(v)
+    pure real(8) function m_square(v)
         real(8), dimension(3), intent(in) :: v
 
         m_square = v(1)*v(1)+v(2)*v(2)+v(3)*v(3)
     end function m_square
 
     !> return the length
-    real(8) function m_length(v)
-        real(8), dimension(3) :: v
+    pure real(8) function m_length(v)
+        real(8), dimension(3), intent(in) :: v
 
         m_length = dsqrt(v(1)*v(1)+v(2)*v(2)+v(3)*v(3))
     end function m_length
 
     !> return the dot product v.u
-    function m_dot(v, u) result(d)
+    pure function m_dot(v, u) result(d)
         real(8), dimension(3), intent(in) :: v, u
         real(8) :: d
 
@@ -132,7 +132,7 @@ contains
     end function m_dot
 
     !> return the cross product v x u
-    function m_cross(v, u) result(vxu)
+    pure function m_cross(v, u) result(vxu)
         real(8), dimension(3), intent(in) :: v, u
         real(8), dimension(3) :: vxu
 
@@ -358,7 +358,7 @@ contains
     function m_tostr(v) result(str)
         real(8), dimension(3) :: v
         character(LEN=46) str
-        write( str, '("(",E14.7,",",E14.7,",",E14.7")")') v
+        write( str, '("(",E14.7,",",E14.7,",",E14.7,")")') v
         return
     end function m_tostr
 

@@ -77,6 +77,20 @@ class SimulationBox():
         hpi = 0.5 * np.pi
         return isclose(self.alpha, hpi) and isclose(self.beta, hpi) and isclose(self.gamma, hpi)
 
+    @classmethod
+    def from_lammps( cls, xstr, ystr, zstr, xyzstr=""):
+        obj = cls()
+        try:
+            xlo, xhi = tuple( map( float, xstr.split()[:2]))
+            ylo, yhi = tuple( map( float, ystr.split()[:2]))
+            zlo, zhi = tuple( map( float, zstr.split()[:2]))
+            xy, xz, yz = tuple( map( float, xyzstr.split()[:3])) if len(xyzstr) > 0 else (0.0, 0.0, 0.0)
+            obj.set_from_lammps(float(xlo), float(xhi), float(ylo), float(yhi), float(zlo), float(zhi), float(xy), float(xz), float(yz))
+        except Exception as e:
+            print(f"ERROR: exception {e} while creating SimulationBox from lammps")
+            raise
+        return obj
+
     def set_from_scalars(self, a, b, c, alpha=90.0, beta=90.0, gamma=90.0):
         ''' Set the dimensions of the unit cell using the
             lengths of the spaning vectors (a, b and c) and
