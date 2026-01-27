@@ -364,6 +364,14 @@ def msd( filename, dt=0.0, start=-1, end=sys.maxsize, every=1, dimensions=['xyz'
         f = open( reader.dir+os.sep+"msd.dat", 'w')
         du.write(f=f, var=0.10)
         f.close()
+
+        if usecom and nselected == 1:
+            f = open( reader.dir+os.sep+"cm0msd.dat", 'w')
+            f.write("# %10s %15s\n"%("t(fs)", "msd(Å²)"))
+            for t_, msd_ in zip(t,np.sum((cm[:,0,:]-cm[0,0,:])**2,axis=1)):
+                f.write("%12g %15g\n"%(t_,msd_))
+            f.close()
+
     else:
         REGIONDIM = dmapinv[ region[0]]
         LEVELS = region[1]
@@ -592,6 +600,7 @@ def _max_consecutive( data, stepsize=1):
         return (imin,imax)              # return the indexes
     else:
         return (1, data.size-1)
+
 # LDP: this is kept only for archive
 def msd_straight( r):
     ''' Calculate the MDS using the conventional approach and a time

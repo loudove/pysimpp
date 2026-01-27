@@ -304,7 +304,7 @@ class LammpsDump():
                                 nbytes = fsize
                             # start frame has been exceeded, start counting
                             if not match[-1] < start:
-                                cnt += np.count_nonzero( (start<match) & (match<end))
+                                cnt += np.count_nonzero( (start<=match) & (match<=end))
                         batch = min(batch,fsize-nbytes)
                         nbytes+=batch
                     # count the file only if contains frame of interest
