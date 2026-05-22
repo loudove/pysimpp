@@ -768,13 +768,16 @@ class LammpsReader(abcReader):
             if 'atom_style' in blocks:
                 atomstyle = blocks['atom_style']
             else:
-                atomstyle = 'atomic' if len(blocks['Atoms'].split()) == 5 else self.options['atom_style']
+                atomstyle = 'atomic' if len(blocks['Atoms'][0].split()) == 5 else self.options['atom_style']
         if len(atomstyle) == 0: atomstyle='full'
         it = 2 if atomstyle in ('angle', 'bond', 'full', 'line', 'molecular', 'tri') else 0 if atomstyle == 'charge' else 1
         im = 2 if atomstyle == 'template' else 1
         iq = 2 if atomstyle in ('dipole', 'electron') else 1 if atomstyle == 'charge' else 3
         read_charge = atomstyle in ('dipole', 'electron', 'full', 'charge')
         read_molecule = atomstyle in  ('atomic','angle', 'bond', 'full', 'line', 'molecular', 'template', 'tri')
+
+        if len(self.options['atom_style']) == 0:
+             self.options['atom_style'] = str(atomstyle)
 
         # parse box block:
         #  [ (lx, xlo, xhi), (ly, ylo, yhi), (lz, zlo, zhi), (xy, xz, yz)]
