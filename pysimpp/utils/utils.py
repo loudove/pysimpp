@@ -2,6 +2,7 @@
 
 import os
 import sys
+import pathlib
 import inspect
 import time
 import math
@@ -118,16 +119,20 @@ class chk_number(object):
             msg = "%s (check: %s)" % (self.message, string)
             raise ArgumentTypeError(msg)
         return val
-    
-        if len(value) == 0: return []
+
+        if len(value) == 0:
+            return []
         try:
             value = self.mytype(value)
             if value <= 0:
-                raise argparse.ArgumentTypeError("{} is not a positive {}".format( value, self.mytype.__name__))
+                raise argparse.ArgumentTypeError(
+                    "{} is not a positive {}".format(value, self.mytype.__name__))
             if self.mymax > 0 and value > self.mymax:
-                raise argparse.ArgumentTypeError("{} is larger than maximum permited value ({})".format( value, self.mymax))
+                raise argparse.ArgumentTypeError(
+                    "{} is larger than maximum permited value ({})".format(value, self.mymax))
         except ValueError:
-            raise Exception("{} is not an {}".format( value, self.mytype.__name__))
+            raise Exception("{} is not an {}".format(
+                value, self.mytype.__name__))
         return value
 
 
@@ -392,6 +397,14 @@ def sort_connected_lists_check_multiplicity(list1, list2, list3, reverse=False):
             i += m
         else:
             i += 1
+
+
+def chk_file(string):
+    ''' Check if the string is an existing file path and if not raise an ArgumentTypeError. '''
+    if not pathlib.is_file(string):
+        msg = f"file {string} not found "
+        raise ArgumentTypeError(msg)
+    return string
 
 
 def chk_filename(filename):
